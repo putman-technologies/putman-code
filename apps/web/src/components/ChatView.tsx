@@ -303,6 +303,7 @@ import { NativeChildWorkDialog } from "./chat/NativeChildWorkDialog";
 import { ProviderSubagentBar } from "./chat/ProviderSubagentBar";
 import { getTriggerDisplayModelName } from "./chat/providerIconUtils";
 import { resolveScrollToEndClearance } from "./composerFooterLayout";
+import { ProjectCoordinatorButton } from "./chat/ProjectCoordinatorButton";
 import { ChatHeader } from "./chat/ChatHeader";
 import { useSideChat } from "./chat/useSideChat";
 import { useRemoteOpenState } from "~/remoteOpen";
@@ -3411,6 +3412,28 @@ export default function ChatView(props: ChatViewProps) {
             {!rightPanelControlsAtRoot && !rightPanelControlsInPanel ? panelLayoutControls : null}
             {inlineRightPanelOwnsTitleBar ? threadPanelHeaderControl : null}
             <ChatHeader
+              coordinatorAction={
+                activeProject &&
+                !activeProject.isScratch &&
+                serverConfig?.environment.capabilities.projectCoordinator === true &&
+                !activeThread.id.startsWith(`coordinator-${encodeURIComponent(activeProject.id)}-`) &&
+                activeThread.lineage.relationshipToParent !== "subagent" &&
+                activeThread.lineage.sideChat !== true ? (
+                  <ProjectCoordinatorButton
+                    key={activeThreadKey}
+                    environmentId={activeThread.environmentId}
+                    projectId={activeProject.id}
+                    threadId={activeThread.id}
+                    modelSelection={activeThread.modelSelection}
+                    completedRunId={
+                      isServerThread && activeThreadShell?.latestRun?.status === "completed"
+                        ? activeThreadShell.latestRun.runId
+                        : null
+                    }
+                    onOpen={onOpenRelatedThreadStable}
+                  />
+                ) : null
+              }
               activeThreadEnvironmentId={activeThread.environmentId}
               activeThreadId={activeThread.id}
               isServerThread={isServerThread}

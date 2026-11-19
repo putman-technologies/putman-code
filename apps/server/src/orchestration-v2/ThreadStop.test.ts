@@ -23,6 +23,7 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as Stream from "effect/Stream";
@@ -41,6 +42,7 @@ import * as EffectOutbox from "./EffectOutbox.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
+import { runProjectCoordinator } from "./ProjectCoordinator.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import * as ProviderReplayHarness from "./testkit/ProviderReplayHarness.ts";
 import { checkpointWorkspace } from "@t3tools/provider-testing/replayWorkspace";
@@ -164,6 +166,74 @@ const threadState = (threadId: ThreadId) =>
         .map((link) => link.number),
     };
   });
+
+it.effect("hands off a completed feature once and preserves the source when delivery fails", () =>
+  Effect.gen(function* () {
+    const threads = yield* ThreadManagementService.ThreadManagementService;
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const projectId = ProjectId.make("project:thread-stop");
+    const project = {
+      id: projectId,
+      title: "Demo",
+      workspaceRoot: "/tmp/demo",
+      defaultModelSelection: modelSelection,
+      scripts: [],
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+      deletedAt: null,
+    };
+    const projects = { getById: () => Effect.succeed(Option.some(project)) };
+    const source = ThreadId.make("thread:handoff");
+    yield* createWatchingThread(source, 3);
+    yield* send(source, "Add project search", "start_immediately");
+    const run = (yield* orchestrator.getThreadProjection(source)).runs[0]!;
+    const input = { action: "handoff" as const, projectId, threadId: source, runId: run.id };
+    assert.isTrue(
+      Exit.isFailure(yield* Effect.exit(runProjectCoordinator(input, projects, threads))),
+    );
+    const now = yield* DateTime.now;
+    yield* projections.apply({
+      id: EventId.make("event:handoff:complete"),
+      type: "run.updated",
+      threadId: source,
+      runId: run.id,
+      occurredAt: now,
+      payload: { ...run, status: "completed", completedAt: now },
+    });
+    const open = { action: "open" as const, projectId, modelSelection };
+    const [first, second] = yield* Effect.all(
+      [
+        runProjectCoordinator(open, projects, threads),
+        runProjectCoordinator(open, projects, threads),
+      ],
+      { concurrency: 2 },
+    );
+    assert.equal(first.threadId, second.threadId);
+    assert.isNotNull((yield* threads.getThreadShell(first.threadId))!.pinnedAt);
+    const unavailable = {
+      ...threads,
+      sendToThread: () =>
+        Effect.fail(
+          new ThreadManagementService.ThreadManagementThreadArchivedError({
+            threadId: first.threadId,
+          }),
+        ),
+    };
+    assert.isTrue(
+      Exit.isFailure(yield* Effect.exit(runProjectCoordinator(input, projects, unavailable))),
+    );
+    assert.isNull((yield* threads.getThreadShell(source))!.archivedAt);
+    const target = yield* runProjectCoordinator(input, projects, threads);
+    assert.deepEqual(target, first);
+    assert.deepEqual(yield* runProjectCoordinator(input, projects, threads), target);
+    const packet = (yield* orchestrator.getThreadProjection(target.threadId)).messages;
+    assert.lengthOf(packet, 1);
+    assert.include(packet[0]!.text, "Add project search");
+    assert.include(packet[0]!.text, source);
+    assert.isNotNull((yield* threads.getThreadShell(source))!.archivedAt);
+  }).pipe(Effect.provide(layerTest)),
+);
 
 it.effect.each([
   ["idle", "thread.stop"],

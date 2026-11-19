@@ -13,6 +13,7 @@ import {
   runRanAfter,
   usageLimitBlockedRun,
 } from "@t3tools/shared/orchestrationV2ThreadError";
+import { canHandOffRun, unfinishedHandoffRunStatuses } from "./projectCoordinatorState.ts";
 import { threadIssueKeysEqual } from "@t3tools/contracts";
 import { canonicalizeGitCafePullRequestUrl } from "@t3tools/source-control-definitions/registry";
 import { threadPullRequestsOf } from "../sourceControl/threadPullRequests.ts";
@@ -15352,8 +15353,24 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       }
       case "thread.archive":
       case "thread.unarchive": {
+        if (command.type === "thread.archive" && command.handoffRunId !== undefined) {
+          const shell = yield* projectionStore
+            .getThreadShell(command.threadId)
+            .pipe(mapDispatchError(command));
+          const pending = yield* projectionStore
+            .getThreadRecords(command.threadId, ["runs"], { runStatuses: unfinishedHandoffRunStatuses })
+            .pipe(mapDispatchError(command));
+          if (pending.runs.length > 0 || !canHandOffRun(shell, command.handoffRunId)) {
+            return yield* new OrchestratorDispatchError({
+              commandId: command.commandId,
+              commandType: command.type,
+              cause: "The feature chat changed during handoff. Its new work is still open.",
+            });
+          }
+        }
         const parentArchivedAt = (yield* findThread(command.threadId))?.archivedAt ?? null;
         yield* dispatchThreadMutation(command, events, effects);
+        if (command.type === "thread.archive" && command.handoffRunId !== undefined) break;
         // Unarchive restores the side chats this parent's archive took, not ones archived before it.
         for (const threadId of sideChatIds) {
           const sideChatArchivedAt = (yield* findThread(threadId))?.archivedAt ?? null;

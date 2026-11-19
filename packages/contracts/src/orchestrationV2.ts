@@ -3145,6 +3145,7 @@ export const OrchestrationV2Command = Schema.Union([
   }),
   Schema.Struct({
     type: Schema.Literal("thread.archive"),
+    handoffRunId: Schema.optional(RunId),
     commandId: CommandId,
     threadId: ThreadId,
   }),
@@ -3868,6 +3869,7 @@ export const ORCHESTRATION_V2_WS_METHODS = {
   getWorkflowScript: "orchestration.getWorkflowScript",
   getNativeChildWork: "orchestration.getNativeChildWork",
   stopWorkflow: "orchestration.stopWorkflow",
+  projectCoordinator: "orchestration.projectCoordinator",
   forceStopThread: "orchestration.forceStopThread",
   getTurnItem: "orchestration.getTurnItem",
   launchThread: "orchestration.launchThread",
@@ -4225,6 +4227,11 @@ export const OrchestrationV2ThreadStreamItem = withRecordIdTable(
 );
 export type OrchestrationV2ThreadStreamItem = typeof OrchestrationV2ThreadStreamItem.Type;
 
+export class ProjectCoordinatorError extends Schema.TaggedError<ProjectCoordinatorError>()(
+  "ProjectCoordinatorError",
+  { message: Schema.String },
+) {}
+
 export class OrchestrationV2DispatchCommandError extends Schema.TaggedError<OrchestrationV2DispatchCommandError>()(
   "OrchestrationV2DispatchCommandError",
   {
@@ -4567,6 +4574,22 @@ export const OrchestrationV2RpcSchemas = {
   stopWorkflow: {
     input: OrchestrationV2StopWorkflowInput,
     output: Schema.Void,
+  },
+  projectCoordinator: {
+    input: Schema.Union([
+      Schema.Struct({
+        action: Schema.Literal("open"),
+        projectId: ProjectId,
+        modelSelection: ModelSelection,
+      }),
+      Schema.Struct({
+        action: Schema.Literal("handoff"),
+        projectId: ProjectId,
+        threadId: ThreadId,
+        runId: RunId,
+      }),
+    ]),
+    output: Schema.Struct({ threadId: ThreadId }),
   },
   forceStopThread: {
     input: OrchestrationV2ForceStopThreadInput,
