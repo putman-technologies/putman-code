@@ -23,7 +23,6 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
-import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as Stream from "effect/Stream";
@@ -183,9 +182,16 @@ it.effect("hands off a completed feature once and preserves the source when deli
       updatedAt: "2026-01-01T00:00:00Z",
       deletedAt: null,
     };
-    const projects = { getById: () => Effect.succeed(Option.some(project)) };
+    const projects = { getById: () => Effect.succeedSome(project) };
     const source = ThreadId.make("thread:handoff");
     yield* createWatchingThread(source, 3);
+    yield* orchestrator.dispatch({
+      type: "thread.pull-request.watch",
+      commandId: CommandId.make("handoff:unwatch"),
+      threadId: source,
+      ...pullRequest(3),
+      watching: false,
+    });
     yield* send(source, "Add project search", "start_immediately");
     const run = (yield* orchestrator.getThreadProjection(source)).runs[0]!;
     const input = { action: "handoff" as const, projectId, threadId: source, runId: run.id };

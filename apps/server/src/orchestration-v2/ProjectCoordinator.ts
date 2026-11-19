@@ -14,11 +14,14 @@ import { formatThreadLink } from "@t3tools/shared/threadLinks";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import type * as Projects from "../project/ProjectService.ts";
 import type { ThreadManagementServiceShape } from "./ThreadManagementService.ts";
 import { canHandOffRun, unfinishedHandoffRunStatuses } from "./projectCoordinatorState.ts";
 
 type Input = typeof OrchestrationV2RpcSchemas.projectCoordinator.input.Type;
+const isProjectCoordinatorError = Schema.is(ProjectCoordinatorError);
+const encodeHandoffKey = Schema.encodeSync(Schema.fromJsonString(Schema.Array(Schema.String)));
 const fail = (message: string) => new ProjectCoordinatorError({ message });
 
 const ensureCoordinator = Effect.fn("ProjectCoordinator.ensure")(function* (
@@ -91,7 +94,7 @@ const handoff = Effect.fn("ProjectCoordinator.handoff")(function* (
     return yield* fail("Finish the current feature turn before sending it to the coordinator.");
   }
   const targetId = yield* ensureCoordinator(threads, project, source.modelSelection);
-  const key = JSON.stringify([targetId, source.id, input.runId]);
+  const key = encodeHandoffKey([targetId, source.id, input.runId]);
   const messageId = MessageId.make(`handoff:${key}`);
   if (source.archivedAt !== null) {
     const saved = yield* threads.getProjectThreadRecords(
@@ -178,7 +181,7 @@ export const runProjectCoordinator = Effect.fn("ProjectCoordinator.run")(
     return { threadId };
   },
   Effect.mapError((error) =>
-    error instanceof ProjectCoordinatorError
+    isProjectCoordinatorError(error)
       ? error
       : fail(
           error instanceof Error ? error.message : "The coordinator could not accept this handoff.",
