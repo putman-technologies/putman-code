@@ -772,7 +772,7 @@ function delegatedTasksStopEffect(command: {
 
 const WORKSPACE_PREPARATION_INPUT = "Preparing workspace";
 const RUNTIME_REQUEST_DELIVERY_FAILED_MESSAGE =
-  "T3 Code could not confirm that your answer reached the agent. If the run stays stuck, stop it and try again.";
+  "PutmanCode could not confirm that your answer reached the agent. If the run stays stuck, stop it and try again.";
 
 function withoutPreparationResult(
   item: Extract<OrchestrationV2TurnItem, { readonly type: "command_execution" }>,
@@ -15358,7 +15358,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             .getThreadShell(command.threadId)
             .pipe(mapDispatchError(command));
           const pending = yield* projectionStore
-            .getThreadRecords(command.threadId, ["runs"], { runStatuses: unfinishedHandoffRunStatuses })
+            .getThreadRecords(command.threadId, ["runs"], {
+              runStatuses: unfinishedHandoffRunStatuses,
+            })
             .pipe(mapDispatchError(command));
           if (pending.runs.length > 0 || !canHandOffRun(shell, command.handoffRunId)) {
             return yield* new OrchestratorDispatchError({

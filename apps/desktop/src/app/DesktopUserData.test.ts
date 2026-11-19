@@ -7,38 +7,24 @@ import * as PlatformError from "effect/PlatformError";
 
 import { clearStaleGpuCaches, resolveUserDataPath } from "./DesktopUserData.ts";
 
-it.effect.each(["t3code", "T3 Code (Alpha)"])(
-  "preserves Windows credential keys from %s without copying browser databases",
-  (sourceName) =>
+it.effect.each(["darwin", "win32", "linux"] as const)(
+  "isolates the %s profile and preserves an existing Mac fork profile",
+  (platform) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-v2-profile-" });
-      const source = path.join(directory, sourceName);
-      const destination = path.join(directory, "t3code-v2");
-      const state = '{"os_crypt":{"encrypted_key":"test-encrypted-key"}}';
-      yield* fs.makeDirectory(path.join(directory, "T3 Code (Alpha)"), { recursive: true });
-      yield* fs.makeDirectory(path.join(source, "IndexedDB"), { recursive: true });
-      yield* fs.writeFileString(path.join(source, "Local State"), state);
-      yield* fs.writeFileString(path.join(source, "IndexedDB", "LOCK"), "V1 owns this database");
-      yield* resolveUserDataPath({
-        appDataDirectory: directory,
-        isDevelopment: false,
-        platform: "win32",
-      });
-      assert.equal(yield* fs.readFileString(path.join(destination, "Local State")), state);
-      assert.equal(yield* fs.readFileString(path.join(source, "Local State")), state);
-      assert.isFalse(yield* fs.exists(path.join(destination, "IndexedDB")));
-      yield* fs.writeFileString(path.join(destination, "Local State"), "existing V2 state");
-      yield* resolveUserDataPath({
-        appDataDirectory: directory,
-        isDevelopment: false,
-        platform: "win32",
-      });
-      assert.equal(
-        yield* fs.readFileString(path.join(destination, "Local State")),
-        "existing V2 state",
-      );
+      const directory = yield* fs.makeTempDirectoryScoped();
+      for (const upstream of ["t3code-v2", "T3 Code (Alpha)", "T3 Code"]) {
+        yield* fs.makeDirectory(path.join(directory, upstream));
+      }
+      const resolve = (isDevelopment: boolean) =>
+        resolveUserDataPath({ appDataDirectory: directory, isDevelopment, platform });
+      assert.equal(yield* resolve(false), path.join(directory, "PutmanCode"));
+      assert.equal(yield* resolve(true), path.join(directory, "PutmanCode Dev"));
+      if (platform === "darwin") {
+        yield* fs.makeDirectory(path.join(directory, "Putman Code"));
+        assert.equal(yield* resolve(false), path.join(directory, "Putman Code"));
+      }
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 

@@ -153,7 +153,9 @@ export function LocalPreviewScreen(props: {
                     variant="plain"
                     title={
                       outdated
-                        ? gt("Update T3 Code on {environment}", { environment: environmentLabel })
+                        ? gt("Update PutmanCode on {environment}", {
+                            environment: environmentLabel,
+                          })
                         : disconnected
                           ? gt("Not connected to {environment}", { environment: environmentLabel })
                           : gt("Can't reach {host}", { host: hostOf(current) })
@@ -161,7 +163,7 @@ export function LocalPreviewScreen(props: {
                     detail={
                       outdated
                         ? gt(
-                            "{environment} runs a version of T3 Code that can't open its localhost pages on this device. Update it there, then try again.",
+                            "{environment} runs a version of PutmanCode that can't open its localhost pages on this device. Update it there, then try again.",
                             { environment: environmentLabel },
                           )
                         : disconnected

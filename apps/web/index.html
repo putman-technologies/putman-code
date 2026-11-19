@@ -6,13 +6,13 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
     />
-    <meta name="theme-color" content="#000000" />
-    <link rel="icon" href="/favicon.ico" sizes="48x48" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f5f8fc" />
+    <link rel="icon" href="/putman-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/putman-code.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <script>
       (() => {
-        const LIGHT_BACKGROUND = "#ffffff";
+        const LIGHT_BACKGROUND = "#f5f8fc";
         const DARK_BACKGROUND = "#000000";
         const CUSTOM_THEMES_STORAGE_KEY = "t3code:themes:v1";
         const ENVIRONMENT_THEMES_STORAGE_KEY = "t3code:environment-themes:v1";
@@ -21,9 +21,9 @@
         const THEME_HALVES_STORAGE_KEY = "t3code:theme-halves:v1";
         const SPLASH_COLORS = {
           light: {
-            background: "#ffffff",
-            foreground: "#262626",
-            accent: "#4f46e5",
+            background: "#f5f8fc",
+            foreground: "#17283e",
+            accent: "#245db8",
           },
           dark: {
             background: "#000000",
@@ -246,7 +246,7 @@
             storedTheme === "dark" ||
             storedTheme === "system" ||
             themeModes !== null;
-          const theme = isKnownTheme && storedTheme ? storedTheme : "system";
+          const theme = isKnownTheme && storedTheme ? storedTheme : "light";
           const isThemed = isKnownTheme && themeModes !== null;
           const baseAppearance = customTheme ? customTheme.appearance : "light";
           const systemMode = prefersDark ? "dark" : "light";
@@ -379,14 +379,10 @@
           }
           setThemeColor(chromeColor);
         } catch {
-          let prefersDark = true;
-          try {
-            prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-          } catch {}
           delete document.documentElement.dataset.themeId;
           delete document.documentElement.dataset.themeSelected;
-          document.documentElement.classList.toggle("dark", prefersDark);
-          const fallbackColor = prefersDark ? DARK_BACKGROUND : LIGHT_BACKGROUND;
+          document.documentElement.classList.remove("dark");
+          const fallbackColor = LIGHT_BACKGROUND;
           document.documentElement.style.backgroundColor = fallbackColor;
           setThemeColor(fallbackColor);
         }
@@ -402,8 +398,8 @@
       }
 
       body {
-        background: #ffffff;
-        color: #262626;
+        background: #f5f8fc;
+        color: #17283e;
         font-family:
           -apple-system, BlinkMacSystemFont, "Inter Variable", "Segoe UI", system-ui, sans-serif;
       }
@@ -681,13 +677,13 @@
       if (desktopDisplayName) document.title = desktopDisplayName;
     </script>
     <!-- vite.config.ts stamps the web build's channel into this title. -->
-    <title>T3 Code</title>
+    <title>PutmanCode</title>
   </head>
   <body>
     <div id="root">
       <div id="boot-shell">
-        <div id="boot-shell-card" aria-label="Putman Code splash screen">
-          <img id="boot-shell-logo" src="/putman-code.png" alt="Putman Code" />
+        <div id="boot-shell-card" aria-label="PutmanCode splash screen">
+          <img id="boot-shell-logo" src="/putman-code.png" alt="PutmanCode" />
         </div>
       </div>
     </div>

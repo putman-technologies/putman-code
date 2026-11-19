@@ -2875,7 +2875,7 @@ export default function ChatView(props: ChatViewProps) {
         : serverConfig === null
           ? gt("Side chats are not ready yet. Try again in a moment.")
           : serverConfig.environment.capabilities.sideChats !== true
-            ? gt("Update this environment's T3 Code server to use side chats.")
+            ? gt("Update this environment's PutmanCode server to use side chats.")
             : sideChatsOffered && !isServerThread
               ? gt("Side chats start after the first message.")
               : sideChat.available &&
@@ -3416,7 +3416,9 @@ export default function ChatView(props: ChatViewProps) {
                 activeProject &&
                 !activeProject.isScratch &&
                 serverConfig?.environment.capabilities.projectCoordinator === true &&
-                !activeThread.id.startsWith(`coordinator-${encodeURIComponent(activeProject.id)}-`) &&
+                !activeThread.id.startsWith(
+                  `coordinator-${encodeURIComponent(activeProject.id)}-`,
+                ) &&
                 activeThread.lineage.relationshipToParent !== "subagent" &&
                 activeThread.lineage.sideChat !== true ? (
                   <ProjectCoordinatorButton

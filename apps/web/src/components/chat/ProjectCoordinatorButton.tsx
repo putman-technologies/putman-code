@@ -60,7 +60,7 @@ export function ProjectCoordinatorButton(props: {
   return (
     <Button
       size="compact"
-      variant="ghost-muted"
+      variant="default"
       disabled={busy}
       aria-busy={busy}
       aria-label={label}

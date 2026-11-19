@@ -13,7 +13,7 @@ const repoRoot = NodePath.resolve(desktopDir, "..", "..");
 const devBundleIdSuffix = NodePath.basename(repoRoot)
   .toLowerCase()
   .replaceAll(/[^a-z0-9]+/g, "");
-const APP_DISPLAY_NAME = isDevelopment ? "Putman Code (Dev)" : "Putman Code";
+const APP_DISPLAY_NAME = isDevelopment ? "PutmanCode (Dev)" : "PutmanCode";
 const APP_BUNDLE_ID = isDevelopment
   ? `com.putmantechnologies.putmancode.dev.${devBundleIdSuffix || "local"}`
   : "com.putmantechnologies.putmancode";
@@ -105,7 +105,7 @@ export function makeDevelopmentEnvironmentScript(environment) {
   const envEntries = [
     ["VITE_DEV_SERVER_URL", environment.VITE_DEV_SERVER_URL],
     ["T3CODE_PORT", environment.T3CODE_PORT],
-    ["T3CODE_HOME", environment.T3CODE_HOME],
+    ["PUTMANCODE_HOME", environment.PUTMANCODE_HOME],
     ["T3CODE_COMMIT_HASH", environment.T3CODE_COMMIT_HASH],
     ["T3CODE_OTLP_TRACES_URL", environment.T3CODE_OTLP_TRACES_URL],
     ["T3CODE_OTLP_EXPORT_INTERVAL_MS", environment.T3CODE_OTLP_EXPORT_INTERVAL_MS],
@@ -263,8 +263,9 @@ function resolveMacBundleInfoPlistStrings(executableName) {
     CFBundleExecutable: executableName,
     CFBundleIconFile: "icon.icns",
     NSScreenCaptureUsageDescription:
-      "T3 Code captures the active window when you use the snapshot shortcut.",
-    NSDocumentsFolderUsageDescription: "T3 Code reads project files you open in the desktop app.",
+      "PutmanCode captures the active window when you use the snapshot shortcut.",
+    NSDocumentsFolderUsageDescription:
+      "PutmanCode reads project files you open in the desktop app.",
   };
 }
 
