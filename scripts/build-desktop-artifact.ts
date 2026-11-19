@@ -2703,6 +2703,7 @@ export function resolveDesktopRuntimeDependencies(
 
 export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig")(function* (
   updateChannel: "latest" | "nightly",
+  defaultRepository = "",
 ) {
   const env = yield* Config.all({
     updateRepository: Config.String("T3CODE_DESKTOP_UPDATE_REPOSITORY").pipe(Config.option),
@@ -2711,7 +2712,7 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
   const rawRepo = (
     Option.getOrUndefined(env.updateRepository)?.trim() ||
     Option.getOrUndefined(env.githubRepository)?.trim() ||
-    ""
+    defaultRepository
   ).trim();
   if (!rawRepo) return undefined;
 
@@ -2825,7 +2826,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   // Missing publish config infers a GitHub feed from tokens; staging has no repository, so manifest generation would crash.
   buildConfig.publish = null;
   if (!isDesktopPreviewVersion(version)) {
-    const publishConfig = yield* resolveGitHubPublishConfig(updateChannel);
+    const publishConfig = yield* resolveGitHubPublishConfig(
+      updateChannel,
+      signed && !mockUpdates ? "austin-putmantech/putman-code" : "",
+    );
     if (publishConfig) {
       buildConfig.publish = [publishConfig];
     } else if (mockUpdates) {
@@ -2841,6 +2845,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "mac") {
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
+    if (signed) buildConfig.forceCodeSigning = true;
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
       icon: "icon.icns",
@@ -3861,10 +3866,14 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   const stageProdResourcesDir = path.join(stageAppDir, "apps/desktop/prod-resources");
   yield* fs.copy(stageResourcesDir, stageProdResourcesDir);
 
+  const signingEnv = loadRepoEnv({ repoRoot });
+  const configurePasskeys =
+    signingEnv.T3CODE_MACOS_PROVISIONING_PROFILE?.trim() ||
+    signingEnv.T3CODE_CLERK_PASSKEY_RP_DOMAINS?.trim();
   const configuredMacPasskeySigning =
-    options.platform === "mac" && options.signed
+    options.platform === "mac" && options.signed && configurePasskeys
       ? yield* Effect.try({
-          try: () => resolveMacPasskeySigningConfiguration(loadRepoEnv({ repoRoot })),
+          try: () => resolveMacPasskeySigningConfiguration(signingEnv),
           catch: MacPasskeySigningConfigurationResolutionError.fromCause,
         })
       : undefined;

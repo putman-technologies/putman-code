@@ -256,6 +256,7 @@ import {
 } from "./ui/combobox";
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { SidebarProjectList } from "./sidebar/SidebarProjectList";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { TooltipProvider } from "./ui/tooltip";
 import {
@@ -3217,6 +3218,16 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               searchResultCount={threadSearchResults.length}
               activeSearchResultIndex={activeSearchResultIndex}
               onClearSearch={clearThreadSearch}
+            />
+            <SidebarProjectList
+              projects={scopeGroups}
+              selectedKeys={projectScopeKeys}
+              onSelect={setProjectScopeKeys}
+              onToggle={toggleProjectScopeKey}
+              onNewThread={startThreadInProjectFolder}
+              showEnvironments={showProjectEnvironments}
+              primaryEnvironmentId={primaryEnvironmentId}
+              machineByEnvironmentId={environmentMachineById}
             />
           </SidebarGroup>
         }

@@ -129,6 +129,38 @@ describe("sidebar header new thread", () => {
   });
 });
 
+it("keeps every open project reachable while a single project is selected", async () => {
+  const projects = [
+    project("NovaTrack"),
+    project("CensusNorth"),
+    {
+      ...project("Retired"),
+      archivedAt: "2026-01-02T00:00:00.000Z",
+    },
+  ];
+  vi.mocked(useProjects).mockReturnValue(projects);
+  await using screen = await render(
+    <SidebarProvider>
+      <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+    </SidebarProvider>,
+  );
+  const nav = screen.getByRole("navigation", { name: "Projects" });
+  const nova = nav.getByRole("button", { name: "NovaTrack", exact: true });
+  const census = nav.getByRole("button", { name: "CensusNorth", exact: true });
+  const all = nav.getByRole("button", { name: "All projects", exact: true });
+  await expect.element(nova).toBeVisible();
+  await userEvent.click(nova);
+  await expect.element(nova).toHaveAttribute("aria-pressed", "true");
+  await expect.element(census).toBeVisible();
+  await expect
+    .element(nav.getByRole("button", { name: "Retired", exact: true }))
+    .not.toBeInTheDocument();
+  await userEvent.click(census);
+  await expect.element(census).toHaveAttribute("aria-pressed", "true");
+  await userEvent.click(all);
+  await expect.element(all).toHaveAttribute("aria-pressed", "true");
+});
+
 function threadShell(projectId: ProjectId, index: number): EnvironmentThreadShell {
   return makeThreadFixture({
     environmentId: EnvironmentId.make("local"),

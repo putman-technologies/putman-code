@@ -16,7 +16,7 @@ const packagedEnvironment = DesktopEnvironment.DesktopEnvironment.pipe(
       homeDirectory: "/Users/alice",
       platform: "darwin",
       processArch: "arm64",
-      appVersion: "0.0.22",
+      appVersion: "0.0.1",
       appPath: "/Applications/PutmanCode.app/Contents/Resources/app.asar",
       isPackaged: true,
       resourcesPath: "/Applications/PutmanCode.app/Contents/Resources",
@@ -39,7 +39,7 @@ describe("resolveDesktopSshCliRunner", () => {
       });
 
       assert.deepStrictEqual(runner, {
-        archiveVersion: "0.0.22",
+        archiveVersion: "0.1.10",
         releaseBaseUrl: "https://mirror.example.com/t3code",
       });
     }),

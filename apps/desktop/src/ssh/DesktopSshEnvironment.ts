@@ -92,7 +92,8 @@ export const resolveDesktopSshCliRunner = (
   }
   const releaseBaseUrl = env[CLI_RELEASE_BASE_URL_ENV]?.trim() || undefined;
   return {
-    archiveVersion: environment.appVersion,
+    // The published SSH companion follows the upstream runtime's version.
+    archiveVersion: "0.1.10",
     ...(releaseBaseUrl === undefined ? {} : { releaseBaseUrl }),
   };
 };

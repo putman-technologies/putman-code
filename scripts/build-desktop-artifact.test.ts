@@ -504,6 +504,29 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }),
   );
 
+  it.effect("points signed PutmanCode builds to the fork and requires a signing identity", () =>
+    Effect.gen(function* () {
+      const build = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "0.0.1",
+        true,
+        false,
+        undefined,
+        undefined,
+      );
+      assert.isTrue(build.forceCodeSigning);
+      assert.deepStrictEqual(build.publish, [
+        {
+          provider: "github",
+          owner: "austin-putmantech",
+          repo: "putman-code",
+          releaseType: "release",
+        },
+      ]);
+    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
   it.effect("omits update feeds for pull request preview builds", () =>
     Effect.gen(function* () {
       const preview = yield* createBuildConfig(
