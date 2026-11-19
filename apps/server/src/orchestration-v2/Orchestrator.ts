@@ -15322,6 +15322,36 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             }),
           );
         });
+        if (command.settledInProject !== undefined) {
+          const shell = yield* projectionStore
+            .getThreadShell(command.threadId)
+            .pipe(mapDispatchError(command));
+          const pending = yield* projectionStore
+            .getThreadRecords(command.threadId, ["runs"], {
+              runStatuses: unfinishedHandoffRunStatuses,
+            })
+            .pipe(mapDispatchError(command));
+          // A bulk cleanup never cascades into a side chat or interrupts new work.
+          if (
+            !shell ||
+            shell.projectId !== command.settledInProject ||
+            shell.archivedAt !== null ||
+            shell.settledOverride !== "settled" ||
+            shell.activeRunId !== null ||
+            shell.pendingRuntimeRequest !== null ||
+            (shell.pendingBackgroundTasks?.length ?? 0) > 0 ||
+            (shell.pendingGuestMessageCount ?? 0) > 0 ||
+            (shell.snoozedUntil != null && DateTime.isGreaterThan(shell.snoozedUntil, now)) ||
+            pending.runs.length > 0 ||
+            sideChatIds.length > 0
+          ) {
+            return yield* new OrchestratorDispatchError({
+              commandId: command.commandId,
+              commandType: command.type,
+              cause: "Chat has side chats, moved, or is no longer settled and idle.",
+            });
+          }
+        }
         // Checked under the thread lock: a message sent since the client looked keeps the thread.
         if (command.onlyIfUnused === true) {
           const usage = yield* projectionStore

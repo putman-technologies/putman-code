@@ -178,23 +178,23 @@ describe("searchSettings", () => {
     );
   });
 
-  it("finds the Welcome page only where a primary computer can open it", () => {
-    const availability = {
-      hasCloudPublicConfig: true,
-      hasEnvironment: true,
-      hasProviderSettingsEnvironment: true,
-      canManageLocalBackend: false,
-      isWslSettingsRowVisible: false,
-      hasThreadAutoSettlement: false,
-    };
-    const ids = (hasPrimaryEnvironment: boolean) =>
-      searchSettings(
-        "welcome page",
-        filterAvailableSettingsSearchItems({ ...availability, hasPrimaryEnvironment }),
-      ).map((item) => item.id);
-    // Hosted web reaches remote computers but has no primary one to set up.
-    expect(ids(false)).not.toContain("welcome-page");
-    expect(ids(true)).toContain("welcome-page");
+  it("omits retired About rows from search", () => {
+    const result = searchSettings("version");
+    expect(result.some((item) => item.id === "app-version")).toBe(true);
+    for (const term of [
+      "welcome page",
+      "mobile app",
+      "update track",
+      "usage reporting",
+      "open source licenses",
+    ]) {
+      expect(
+        searchSettings(term).some(
+          (item) =>
+            item.to === "/settings/about" && item.id !== "app-version" && item.id !== "cli-command",
+        ),
+      ).toBe(false);
+    }
   });
 
   it("finds keybinding commands by label, command id, and default key", () => {

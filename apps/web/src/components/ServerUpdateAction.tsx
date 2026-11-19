@@ -87,7 +87,7 @@ function refusedCrossing(
 function CrossTrackNote() {
   return (
     <span className="text-muted-foreground text-xs">
-      <T>Switch tracks in About → Update track</T>
+      <T>This update is on a different release track.</T>
     </span>
   );
 }

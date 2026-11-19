@@ -100,6 +100,7 @@ export interface ThreadCommandInput extends CommandMetadata {
 export interface DeleteThreadInput extends ThreadCommandInput {
   /** The server deletes only a thread with no runs and no messages. */
   readonly onlyIfUnused?: boolean;
+  readonly settledInProject?: ProjectId;
 }
 export type ArchiveThreadInput = ThreadCommandInput;
 export type UnarchiveThreadInput = ThreadCommandInput;
@@ -512,6 +513,7 @@ export const deleteThread = Effect.fn("EnvironmentCommands.deleteThread")(functi
     type: "thread.delete",
     commandId: yield* allocateCommandId(input),
     threadId: input.threadId,
+    ...(input.settledInProject === undefined ? {} : { settledInProject: input.settledInProject }),
     ...(input.onlyIfUnused === undefined ? {} : { onlyIfUnused: input.onlyIfUnused }),
   });
 });

@@ -1,0 +1,95 @@
+name: Draft PutmanCode Mac release
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: putmancode-stable-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'austin-putmantech/putman-code' && github.ref_name == github.event.repository.default_branch
+    runs-on: macos-15
+    environment: mac-release
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-ci-deps
+      - name: Build signed and notarized Apple silicon release
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          NOTARY_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          T3CODE_DESKTOP_UPDATE_REPOSITORY: austin-putmantech/putman-code
+        run: |
+          set -euo pipefail
+          : "${CSC_LINK:?Missing Developer ID certificate}" "${CSC_KEY_PASSWORD:?Missing certificate password}"
+          : "${NOTARY_KEY:?Missing notarization key}" "${APPLE_API_KEY_ID:?Missing key ID}" "${APPLE_API_ISSUER:?Missing issuer ID}"
+          version="$(jq -er '.version | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' apps/desktop/package.json)"
+          export APPLE_API_KEY="$RUNNER_TEMP/putmancode-notary.p8"
+          trap 'rm -f "$APPLE_API_KEY"' EXIT
+          (umask 077 && printf '%s' "$NOTARY_KEY" > "$APPLE_API_KEY")
+          unset NOTARY_KEY
+          vp run dist:desktop:artifact --platform mac --target dmg --arch arm64 --build-version "$version" --signed --output-dir "$RUNNER_TEMP/putmancode-release"
+      - name: Verify the downloadable app and update manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(jq -er .version apps/desktop/package.json)"
+          cd "$RUNNER_TEMP/putmancode-release"
+          ruby -ryaml -rdigest -rbase64 -e '
+            manifest = YAML.safe_load(File.read("latest-mac.yml"), permitted_classes: [Time])
+            abort "Version mismatch" unless manifest.fetch("version") == ARGV.fetch(0)
+            zip = manifest.fetch("files").select { |f| f.fetch("url").end_with?(".zip") }.fetch(0)
+            path = zip.fetch("url")
+            abort "Unexpected ZIP filename" unless File.basename(path) == path
+            abort "ZIP hash mismatch" unless Base64.strict_encode64(Digest::SHA512.file(path).digest) == zip.fetch("sha512")
+            File.write(ENV.fetch("RUNNER_TEMP") + "/verified-zip-name", path)
+          ' "$version"
+          folder="$(mktemp -d)"
+          ditto -x -k "$(cat "$RUNNER_TEMP/verified-zip-name")" "$folder"
+          app="$folder/PutmanCode.app"
+          codesign --verify --deep --strict "$app"
+          codesign -dv --verbose=4 "$app" 2>&1 | grep '^Authority=Developer ID Application:'
+          spctl --assess --type execute "$app"
+          xcrun stapler validate "$app"
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Contents/Info.plist")" = com.putmantechnologies.putmancode
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$version"
+          ruby -ryaml -e 'abort "Incorrect update feed" unless YAML.safe_load(File.read(ARGV[0])).values_at("provider","owner","repo") == ["github","austin-putmantech","putman-code"]' "$app/Contents/Resources/app-update.yml"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: putmancode-mac-release
+          path: |
+            ${{ runner.temp }}/putmancode-release/*.dmg
+            ${{ runner.temp }}/putmancode-release/*.zip
+            ${{ runner.temp }}/putmancode-release/*.blockmap
+            ${{ runner.temp }}/putmancode-release/latest-mac.yml
+          if-no-files-found: error
+          compression-level: 0
+
+  draft:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: putmancode-mac-release
+          path: release
+      - name: Create a draft for review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          version="$(ruby -ryaml -e 'puts YAML.safe_load(File.read(ARGV[0]), permitted_classes: [Time]).fetch("version")' release/latest-mac.yml)"
+          gh release create "v$version" --target "$GITHUB_SHA" --draft --title "PutmanCode $version" --generate-notes release/*

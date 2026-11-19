@@ -159,7 +159,7 @@ export interface ChannelSwitchRelease {
 }
 
 /** Components pass `useMessages()` so labels follow a language switch. */
-export const channelSwitchLabel = (channel: DesktopUpdateChannel, resolve: MessageResolver = m) =>
+const channelSwitchLabel = (channel: DesktopUpdateChannel, resolve: MessageResolver = m) =>
   channel === "nightly"
     ? resolve(msg("Nightly", { $context: "release track" }))
     : resolve(msg("Stable", { $context: "release track" }));
@@ -392,20 +392,6 @@ export function collectChannelSwitchTargets(
     targets.push(target(move.selfUpdate, release.version));
   }
   return { targets, skipped };
-}
-
-/** A remote host on the other track that a switch can still move, for retrying a partial switch. */
-export function awaitsTrackSwitch(
-  machine: Pick<UpdateEverythingMachine, "serverConfig" | "hostedByThisApp">,
-  channel: DesktopUpdateChannel,
-): boolean {
-  const config = machine.serverConfig;
-  return (
-    !machine.hostedByThisApp &&
-    config !== null &&
-    !isOnTrack(config.environment.serverVersion, channel) &&
-    !("skip" in trackSwitchMove(config, false, m))
-  );
 }
 
 function isOnTrack(version: string, channel: DesktopUpdateChannel): boolean {

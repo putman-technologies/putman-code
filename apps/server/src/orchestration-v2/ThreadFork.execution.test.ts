@@ -1185,6 +1185,32 @@ it.effect("a side chat opens once a later run has worked in the project checkout
   }).pipe(Effect.provide(forkCases[0]!.layer)),
 );
 
+it.effect("bulk deletion checks settlement and project under the thread lock", () =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const threadId = ThreadId.make("settled-cleanup");
+    const projectId = ProjectId.make("side-chat-project");
+    yield* createParent(threadId);
+    const remove = (id: string, settledInProject: ProjectId) =>
+      orchestrator.dispatch({
+        type: "thread.delete",
+        commandId: CommandId.make(id),
+        threadId,
+        settledInProject,
+      });
+    yield* remove("cleanup-active", projectId).pipe(Effect.flip);
+    yield* orchestrator.dispatch({
+      type: "thread.settle",
+      threadId,
+      commandId: CommandId.make("cleanup-settle"),
+    });
+    yield* remove("cleanup-wrong-project", ProjectId.make("other")).pipe(Effect.flip);
+    assert.isNull((yield* orchestrator.getThreadProjection(threadId)).thread.deletedAt);
+    yield* remove("cleanup-settled", projectId);
+    assert.isNotNull((yield* orchestrator.getThreadProjection(threadId)).thread.deletedAt);
+  }).pipe(Effect.provide(forkCases[0]!.layer)),
+);
+
 it.effect("closing a side chat deletes it only while unused; a deleted parent takes no more", () =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
