@@ -3072,7 +3072,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "on the computer that opened this page"]
+      "c": [
+        " ",
+        "on the computer that opened this page"
+      ]
     }
   ],
   "b2d53b4d1d48fbef": [
@@ -3084,7 +3087,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "· whoever runs it gets this access"]
+      "c": [
+        " ",
+        "· whoever runs it gets this access"
+      ]
     }
   ],
   "c54cc9c75db9dc58": "Only approve a sign-in you just started.",
@@ -7657,15 +7663,15 @@
   "e1fcc4b74faaae02": "Remove shortcut…",
   "efa55bbb1d3aa45e": "Review changes",
   "3e02b74615e20d82": "Manual setup",
-  "5be89f3939544a2b": [
-    "Turn capture off in PutmanCode to stop it. Remove the shortcut from ",
+  "83eec2abc4e4fec6": [
+    "Turn capture off in PutmanCode to stop it. Remove the shortcut from",
+    " ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
     },
-    " ",
-    "to free up the keys."
+    " to free up the keys."
   ],
   "4bf700ad94c0c486": "I've added the shortcut",
   "bcdea6ebe1a65e63": "ChatGPT account to connect",
