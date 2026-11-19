@@ -1,11 +1,12 @@
 import Constants from "expo-constants";
 import { Observe } from "expo-observe";
 
-// Importing expo-observe installs its global JS error handler; reports leave only through the relay.
-const relayUrl: unknown = Constants.expoConfig?.extra?.relay?.url;
+// Importing expo-observe installs its global JS error handler; dispatch requires a configured diagnostics endpoint.
+const diagnosticsUrl: unknown = Constants.expoConfig?.extra?.diagnosticsUrl;
 const appVariant: unknown = Constants.expoConfig?.extra?.appVariant;
 
-export const crashReportingAvailable = typeof relayUrl === "string" && relayUrl.trim() !== "";
+export const crashReportingAvailable =
+  typeof diagnosticsUrl === "string" && diagnosticsUrl.trim() !== "";
 
 interface PromiseRejectionTracker {
   readonly enablePromiseRejectionTracker?: (options: {
@@ -53,7 +54,7 @@ if (!crashReportingAvailable) {
       (preferences) =>
         changedSinceLoad()
           ? undefined
-          : setCrashReportsEnabled(preferences.crashReportsEnabled !== false),
+          : setCrashReportsEnabled(preferences.crashReportsEnabled === true),
       // Observe keeps the last choice it was given, which stands in for the unreadable one.
       (error: unknown) => console.warn("[observe] could not read the crash report setting", error),
     )

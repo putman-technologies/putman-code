@@ -2969,7 +2969,6 @@
   "c646366e142ba05f": "Desktop WSL state is unavailable.",
   "228dcd284ea651b3": "Failed to load WSL state.",
   "b08d105dd2553f8d": "The project did not appear in the desktop app.",
-  "7a4b3f3b83e121d7": "{organization} turned off anonymous usage data.",
   "d85822b18e9475df": "Managed by {organization}.",
   "a6dd531d58080010": "Connect to this server to check releases.",
   "314cdccee9c14774": "This server does not support registry lookups. Update it before switching tracks.",
@@ -3072,10 +3071,7 @@
     {
       "t": "span",
       "i": 2,
-      "c": [
-        " ",
-        "on the computer that opened this page"
-      ]
+      "c": [" ", "on the computer that opened this page"]
     }
   ],
   "b2d53b4d1d48fbef": [
@@ -3087,10 +3083,7 @@
     {
       "t": "span",
       "i": 2,
-      "c": [
-        " ",
-        "· whoever runs it gets this access"
-      ]
+      "c": [" ", "· whoever runs it gets this access"]
     }
   ],
   "c54cc9c75db9dc58": "Only approve a sign-in you just started.",
@@ -6021,26 +6014,6 @@
   ],
   "216ab7514aea1d61": "Start without an agent",
   "501ce2d99da8bfd1": "Set up one agent to start.",
-  "e1a94e844613f345": [
-    "PutmanCode collects anonymous usage data to improve the app. To opt out, see the",
-    " ",
-    {
-      "t": "a",
-      "i": 1,
-      "c": "privacy policy"
-    },
-    "."
-  ],
-  "b33f35083757b42c": [
-    "See the",
-    " ",
-    {
-      "t": "a",
-      "i": 1,
-      "c": "privacy policy"
-    },
-    "."
-  ],
   "f77d000c0710f066": "Turn on",
   "4ed27bf946e504db": "Set up",
   "7a26eaacff0607f7": [
@@ -9872,8 +9845,6 @@
   "c424bee294b9f778": "This environment is managed by {organization}. Some settings and features follow its policy.",
   "82d9538af590f58c": "See your agents, import projects, and set up your phone.",
   "6a48fd0a37e725a1": "Legal",
-  "7e011a0b7a306500": "How we handle your data, including the anonymous usage data PutmanCode collects.",
-  "e741b1ab9396053a": "How we handle your data. {telemetryOff}",
   "26ec5b81bf4d836f": "Notices for dependencies, assets, and optional tools used by PutmanCode.",
   "e39a57514be028e9": "Review",
   "7c0512387c3a42ea": "Stable",
@@ -9900,7 +9871,6 @@
   "5fe5a45199fa9c07": "No text generation providers available.",
   "99ceba64591c9257": "View diagnostics",
   "eb576a5feda7b535": "Open",
-  "66647e8c8123a51f": "View policy",
   "6d59e1e516e53d17": "View licenses",
   "941d08db15f62d17": "Archived",
   "e122b2428c0d03a5": "Open all environments",
@@ -11547,7 +11517,6 @@
   "dc2a999ca67ccf31": "phone tablet iPhone iPad iOS Android App Store Google Play QR",
   "6310b97b04ef239f": "Welcome page",
   "df9fa3a9cb004b9b": "onboarding setup first run getting started agents import projects",
-  "3188bc3b3c4508bc": "Privacy policy",
   "901a823214edc8c4": "telemetry analytics usage data tracking legal opt out",
   "82136480255a5106": "OTel OTLP telemetry export endpoints logs traces metrics Grafana",
   "659d081051faf7ff": "logs traces processes resource history failures spans cpu memory",
@@ -12157,5 +12126,7 @@
   "b7df38b7d8792d78": "Open guide",
   "9e91e9a77b664e4e": "Could not start a review guide",
   "e08cdb553e6da003": "server",
-  "8447567c069219a6": "Remove"
+  "8447567c069219a6": "Remove",
+  "ccce67f9880cdcc7": "Anonymous usage reporting is off in PutmanCode.",
+  "3aeed5704f9098a6": "Usage reporting"
 }

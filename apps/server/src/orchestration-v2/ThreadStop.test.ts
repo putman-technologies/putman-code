@@ -177,11 +177,24 @@ it.effect("hands off a completed feature once and preserves the source when deli
       title: "Demo",
       workspaceRoot: "/tmp/demo",
       defaultModelSelection: modelSelection,
-      scripts: [],
+      scripts: [
+        {
+          id: "check",
+          name: "Unit tests",
+          command: "vp test",
+          icon: "configure",
+          runOnWorktreeCreate: false,
+        },
+      ] as const,
       createdAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-01-01T00:00:00Z",
       deletedAt: null,
     };
+    const readCheckout = (cwd: string) =>
+      Effect.sync(() => {
+        assert.equal(cwd, project.workspaceRoot);
+        return { isRepo: true, refName: "feature/search", hasWorkingTreeChanges: true };
+      });
     const projects = { getById: () => Effect.succeedSome(project) };
     const source = ThreadId.make("thread:handoff");
     yield* createWatchingThread(source, 3);
@@ -196,7 +209,9 @@ it.effect("hands off a completed feature once and preserves the source when deli
     const run = (yield* orchestrator.getThreadProjection(source)).runs[0]!;
     const input = { action: "handoff" as const, projectId, threadId: source, runId: run.id };
     assert.isTrue(
-      Exit.isFailure(yield* Effect.exit(runProjectCoordinator(input, projects, threads))),
+      Exit.isFailure(
+        yield* Effect.exit(runProjectCoordinator(input, projects, threads, readCheckout)),
+      ),
     );
     const now = yield* DateTime.now;
     yield* projections.apply({
@@ -207,11 +222,37 @@ it.effect("hands off a completed feature once and preserves the source when deli
       occurredAt: now,
       payload: { ...run, status: "completed", completedAt: now },
     });
+    yield* projections.apply({
+      id: EventId.make("event:handoff:script"),
+      type: "turn-item.updated",
+      threadId: source,
+      runId: run.id,
+      occurredAt: now,
+      payload: {
+        id: TurnItemId.make("item:handoff:test"),
+        threadId: source,
+        runId: run.id,
+        nodeId: run.rootNodeId,
+        providerThreadId: null,
+        providerTurnId: null,
+        nativeItemRef: null,
+        parentItemId: null,
+        ordinal: 1,
+        status: "completed",
+        title: null,
+        startedAt: now,
+        completedAt: now,
+        updatedAt: now,
+        type: "command_execution",
+        input: "vp test",
+        exitCode: 0,
+      },
+    });
     const open = { action: "open" as const, projectId, modelSelection };
     const [first, second] = yield* Effect.all(
       [
-        runProjectCoordinator(open, projects, threads),
-        runProjectCoordinator(open, projects, threads),
+        runProjectCoordinator(open, projects, threads, readCheckout),
+        runProjectCoordinator(open, projects, threads, readCheckout),
       ],
       { concurrency: 2 },
     );
@@ -227,16 +268,36 @@ it.effect("hands off a completed feature once and preserves the source when deli
         ),
     };
     assert.isTrue(
-      Exit.isFailure(yield* Effect.exit(runProjectCoordinator(input, projects, unavailable))),
+      Exit.isFailure(
+        yield* Effect.exit(runProjectCoordinator(input, projects, unavailable, readCheckout)),
+      ),
     );
     assert.isNull((yield* threads.getThreadShell(source))!.archivedAt);
-    const target = yield* runProjectCoordinator(input, projects, threads);
+    const interrupted: typeof threads = {
+      ...threads,
+      dispatch: (command) =>
+        command.type === "thread.archive"
+          ? Effect.die("interrupted after delivery")
+          : threads.dispatch(command),
+    };
+    assert.isTrue(
+      Exit.isFailure(
+        yield* Effect.exit(runProjectCoordinator(input, projects, interrupted, readCheckout)),
+      ),
+    );
+    assert.isNull((yield* threads.getThreadShell(source))!.archivedAt);
+    const target = yield* runProjectCoordinator(input, projects, threads, () =>
+      Effect.die("already delivered"),
+    );
     assert.deepEqual(target, first);
-    assert.deepEqual(yield* runProjectCoordinator(input, projects, threads), target);
+    assert.deepEqual(yield* runProjectCoordinator(input, projects, threads, readCheckout), target);
     const packet = (yield* orchestrator.getThreadProjection(target.threadId)).messages;
     assert.lengthOf(packet, 1);
     assert.include(packet[0]!.text, "Add project search");
     assert.include(packet[0]!.text, source);
+    assert.include(packet[0]!.text, "Checkout at handoff: feature/search; uncommitted changes");
+    assert.include(packet[0]!.text, "Unit tests: exit 0");
+    assert.include(packet[0]!.text, "https://github.com/pingdotgg/t3code/pull/3");
     assert.isNotNull((yield* threads.getThreadShell(source))!.archivedAt);
   }).pipe(Effect.provide(layerTest)),
 );

@@ -8,6 +8,8 @@ Open **PutmanCode.app**. The default workspace has a light editor, navy project 
 
 Projects and thread history are stored under `~/.putman-code/userdata`. Your repository stays in the folder you chose when adding the project. Fresh installs keep Chromium preferences under `~/Library/Application Support/PutmanCode`. Upgrades from the earlier fork reuse its existing `Putman Code` profile. Set `PUTMANCODE_HOME` to choose another app data directory.
 
+Anonymous product usage reporting is disabled. The project coordinator receives the feature checkout, linked pull requests, and exit codes for matching project scripts recorded in the completed turn.
+
 ## Development
 
 Install dependencies with `vp i`. Use `vp run dev` for a local workspace or `vp run build:desktop:bundle` to compile the desktop client and bundled server.

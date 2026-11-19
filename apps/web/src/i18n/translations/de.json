@@ -2970,7 +2970,6 @@
   "c646366e142ba05f": "Der WSL-Status des Desktops ist nicht verfügbar.",
   "228dcd284ea651b3": "Der WSL-Status konnte nicht geladen werden.",
   "b08d105dd2553f8d": "Das Projekt ist nicht in der Desktop-App erschienen.",
-  "7a4b3f3b83e121d7": "{organization} hat anonyme Nutzungsdaten deaktiviert.",
   "d85822b18e9475df": "Verwaltet von {organization}.",
   "a6dd531d58080010": "Verbinde dich mit diesem Server, um nach Releases zu suchen.",
   "314cdccee9c14774": "Dieser Server unterstützt keine Registry-Abfragen. Aktualisiere ihn, bevor du den Kanal wechselst.",
@@ -6012,26 +6011,6 @@
   ],
   "216ab7514aea1d61": "Ohne Agenten starten",
   "501ce2d99da8bfd1": "Richte einen Agenten ein, um zu starten.",
-  "e1a94e844613f345": [
-    "PutmanCode erfasst anonyme Nutzungsdaten, um die App zu verbessern. Wie du widersprichst, steht in der",
-    " ",
-    {
-      "t": "a",
-      "i": 1,
-      "c": "Datenschutzerklärung"
-    },
-    "."
-  ],
-  "b33f35083757b42c": [
-    "Siehe",
-    " ",
-    {
-      "t": "a",
-      "i": 1,
-      "c": "Datenschutzerklärung"
-    },
-    "."
-  ],
   "f77d000c0710f066": "Aktivieren",
   "4ed27bf946e504db": "Einrichten",
   "7a26eaacff0607f7": [
@@ -9857,8 +9836,6 @@
   "c424bee294b9f778": "Diese Umgebung wird von {organization} verwaltet. Einige Einstellungen und Funktionen folgen deren Richtlinie.",
   "82d9538af590f58c": "Sieh deine Agenten, importiere Projekte und richte dein Smartphone ein.",
   "6a48fd0a37e725a1": "Rechtliches",
-  "7e011a0b7a306500": "Wie wir mit deinen Daten umgehen, einschließlich der anonymen Nutzungsdaten, die PutmanCode erfasst.",
-  "e741b1ab9396053a": "Wie wir mit deinen Daten umgehen. {telemetryOff}",
   "26ec5b81bf4d836f": "Hinweise zu Abhängigkeiten, Assets und optionalen Tools, die PutmanCode verwendet.",
   "e39a57514be028e9": "Review",
   "7c0512387c3a42ea": "Stable",
@@ -9885,7 +9862,6 @@
   "5fe5a45199fa9c07": "Keine Anbieter für Textgenerierung verfügbar.",
   "99ceba64591c9257": "Diagnose anzeigen",
   "eb576a5feda7b535": "Öffnen",
-  "66647e8c8123a51f": "Richtlinie anzeigen",
   "6d59e1e516e53d17": "Lizenzen anzeigen",
   "941d08db15f62d17": "Archiviert",
   "e122b2428c0d03a5": "Alle Umgebungen öffnen",
@@ -11533,7 +11509,6 @@
   "dc2a999ca67ccf31": "telefon tablet iPhone iPad iOS Android App Store Google Play QR",
   "6310b97b04ef239f": "Willkommensseite",
   "df9fa3a9cb004b9b": "onboarding einrichtung erster start erste schritte agenten import projekte",
-  "3188bc3b3c4508bc": "Datenschutzerklärung",
   "901a823214edc8c4": "telemetrie analyse nutzungsdaten tracking rechtliches deaktivieren",
   "82136480255a5106": "OTel OTLP telemetrie export endpunkte logs traces metriken Grafana",
   "659d081051faf7ff": "logs traces prozesse ressourcenverlauf fehler spans cpu speicher",
@@ -12142,5 +12117,7 @@
   "b7df38b7d8792d78": "Leitfaden öffnen",
   "9e91e9a77b664e4e": "Review-Leitfaden konnte nicht gestartet werden",
   "e08cdb553e6da003": "Server",
-  "8447567c069219a6": "Entfernen"
+  "8447567c069219a6": "Entfernen",
+  "ccce67f9880cdcc7": "Die anonyme Übermittlung von Nutzungsdaten ist in PutmanCode deaktiviert.",
+  "3aeed5704f9098a6": "Nutzungsberichte"
 }
