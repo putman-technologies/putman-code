@@ -25,6 +25,7 @@ import {
   resolvePullRequestAuthorFilter,
   PositiveInt,
   TrimmedNonEmptyString,
+  type CoordinatorStatus,
   type PullRequestAction,
   type PullRequestStackHead,
   type PullRequestActor,
@@ -54,6 +55,7 @@ import * as GitHubRest from "./GitHubRest.ts";
 import * as GitHubPullRequestEvents from "./gitHubPullRequestEvents.ts";
 import * as GitHubRequestPolicy from "./GitHubRequestPolicy.ts";
 import * as GitHubGraphQlClient from "./gitHubGraphQlClient.ts";
+import { coordinatorReleaseState } from "./coordinatorReleaseState.ts";
 import { PullRequestBatchesGraphQLGroup } from "./pullRequestBatches.graphql.ts";
 import {
   PullRequestMutationsGraphQLGroup,
@@ -559,6 +561,12 @@ export class GitHubPullRequestApi extends Context.Service<
       }>;
     }) => Effect.Effect<ReadonlyArray<GitHubPullRequestStat>, GitHubPullRequestApiError>;
 
+    readonly coordinatorStatus: (input: {
+      readonly cwd: string;
+      readonly repository: string;
+      readonly host: string;
+      readonly number: number;
+    }) => Effect.Effect<CoordinatorStatus, GitHubPullRequestApiError>;
     readonly getPullRequestSummary: (input: {
       readonly cwd: string;
       readonly repository: string;
@@ -1911,6 +1919,13 @@ export const make = Effect.gen(function* () {
   }).pipe(RequestResolver.batchN(FILES_VIEWED_PER_REQUEST));
 
   return GitHubPullRequestApi.of({
+    coordinatorStatus: Effect.fn("GitHubPullRequestApi.coordinatorStatus")((input) => {
+      const { owner, name } = parseRepositorySelector(input.repository);
+      return client.CoordinatorRelease({ owner, name, number: input.number }).pipe(
+        graphql({ ...input, operation: "coordinatorStatus" }),
+        Effect.map((result) => coordinatorReleaseState(result.repository?.pullRequest)),
+      );
+    }),
     withVerifiedCredential,
     revalidateChecks,
     getRoutingIdentity,

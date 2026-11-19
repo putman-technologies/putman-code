@@ -429,5 +429,83 @@ export declare namespace PullRequestWatchFingerprint {
   export type Result = typeof PullRequestWatchFingerprint.result.Type
 }
 
+/** Describes the status of a given deployment attempt. */
+export const DeploymentStatus = Schema.Struct({
+  /** Identifies the current state of the deployment. */
+  state: GraphQL.enumLiterals(Shared.DeploymentStatusState.literals)
+})
+export interface DeploymentStatus extends Schema.Struct.Type<typeof DeploymentStatus.fields> {}
+
+/** Represents triggered deployment instance. */
+export const Deployment = Schema.Struct({
+  /** The latest status of this deployment. */
+  latestStatus: Schema.NullOr(DeploymentStatus)
+})
+export interface Deployment extends Schema.Struct.Type<typeof Deployment.fields> {}
+
+/** The connection type for Deployment. */
+export const DeploymentConnection = Schema.Struct({
+  /** A list of nodes. */
+  nodes: Schema.NullOr(Schema.Array(Schema.NullOr(Deployment)))
+})
+export interface DeploymentConnection extends Schema.Struct.Type<typeof DeploymentConnection.fields> {}
+
+/** Represents a Git commit. */
+export const MergeCommitCommit = Schema.Struct({
+  /** Check and Status rollup information for this commit. */
+  statusCheckRollup: Schema.NullOr(PullRequestSummaryRepositoryPullRequestCommitsNodesCommitStatusCheckRollupStatusCheckRollup),
+  /** The deployments associated with a commit. */
+  deployments: Schema.NullOr(DeploymentConnection)
+})
+export interface MergeCommitCommit extends Schema.Struct.Type<typeof MergeCommitCommit.fields> {}
+
+/** A repository pull request. */
+export const CoordinatorReleaseRepositoryPullRequestPullRequest = Schema.Struct({
+  /** Identifies the state of the pull request. */
+  state: GraphQL.enumLiterals(Shared.PullRequestState.literals),
+  /** The current status of this pull request with respect to code review. */
+  reviewDecision: Schema.NullOr(GraphQL.enumLiterals(Shared.PullRequestReviewDecision.literals)),
+  /** A list of commits present in this pull request's head branch not present in the base branch. */
+  commits: PullRequestSummaryRepositoryPullRequestCommitsPullRequestCommitConnection,
+  /** The commit that was created when this pull request was merged. */
+  mergeCommit: Schema.NullOr(MergeCommitCommit)
+})
+export interface CoordinatorReleaseRepositoryPullRequestPullRequest extends Schema.Struct.Type<typeof CoordinatorReleaseRepositoryPullRequestPullRequest.fields> {}
+
+/** A repository contains the content for a project. */
+export const CoordinatorReleaseRepositoryRepository = Schema.Struct({
+  /** Returns a single pull request from the current repository by number. */
+  pullRequest: Schema.NullOr(CoordinatorReleaseRepositoryPullRequestPullRequest)
+})
+export interface CoordinatorReleaseRepositoryRepository extends Schema.Struct.Type<typeof CoordinatorReleaseRepositoryRepository.fields> {}
+
+/** `query CoordinatorRelease` */
+export const CoordinatorRelease = GraphQL.query("CoordinatorRelease", {
+  document: {
+    variables: [
+      { name: "owner", body: "String!" },
+      { name: "name", body: "String!" },
+      { name: "number", body: "Int!" }
+    ],
+    selections: [
+      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){pullRequest(number:$", "number", "){state reviewDecision commits(last:1){nodes{commit{statusCheckRollup{state}}}}mergeCommit{statusCheckRollup{state}deployments(first:1 environments:[\"Production\" \"production\" \"Prod\" \"prod\" \"PRODUCTION\" \"PROD\"]orderBy:{field:CREATED_AT direction:DESC}){nodes{latestStatus{state}}}}}}"] }
+    ],
+    fragments: []
+  },
+  variables: {
+    owner: Schema.String,
+    name: Schema.String,
+    number: Shared.Int
+  },
+  result: Schema.Struct({
+    /** Lookup a given repository by the owner and repository name. */
+    repository: Schema.NullOr(CoordinatorReleaseRepositoryRepository)
+  })
+})
+export declare namespace CoordinatorRelease {
+  export type Variables = typeof CoordinatorRelease.variables.Type
+  export type Result = typeof CoordinatorRelease.result.Type
+}
+
 /** Every operation in pullRequestBatches.graphql. */
-export const PullRequestBatchesGraphQLGroup = GraphQLGroup.make(PullRequestSummary, PullRequestStats, PullRequestStackMembership, PullRequestWatchFingerprint)
+export const PullRequestBatchesGraphQLGroup = GraphQLGroup.make(PullRequestSummary, PullRequestStats, PullRequestStackMembership, PullRequestWatchFingerprint, CoordinatorRelease)

@@ -12118,5 +12118,11 @@
   "e08cdb553e6da003": "servidor",
   "8447567c069219a6": "Remover",
   "ccce67f9880cdcc7": "O envio de relatórios anônimos de uso está desativado no PutmanCode.",
-  "3aeed5704f9098a6": "Relatórios de uso"
+  "3aeed5704f9098a6": "Relatórios de uso",
+  "90c7d27c15d7d4b9": "Requer revisão",
+  "f127b2c1c6d043c4": "CI em execução",
+  "1ad8f1c49fa4e6ef": "Aguardando implantação",
+  "477a176670b421b9": "Implantado",
+  "efa2b753ba618ac3": "Status indisponível",
+  "0322bdeabfecdecb": "Status do coordenador: {status}"
 }

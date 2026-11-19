@@ -2059,6 +2059,12 @@ const WsOrchestrationV2StopWorkflowRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.st
   error: Schema.Union([OrchestrationV2StopWorkflowError, EnvironmentAuthorizationError]),
 });
 
+const WsCoordinatorStatusRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.coordinatorStatus, {
+  payload: OrchestrationV2RpcSchemas.coordinatorStatus.input,
+  success: OrchestrationV2RpcSchemas.coordinatorStatus.output,
+  error: Schema.Union([ProjectCoordinatorError, EnvironmentAuthorizationError]),
+});
+
 const WsProjectCoordinatorRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.projectCoordinator, {
   payload: OrchestrationV2RpcSchemas.projectCoordinator.input,
   success: OrchestrationV2RpcSchemas.projectCoordinator.output,
@@ -2480,6 +2486,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2StopWorkflowRpc,
   WsOrchestrationV2ForceStopThreadRpc,
   WsProjectCoordinatorRpc,
+  WsCoordinatorStatusRpc,
   WsOrchestrationV2GetTurnItemRpc,
   WsOrchestrationV2GetTurnDiffRpc,
   WsOrchestrationV2GetFullThreadDiffRpc,

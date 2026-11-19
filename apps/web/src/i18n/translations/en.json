@@ -12128,5 +12128,11 @@
   "e08cdb553e6da003": "server",
   "8447567c069219a6": "Remove",
   "ccce67f9880cdcc7": "Anonymous usage reporting is off in PutmanCode.",
-  "3aeed5704f9098a6": "Usage reporting"
+  "3aeed5704f9098a6": "Usage reporting",
+  "90c7d27c15d7d4b9": "Needs review",
+  "f127b2c1c6d043c4": "CI running",
+  "1ad8f1c49fa4e6ef": "Awaiting deploy",
+  "477a176670b421b9": "Deployed",
+  "efa2b753ba618ac3": "Status unavailable",
+  "0322bdeabfecdecb": "Coordinator status: {status}"
 }

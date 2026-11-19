@@ -12119,5 +12119,11 @@
   "e08cdb553e6da003": "serveur",
   "8447567c069219a6": "Supprimer",
   "ccce67f9880cdcc7": "L’envoi de rapports d’utilisation anonymes est désactivé dans PutmanCode.",
-  "3aeed5704f9098a6": "Rapports d’utilisation"
+  "3aeed5704f9098a6": "Rapports d’utilisation",
+  "90c7d27c15d7d4b9": "À vérifier",
+  "f127b2c1c6d043c4": "CI en cours",
+  "1ad8f1c49fa4e6ef": "En attente de déploiement",
+  "477a176670b421b9": "Déployé",
+  "efa2b753ba618ac3": "Statut indisponible",
+  "0322bdeabfecdecb": "État du coordinateur : {status}"
 }

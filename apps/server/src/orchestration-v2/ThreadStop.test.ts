@@ -41,6 +41,7 @@ import * as EffectOutbox from "./EffectOutbox.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
+import { readCoordinatorStatus } from "./CoordinatorStatus.ts";
 import { runProjectCoordinator } from "./ProjectCoordinator.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import * as ProviderReplayHarness from "./testkit/ProviderReplayHarness.ts";
@@ -196,6 +197,16 @@ it.effect("hands off a completed feature once and preserves the source when deli
         return { isRepo: true, refName: "feature/search", hasWorkingTreeChanges: true };
       });
     const projects = { getById: () => Effect.succeedSome(project) };
+    const sql = yield* SqlClient.SqlClient;
+    const status = (state: "review" | "ci" | "deployed") =>
+      readCoordinatorStatus(projectId, sql, threads, (ref) =>
+        Effect.sync(() => {
+          assert.equal(ref.projectId, projectId);
+          assert.equal(ref.number, 3);
+          return state;
+        }),
+      );
+    assert.equal(yield* status("deployed"), "idle");
     const source = ThreadId.make("thread:handoff");
     yield* createWatchingThread(source, 3);
     yield* orchestrator.dispatch({
@@ -290,6 +301,9 @@ it.effect("hands off a completed feature once and preserves the source when deli
       Effect.die("already delivered"),
     );
     assert.deepEqual(target, first);
+    for (const next of ["review", "ci", "deployed"] as const) {
+      assert.equal(yield* status(next), next);
+    }
     assert.deepEqual(yield* runProjectCoordinator(input, projects, threads, readCheckout), target);
     const packet = (yield* orchestrator.getThreadProjection(target.threadId)).messages;
     assert.lengthOf(packet, 1);
@@ -299,6 +313,45 @@ it.effect("hands off a completed feature once and preserves the source when deli
     assert.include(packet[0]!.text, "Unit tests: exit 0");
     assert.include(packet[0]!.text, "https://github.com/pingdotgg/t3code/pull/3");
     assert.isNotNull((yield* threads.getThreadShell(source))!.archivedAt);
+
+    const nextSource = ThreadId.make("feature-without-a-pr");
+    yield* threads.dispatch({
+      type: "thread.create",
+      threadId: nextSource,
+      projectId,
+      title: "Second feature",
+      commandId: CommandId.make("create-second-feature"),
+      createdBy: "user",
+      creationSource: "web",
+      modelSelection,
+      runtimeMode: "approval-required",
+      interactionMode: "default",
+      branch: null,
+      worktreePath: null,
+    });
+    yield* send(nextSource, "Prepare the second change", "start_immediately");
+    const nextRun = (yield* orchestrator.getThreadProjection(nextSource)).runs[0]!;
+    yield* projections.apply({
+      id: EventId.make("event:second-feature:complete"),
+      type: "run.updated",
+      threadId: nextSource,
+      runId: nextRun.id,
+      occurredAt: now,
+      payload: { ...nextRun, status: "completed", completedAt: now },
+    });
+    yield* runProjectCoordinator(
+      { ...input, threadId: nextSource, runId: nextRun.id },
+      projects,
+      threads,
+      readCheckout,
+    );
+    assert.equal(yield* status("deployed"), "review");
+    assert.equal(
+      yield* readCoordinatorStatus(ProjectId.make("unrelated-project"), sql, threads, () =>
+        Effect.die("An unrelated project must never read a pull request"),
+      ),
+      "idle",
+    );
   }).pipe(Effect.provide(layerTest)),
 );
 

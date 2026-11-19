@@ -3,6 +3,7 @@ import { useGT } from "gt-react";
 import { SquarePenIcon } from "lucide-react";
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import { ProjectEnvironmentBadge } from "../ProjectEnvironmentBadge";
+import { CoordinatorStatusBadge } from "./CoordinatorStatusBadge";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { SidebarHeaderIconButton } from "./SidebarThreadHeader";
 
@@ -55,6 +56,7 @@ export function SidebarProjectList(props: SidebarProjectListProps) {
                   machineByEnvironmentId={props.machineByEnvironmentId}
                 />
               )}
+              <CoordinatorStatusBadge members={project.memberProjectRefs} />
             </button>
             <span className="opacity-0 group-hover/project:opacity-100 group-focus-within/project:opacity-100 pointer-coarse:opacity-100">
               <SidebarHeaderIconButton

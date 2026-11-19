@@ -3869,6 +3869,7 @@ export const ORCHESTRATION_V2_WS_METHODS = {
   getWorkflowScript: "orchestration.getWorkflowScript",
   getNativeChildWork: "orchestration.getNativeChildWork",
   stopWorkflow: "orchestration.stopWorkflow",
+  coordinatorStatus: "orchestration.coordinatorStatus",
   projectCoordinator: "orchestration.projectCoordinator",
   forceStopThread: "orchestration.forceStopThread",
   getTurnItem: "orchestration.getTurnItem",
@@ -4227,6 +4228,26 @@ export const OrchestrationV2ThreadStreamItem = withRecordIdTable(
 );
 export type OrchestrationV2ThreadStreamItem = typeof OrchestrationV2ThreadStreamItem.Type;
 
+export const CoordinatorStatus = Schema.Literals([
+  "idle",
+  "review",
+  "ci",
+  "awaiting",
+  "deployed",
+  "unavailable",
+]);
+export type CoordinatorStatus = typeof CoordinatorStatus.Type;
+
+/** A grouped project or multi-PR handoff shows the first state needing attention. */
+export function summarizeCoordinatorStatuses(
+  states: readonly CoordinatorStatus[],
+): CoordinatorStatus {
+  for (const state of ["review", "unavailable", "ci", "awaiting", "deployed"] as const) {
+    if (states.includes(state)) return state;
+  }
+  return "idle";
+}
+
 export class ProjectCoordinatorError extends Schema.TaggedError<ProjectCoordinatorError>()(
   "ProjectCoordinatorError",
   { message: Schema.String },
@@ -4575,6 +4596,7 @@ export const OrchestrationV2RpcSchemas = {
     input: OrchestrationV2StopWorkflowInput,
     output: Schema.Void,
   },
+  coordinatorStatus: { input: Schema.Struct({ projectId: ProjectId }), output: CoordinatorStatus },
   projectCoordinator: {
     input: Schema.Union([
       Schema.Struct({

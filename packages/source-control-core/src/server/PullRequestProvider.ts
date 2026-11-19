@@ -5,6 +5,7 @@ import type {
   PullRequestStackMembership,
   PullRequestAction,
   PullRequestStackHead,
+  CoordinatorStatus,
   PullRequestActor,
   PullRequestReferenceCandidate,
   PullRequestReferenceSigil,
@@ -432,6 +433,10 @@ export interface PullRequestProviderApi {
       readonly number: number;
     }>;
   }) => Effect.Effect<ReadonlyArray<ProviderChangeRequestStat>, PullRequestProviderError>;
+
+  readonly coordinatorStatus?: (
+    input: ProviderRepositoryRef & { readonly number: number },
+  ) => Effect.Effect<CoordinatorStatus, PullRequestProviderError>;
 
   readonly getChangeRequestChecks?: (
     input: ProviderRepositoryRef & { readonly number: number },

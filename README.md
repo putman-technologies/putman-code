@@ -10,7 +10,7 @@ Projects and thread history are stored under `~/.putman-code/userdata`. Your rep
 
 Anonymous product usage reporting is disabled. The project coordinator receives the feature checkout, linked pull requests, and exit codes for matching project scripts recorded in the completed turn.
 
-The Projects list stays above the thread list. Select a project to filter its chats, or use its pencil button to start a chat there.
+The Projects list stays above the thread list. Select a project to filter its chats, or use its pencil button to start a chat there. The badge beside each project follows its latest coordinator handoff and refreshes every minute. **Needs review** covers unlinked work, approvals, and failed checks. **CI running** follows pending GitHub checks. After merge, **Awaiting deploy** changes to **Deployed** when GitHub records a successful deployment for that merge commit in the Production or Prod environment.
 
 ## Sharing Mac updates
 

@@ -12119,5 +12119,11 @@
   "e08cdb553e6da003": "Server",
   "8447567c069219a6": "Entfernen",
   "ccce67f9880cdcc7": "Die anonyme Übermittlung von Nutzungsdaten ist in PutmanCode deaktiviert.",
-  "3aeed5704f9098a6": "Nutzungsberichte"
+  "3aeed5704f9098a6": "Nutzungsberichte",
+  "90c7d27c15d7d4b9": "Prüfung nötig",
+  "f127b2c1c6d043c4": "CI läuft",
+  "1ad8f1c49fa4e6ef": "Wartet auf Bereitstellung",
+  "477a176670b421b9": "Bereitgestellt",
+  "efa2b753ba618ac3": "Status unbekannt",
+  "0322bdeabfecdecb": "Koordinatorstatus: {status}"
 }

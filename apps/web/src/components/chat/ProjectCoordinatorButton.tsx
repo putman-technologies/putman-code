@@ -6,6 +6,9 @@ import { CornerUpRightIcon, MessagesSquareIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { orchestrationEnvironment } from "../../state/orchestration";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
+import { appAtomRegistry } from "../../rpc/atomRegistry";
+import { serverEnvironment } from "../../state/server";
+import { coordinatorStatusQuery } from "../../state/projects";
 import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
 
@@ -43,6 +46,17 @@ export function ProjectCoordinatorButton(props: {
           : { action: "open", projectId: props.projectId, modelSelection: props.modelSelection },
       });
       if (response._tag === "Success") {
+        if (
+          appAtomRegistry.get(serverEnvironment.configValueAtom(props.environmentId))?.environment
+            .capabilities.coordinatorStatus
+        ) {
+          appAtomRegistry.refresh(
+            coordinatorStatusQuery({
+              environmentId: props.environmentId,
+              input: { projectId: props.projectId },
+            }),
+          );
+        }
         props.onOpen(response.value.threadId, props.environmentId);
       } else if (response._tag === "Failure") {
         const cause = squashAtomCommandFailure(response);

@@ -1180,6 +1180,43 @@ layer("GitHubPullRequestApi.layer", (it) => {
       }),
   );
 
+  it.effect(
+    "reads coordinator release evidence from the production deployment on the merged commit",
+    () =>
+      Effect.gen(function* () {
+        mockedExecute.mockReturnValueOnce(
+          Effect.succeed(
+            output(
+              encodeJson({
+                data: {
+                  repository: {
+                    pullRequest: {
+                      state: "MERGED",
+                      reviewDecision: null,
+                      commits: { nodes: [] },
+                      mergeCommit: {
+                        statusCheckRollup: { state: "SUCCESS" },
+                        deployments: { nodes: [{ latestStatus: { state: "SUCCESS" } }] },
+                      },
+                    },
+                  },
+                },
+              }),
+            ),
+          ),
+        );
+        const api = yield* GitHubPullRequestApi.GitHubPullRequestApi;
+        expect(
+          yield* api.coordinatorStatus({
+            cwd: "/w",
+            host: "github.com",
+            repository: "acme/web",
+            number: 7,
+          }),
+        ).toBe("deployed");
+      }),
+  );
+
   it.effect("reads linked pull requests on one host together, filed back by position", () =>
     Effect.gen(function* () {
       const node = (number: number) => ({

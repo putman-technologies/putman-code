@@ -12126,5 +12126,11 @@
   "e08cdb553e6da003": "server",
   "8447567c069219a6": "Ta bort",
   "ccce67f9880cdcc7": "Anonym användningsrapportering är avstängd i PutmanCode.",
-  "3aeed5704f9098a6": "Användningsrapportering"
+  "3aeed5704f9098a6": "Användningsrapportering",
+  "90c7d27c15d7d4b9": "Behöver granskas",
+  "f127b2c1c6d043c4": "CI körs",
+  "1ad8f1c49fa4e6ef": "Väntar på driftsättning",
+  "477a176670b421b9": "Driftsatt",
+  "efa2b753ba618ac3": "Status saknas",
+  "0322bdeabfecdecb": "Koordinatorstatus: {status}"
 }

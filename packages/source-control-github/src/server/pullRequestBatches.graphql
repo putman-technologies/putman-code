@@ -137,3 +137,39 @@ query PullRequestWatchFingerprint(
     }
   }
 }
+
+# Commit-scoped evidence for the coordinator sidebar. A successful build alone cannot
+# establish that the release was deployed.
+query CoordinatorRelease($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      state
+      reviewDecision
+      commits(last: 1) {
+        nodes {
+          commit {
+            statusCheckRollup {
+              state
+            }
+          }
+        }
+      }
+      mergeCommit {
+        statusCheckRollup {
+          state
+        }
+        deployments(
+          first: 1
+          environments: ["Production", "production", "Prod", "prod", "PRODUCTION", "PROD"]
+          orderBy: { field: CREATED_AT, direction: DESC }
+        ) {
+          nodes {
+            latestStatus {
+              state
+            }
+          }
+        }
+      }
+    }
+  }
+}

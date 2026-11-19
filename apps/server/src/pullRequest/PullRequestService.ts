@@ -19,6 +19,7 @@ import {
   PullRequestOperationError,
   PullRequestUnavailableError,
   resolvePullRequestAuthorFilter,
+  type CoordinatorStatus,
   type OrchestrationProjectShell,
   type ProjectId,
   type PullRequestAction,
@@ -198,6 +199,7 @@ export class PullRequestService extends Context.Service<
       input: PullRequestRef,
       operation: Effect.Effect<A, E, R>,
     ) => Effect.Effect<A, E | PullRequestError, R>;
+    readonly coordinatorStatus: (input: PullRequestRef) => Effect.Effect<CoordinatorStatus>;
     readonly summary: (
       input: PullRequestRef,
       options?: {
@@ -588,6 +590,9 @@ function withRateLimitBackoff(
     ...(api.getChangeRequestPreview === undefined
       ? {}
       : { getChangeRequestPreview: wrap("getChangeRequestPreview", api.getChangeRequestPreview) }),
+    ...(api.coordinatorStatus === undefined
+      ? {}
+      : { coordinatorStatus: wrap("coordinatorStatus", api.coordinatorStatus) }),
     ...(api.getChangeRequestChecks === undefined
       ? {}
       : { getChangeRequestChecks: wrap("getChangeRequestChecks", api.getChangeRequestChecks) }),
@@ -3300,6 +3305,25 @@ export const make = Effect.gen(function* () {
     );
   };
 
+  const coordinatorCache = yield* Cache.makeWith(
+    (key: string) => {
+      const input = refOfCacheKey(key);
+      return requireProject(input).pipe(
+        Effect.flatMap(
+          ({ api, project, host, repository }) =>
+            api.coordinatorStatus?.({
+              cwd: project.workspaceRoot,
+              host,
+              repository,
+              number: input.number,
+            }) ?? Effect.succeed("unavailable" as const),
+        ),
+        Effect.orElseSucceed(() => "unavailable" as const),
+      );
+    },
+    { capacity: DETAIL_CACHE_CAPACITY, timeToLive: () => Duration.seconds(45) },
+  );
+
   const checksCache = yield* Cache.makeWith(
     (key: string) => {
       const input = refOfCacheKey(key);
@@ -4102,6 +4126,10 @@ export const make = Effect.gen(function* () {
       ),
     );
 
+  const readCoordinatorPull = credentialCached((ref) =>
+    Cache.get(coordinatorCache, refCacheKey(ref)),
+  );
+
   return PullRequestService.of({
     withSharedProjectReads,
     routing,
@@ -4116,6 +4144,9 @@ export const make = Effect.gen(function* () {
       );
       return yield* listStats({ ...input, refs: refs.flatMap(Option.toArray) });
     }),
+    coordinatorStatus: Effect.fn("PullRequestService.coordinatorStatus")((input) =>
+      readCoordinatorPull(input).pipe(Effect.orElseSucceed(() => "unavailable" as const)),
+    ),
     summary: credentialCached(summary),
     batchesReads,
     stack: credentialCached(stack),
