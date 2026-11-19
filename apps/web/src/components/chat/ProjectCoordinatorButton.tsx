@@ -30,46 +30,55 @@ export function ProjectCoordinatorButton(props: {
   const label = props.completedRunId ? gt("Send to Coordinator") : gt("Open Coordinator");
   const Icon = props.completedRunId ? CornerUpRightIcon : MessagesSquareIcon;
   const activate = async () => {
+    const response = await send({
+      environmentId: props.environmentId,
+      input: props.completedRunId
+        ? {
+            action: "handoff",
+            projectId: props.projectId,
+            threadId: props.threadId,
+            runId: props.completedRunId,
+          }
+        : { action: "open", projectId: props.projectId, modelSelection: props.modelSelection },
+    });
+    if (response._tag === "Success") {
+      if (
+        appAtomRegistry.get(serverEnvironment.configValueAtom(props.environmentId))?.environment
+          .capabilities.coordinatorStatus
+      ) {
+        appAtomRegistry.refresh(
+          coordinatorStatusQuery({
+            environmentId: props.environmentId,
+            input: { projectId: props.projectId },
+          }),
+        );
+      }
+      props.onOpen(response.value.threadId, props.environmentId);
+    } else if (response._tag === "Failure") {
+      const cause = squashAtomCommandFailure(response);
+      toastManager.add({
+        type: "error",
+        title: label,
+        description: cause instanceof Error ? cause.message : undefined,
+      });
+    }
+  };
+  const handleClick = () => {
     if (pending.current) return;
     pending.current = true;
     setBusy(true);
-    try {
-      const response = await send({
-        environmentId: props.environmentId,
-        input: props.completedRunId
-          ? {
-              action: "handoff",
-              projectId: props.projectId,
-              threadId: props.threadId,
-              runId: props.completedRunId,
-            }
-          : { action: "open", projectId: props.projectId, modelSelection: props.modelSelection },
-      });
-      if (response._tag === "Success") {
-        if (
-          appAtomRegistry.get(serverEnvironment.configValueAtom(props.environmentId))?.environment
-            .capabilities.coordinatorStatus
-        ) {
-          appAtomRegistry.refresh(
-            coordinatorStatusQuery({
-              environmentId: props.environmentId,
-              input: { projectId: props.projectId },
-            }),
-          );
-        }
-        props.onOpen(response.value.threadId, props.environmentId);
-      } else if (response._tag === "Failure") {
-        const cause = squashAtomCommandFailure(response);
+    void activate()
+      .catch((cause: unknown) => {
         toastManager.add({
           type: "error",
           title: label,
           description: cause instanceof Error ? cause.message : undefined,
         });
-      }
-    } finally {
-      pending.current = false;
-      setBusy(false);
-    }
+      })
+      .finally(() => {
+        pending.current = false;
+        setBusy(false);
+      });
   };
   return (
     <Button
@@ -80,7 +89,7 @@ export function ProjectCoordinatorButton(props: {
       aria-label={label}
       title={label}
       className="shrink-0 [-webkit-app-region:no-drag]"
-      onClick={() => void activate()}
+      onClick={handleClick}
     >
       <Icon aria-hidden="true" className="size-3.5" />
       <span className="hidden lg:inline">{label}</span>
