@@ -1,4 +1,16 @@
 import {
+  audit,
+  changeTeam,
+  isTeamAction,
+  listHolds,
+  matchingHolds,
+  readTeam,
+  readLimits,
+  teamAccess,
+  workerActor,
+  type BoardActor,
+} from "./CoordinatorTeam.ts";
+import {
   CommandId,
   MessageId,
   HandoffUsage,
@@ -40,7 +52,16 @@ type Pulls = Pick<
   PullRequestService["Service"],
   "coordinatorChange" | "coordinatorProduction" | "coordinatorIncludes" | "checks"
 > &
-  Partial<Pick<PullRequestService["Service"], "checkLogs" | "dispatchCoordinatorRelease">>;
+  Partial<
+    Pick<
+      PullRequestService["Service"],
+      | "checkLogs"
+      | "dispatchCoordinatorRelease"
+      | "coordinatorRange"
+      | "list"
+      | "coordinatorSinceProduction"
+    >
+  >;
 const pullSchema = Schema.Struct({
   host: Schema.String,
   repository: Schema.String,
@@ -261,6 +282,8 @@ interface Row {
   assets_json: string | null;
   assets_revision: string | null;
   approved_revision: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
   prepared_revision: string | null;
   external_thread: string | null;
   repair_base: string | null;
@@ -269,7 +292,7 @@ interface Row {
 const rowsFor = (sql: Sql, projectId: ProjectId, ids?: readonly MessageId[]) => sql<Row>`
  SELECT m.message_id id,m.thread_id coord,m.created_at at,json_extract(m.payload_json,'$.text') text,
  json_extract(substr(m.message_id,9),'$[1]') source,json_extract(substr(m.message_id,9),'$[2]') run,
- h.additional_pulls_json,h.snapshot_json,h.assets_json,h.assets_revision,h.approved_revision,h.prepared_revision,h.external_thread,h.repair_base,h.released_revision
+ h.additional_pulls_json,h.snapshot_json,h.assets_json,h.assets_revision,h.approved_revision,h.approved_by,h.approved_at,h.prepared_revision,h.external_thread,h.repair_base,h.released_revision
  FROM orchestration_v2_projection_threads t JOIN orchestration_v2_projection_messages m ON m.thread_id=t.thread_id
  LEFT JOIN coordinator_handoffs h ON h.project_id=t.project_id AND h.message_id=m.message_id
  WHERE t.project_id=${projectId} AND t.deleted_at IS NULL AND h.continuation_of IS NULL AND m.role='user' AND m.message_id GLOB 'handoff:*'
@@ -277,7 +300,7 @@ const rowsFor = (sql: Sql, projectId: ProjectId, ids?: readonly MessageId[]) => 
  ${ids ? sql`AND m.message_id IN (SELECT value FROM json_each(${encodeStrings(ids)}))` : sql``}
  UNION ALL
  SELECT h.message_id,h.external_thread,h.received_at,'',h.external_thread,'external',
- h.additional_pulls_json,h.snapshot_json,h.assets_json,h.assets_revision,h.approved_revision,h.prepared_revision,
+ h.additional_pulls_json,h.snapshot_json,h.assets_json,h.assets_revision,h.approved_revision,h.approved_by,h.approved_at,h.prepared_revision,
  h.external_thread,h.repair_base,h.released_revision FROM coordinator_handoffs h
  JOIN orchestration_v2_projection_threads t ON t.thread_id=h.external_thread AND t.project_id=h.project_id AND t.deleted_at IS NULL
  WHERE h.project_id=${projectId} AND h.external_thread IS NOT NULL
@@ -304,6 +327,22 @@ function pullLink(value: string) {
   };
 }
 
+const openProjectCoordinator = Effect.fn("CoordinatorBoard.openProjectCoordinator")(function* (
+  project: import("@t3tools/contracts").Project,
+  sql: Sql,
+  threads: ThreadManagementServiceShape,
+) {
+  const projectId = project.id;
+  const latest = yield* sql<{
+    thread_id: string;
+  }>`SELECT thread_id FROM orchestration_v2_projection_threads WHERE project_id=${projectId} AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 1`;
+  const previous = latest[0]
+    ? yield* threads.getThreadShell(ThreadId.make(latest[0].thread_id))
+    : null;
+  const model = project.defaultModelSelection ?? previous?.modelSelection;
+  if (!model) return yield* error("Open the project coordinator once to select its model.");
+  return yield* ensureCoordinator(threads, project, model, () => Effect.undefined);
+});
 // The Hub has already delivered its message. Desktop submissions also wake the coordinator.
 export const submitCoordinatorPull = Effect.fn("CoordinatorBoard.submitPull")(function* (
   projectId: ProjectId,
@@ -342,15 +381,7 @@ export const submitCoordinatorPull = Effect.fn("CoordinatorBoard.submitPull")(fu
     if (!shell || shell.deletedAt || shell.projectId !== projectId)
       return yield* error("The coordinator is unavailable.");
   } else {
-    const latest = yield* sql<{
-      thread_id: string;
-    }>`SELECT thread_id FROM orchestration_v2_projection_threads WHERE project_id=${projectId} AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 1`;
-    const previous = latest[0]
-      ? yield* threads.getThreadShell(ThreadId.make(latest[0].thread_id))
-      : null;
-    const model = project.defaultModelSelection ?? previous?.modelSelection;
-    if (!model) return yield* error("Open the project coordinator once to select its model.");
-    target = yield* ensureCoordinator(threads, project, model, () => Effect.undefined);
+    target = yield* openProjectCoordinator(project, sql, threads);
   }
   const id = MessageId.make(
     "queue-pr:" + revision([projectId, link.host, link.repository, link.number]),
@@ -470,7 +501,7 @@ const loadItems = Effect.fn("CoordinatorBoard.handoffs")(function* (
       const originalToken = [base, assets, linked.map((p) => p.evidence?.preview ?? null)];
       const criteria = linked.flatMap((p) => p.evidence?.criteria ?? []);
       const token = revision(criteria.length ? [...originalToken, criteria] : originalToken);
-      const approved = row.approved_revision === token;
+      const approved = row.approved_revision === token && !!row.approved_by;
       return {
         ...(snapshot.usage ? { usage: snapshot.usage } : {}),
         external: row.external_thread !== null,
@@ -494,6 +525,8 @@ const loadItems = Effect.fn("CoordinatorBoard.handoffs")(function* (
         revision: token,
         assets,
         approved,
+        approvedBy: approved ? row.approved_by : null,
+        approvedAt: approved ? row.approved_at : null,
         prepared: row.prepared_revision === token,
         phase: releasePhase(
           linked.map((p) => p.evidence),
@@ -550,6 +583,8 @@ export const readCoordinatorBoard = Effect.fn("CoordinatorBoard.read")(function*
   threads: ThreadManagementServiceShape,
   pulls: Pulls,
   readCheckout?: ReadCheckout,
+  actor?: BoardActor,
+  withGithub = false,
 ) {
   const project = yield* findProject(projects, projectId);
   const shells = yield* activeShells(threads, projectId);
@@ -592,7 +627,47 @@ export const readCoordinatorBoard = Effect.fn("CoordinatorBoard.read")(function*
         ]
       : [],
   );
+  const open =
+    withGithub && pulls.list
+      ? yield* pulls
+          .list({ projectId, state: "open", limit: 100 })
+          .pipe(Effect.orElseSucceed(() => null))
+      : null;
+  const github = withGithub
+    ? {
+        title: project.title,
+        open:
+          open &&
+          !open.errors.length &&
+          (open.entries.some((p) => p.provider === "github") ||
+            open.providers.some((p) => p.kind === "github" && p.configured))
+            ? open.entries.filter((p) => p.provider === "github" && p.projectId === projectId)
+            : null,
+        truncated: open?.truncated ?? false,
+        unshipped:
+          deployed && pulls.coordinatorSinceProduction
+            ? yield* pulls.coordinatorSinceProduction(projectId, deployed.revision)
+            : null,
+      }
+    : undefined;
   return {
+    ...(github ? { github } : {}),
+    ...(actor
+      ? {
+          team: yield* readTeam(sql, projectId, actor, [
+            ...new Map(
+              [
+                ...shells
+                  .filter((t) => !isProjectCoordinatorThread(projectId, t.id))
+                  .map((t) => ({ id: t.id, title: t.title })),
+                ...items
+                  .filter((i) => !i.external)
+                  .map((i) => ({ id: i.threadId, title: i.title })),
+              ].map((t) => [t.id, t]),
+            ).values(),
+          ]),
+        }
+      : {}),
     // When a feature chat arrives after a teammate submits its PR, keep the actionable chat row.
     items: resolved.filter(
       (item) =>
@@ -620,8 +695,49 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
   projects: ProjectsApi,
   threads: ThreadManagementServiceShape,
   pulls: Pulls,
+  actor: BoardActor,
 ) {
   const project = yield* findProject(projects, input.projectId);
+  if (isTeamAction(input))
+    return yield* sql.withTransaction(changeTeam(sql, input, actor, threads));
+  const rights = yield* teamAccess(sql, input.projectId, actor);
+  actor = rights.actor;
+  if (input.type === "approve" && !rights.approve)
+    return yield* error("Project approval permission is required.");
+  if ((input.type === "release" || input.type === "playbook") && !rights.release)
+    return yield* error("Project release permission is required.");
+  if (!["inspectRelease", "approve", "release", "playbook"].includes(input.type) && !rights.submit)
+    return yield* error("Project submission permission is required.");
+  if (input.type === "askPull") {
+    const link = pullLink(input.url);
+    if (
+      !link ||
+      project.repositoryIdentity?.canonicalKey.toLowerCase() !==
+        (link.host + "/" + link.repository).toLowerCase()
+    )
+      return yield* error("Choose a pull request from this project.");
+    const change = yield* pulls.coordinatorChange(
+      { projectId: input.projectId, ...link },
+      { bypassCache: true },
+    );
+    if (!change) return yield* error("This pull request could not be verified.");
+    const dest = yield* openProjectCoordinator(project, sql, threads);
+    const id = "ask-pr:" + revision([input.projectId, actor.key, link.url, input.requestId]);
+    yield* threads.sendToThread({
+      projectId: input.projectId,
+      threadId: dest,
+      messageId: MessageId.make(id),
+      commandId: CommandId.make(id),
+      mode: "queue",
+      createdBy: "user",
+      creationSource: "web",
+      attachments: [],
+      text: ["Question about " + link.url + " @ " + change.head, change.title ?? "", input.question]
+        .filter(Boolean)
+        .join("\n"),
+    });
+    return { threadId: dest };
+  }
   if (input.type === "submitPull")
     return yield* submitCoordinatorPull(input.projectId, input.url, sql, projects, threads, pulls);
   if (input.type === "playbook") {
@@ -634,7 +750,9 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
     return { threadId: policyThread };
   }
   const requested =
-    input.type === "prepare" || input.type === "release" ? input.items : [input.item];
+    input.type === "prepare" || input.type === "release" || input.type === "inspectRelease"
+      ? input.items
+      : [input.item];
   const rows = yield* loadItems(
     input.projectId,
     sql,
@@ -651,6 +769,127 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
   const first = items[0]!;
   for (const item of items)
     yield* sql`INSERT OR IGNORE INTO coordinator_handoffs (message_id,project_id) VALUES (${item.id},${input.projectId})`;
+  let reviewedManifest: import("@t3tools/contracts").ShipManifest | undefined;
+  if (input.type === "inspectRelease" || input.type === "release") {
+    const refs = items.flatMap((i) => i.pulls);
+    const ref = refs[0];
+    const head = ref?.evidence?.defaultRevision,
+      branch = ref?.evidence?.defaultBranch;
+    if (
+      !ref ||
+      !head ||
+      !branch ||
+      !refs.every(
+        (p) =>
+          p.repository.toLowerCase() === ref.repository.toLowerCase() &&
+          p.host === ref.host &&
+          p.evidence?.defaultRevision === head &&
+          p.evidence.state === "MERGED",
+      ) ||
+      project.repositoryIdentity?.canonicalKey.toLowerCase() !==
+        ref.host.toLowerCase() + "/" + ref.repository.toLowerCase()
+    )
+      return yield* error("Select merged changes from the project's current default branch.");
+    const production = yield* pulls.coordinatorProduction(input.projectId);
+    const base = production?.find(
+      (d) =>
+        d.state === "SUCCESS" &&
+        d.repository.toLowerCase() === ref.repository.toLowerCase() &&
+        d.host === ref.host,
+    )?.revision;
+    if (!base || !pulls.coordinatorRange)
+      return yield* error(
+        "A verified production baseline and repository comparison are required to inspect a release.",
+      );
+    const range = yield* pulls.coordinatorRange({
+      projectId: input.projectId,
+      host: ref.host,
+      repository: ref.repository,
+      number: ref.number,
+      base,
+      head,
+      branch,
+    });
+    if (
+      !range ||
+      !range.commits.length ||
+      refs.some(
+        (p) =>
+          !range.commits.some((c) => c.pulls.includes(p.number) || c.sha === p.evidence?.merge),
+      )
+    )
+      return yield* error(
+        "The production comparison is empty, divergent or incomplete. Verify the production baseline and compare range.",
+      );
+    const holds = yield* listHolds(sql, input.projectId);
+    const affected = matchingHolds(holds, range.files, [
+      ...refs.map((p) => p.number),
+      ...range.commits.flatMap((c) => c.pulls),
+    ]);
+    const manifest = {
+      ...range,
+      repository: ref.repository,
+      base,
+      head,
+      holds: affected,
+      token: revision([base, head, range, holds, items.map((i) => [i.id, i.revision]).sort()]),
+    };
+    if (input.type === "inspectRelease") return { threadId: first.coordinatorId, manifest };
+    if (input.manifest !== manifest.token || affected.length)
+      return yield* error(
+        affected.length
+          ? "Release is on hold: " + affected.join(", ")
+          : "Review the current release manifest before confirming.",
+      );
+    reviewedManifest = manifest;
+  }
+  if (input.type === "feedback") {
+    const { previewOrigin } = yield* readLimits(sql, input.projectId);
+    const link = first.pulls.find(
+      (p) =>
+        p.evidence?.preview === input.preview &&
+        p.evidence?.head &&
+        new URL(input.preview).pathname.split("/").includes(p.evidence.head),
+    );
+    if (
+      !link ||
+      !previewOrigin ||
+      coordinatorWebUrl(input.preview) === null ||
+      new URL(input.preview).origin !== previewOrigin
+    )
+      return yield* error(
+        "This revision has no verified preview on the configured private origin.",
+      );
+    const id = revision([input.projectId, first.id, actor.key, input.requestId]);
+    const dest = first.external ? first.coordinatorId : first.threadId;
+    const source = yield* threads.getThreadShell(dest);
+    if (!source || source.deletedAt || source.projectId !== input.projectId)
+      return yield* error("The originating chat is unavailable.");
+    if (source.archivedAt)
+      yield* threads.dispatch({
+        type: "thread.unarchive",
+        threadId: dest,
+        commandId: CommandId.make("feedback-open:" + id),
+      });
+    yield* threads.sendToThread({
+      projectId: input.projectId,
+      threadId: dest,
+      messageId: MessageId.make("preview:" + id),
+      commandId: CommandId.make("preview:" + id),
+      mode: "queue",
+      createdBy: "user",
+      creationSource: "web",
+      attachments: [],
+      text: [
+        "Preview feedback from " + actor.label,
+        link.url + " @ " + link.evidence?.head,
+        input.preview,
+        "Screen: " + input.screen,
+        input.note,
+      ].join("\n"),
+    });
+    return { threadId: dest };
+  }
   if (input.type === "repair") {
     if (first.phase !== "failed" || first.external || first.repairState)
       return yield* error(
@@ -660,9 +899,14 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
     if (!source || source.deletedAt || source.projectId !== input.projectId)
       return yield* error("The feature chat is unavailable.");
     const target = first.pulls.find(
-      (p) => p.evidence?.state === "OPEN" && ["ERROR", "FAILURE"].includes(p.evidence.checks ?? ""),
+      (p) =>
+        p.evidence?.state === "OPEN" &&
+        ["ERROR", "FAILURE"].includes(p.evidence.checks ?? "") &&
+        (actor.key !== workerActor.key || p.evidence.ciDiagnosis?.kind === "pr"),
     );
     if (!target?.evidence?.head) return yield* error("No failed open PR was verified.");
+    if (actor.key === workerActor.key && target.evidence.ciDiagnosis?.kind !== "pr")
+      return yield* error("Automatic repair requires a verified PR-specific CI failure.");
     const repairId = MessageId.make("repair:" + first.base);
     const previous = yield* threads.getProjectThreadRecords(
       { projectId: input.projectId, threadId: source.id },
@@ -742,6 +986,10 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
       github_release: number;
     }>`SELECT instructions,github_release FROM coordinator_playbooks WHERE project_id=${input.projectId}`;
     const releasing = input.type === "release";
+    if (releasing && !policy?.github_release)
+      return yield* error(
+        "Configure the protected GitHub release workflow before requesting a production release.",
+      );
     if (
       releasing &&
       (!policy?.instructions ||
@@ -775,7 +1023,7 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
       input.projectId,
       items.map((i) => [i.id, i.revision]).sort(),
     ]);
-    if (releasing && policy?.github_release) {
+    if (releasing) {
       const links = items.flatMap((i) => i.pulls);
       const ref = links[0]!;
       const branch = ref.evidence?.defaultBranch;
@@ -787,7 +1035,6 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
         !/^[a-f0-9]{40}$/i.test(candidate) ||
         project.repositoryIdentity?.canonicalKey.toLowerCase() !==
           ref.host.toLowerCase() + "/" + ref.repository.toLowerCase() ||
-        !links.some((p) => p.evidence?.merge === candidate) ||
         links.some(
           (p) =>
             p.host !== ref.host ||
@@ -819,8 +1066,31 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
         ref.repository.toLowerCase(),
         candidate,
       ]);
-      const claim =
-        yield* sql`INSERT INTO coordinator_release_requests(request_id,project_id,revision,state) VALUES(${requestId},${input.projectId},${candidate},'dispatching') ON CONFLICT DO NOTHING RETURNING request_id`;
+      const claim = yield* sql.withTransaction(
+        Effect.gen(function* () {
+          const current = yield* teamAccess(sql, input.projectId, actor);
+          if (
+            !current.release ||
+            !reviewedManifest ||
+            matchingHolds(yield* listHolds(sql, input.projectId), reviewedManifest.files, [
+              ...links.map((l) => l.number),
+              ...reviewedManifest.commits.flatMap((c) => c.pulls),
+            ]).length
+          )
+            return yield* error("Release authorization or project holds changed.");
+          const inserted =
+            yield* sql`INSERT INTO coordinator_release_requests(request_id,project_id,revision,state) VALUES(${requestId},${input.projectId},${candidate},'dispatching') ON CONFLICT DO NOTHING RETURNING request_id`;
+          if (inserted.length)
+            yield* audit(
+              sql,
+              input.projectId,
+              "request-release",
+              actor,
+              reviewedManifest.head + " " + reviewedManifest.token,
+            );
+          return inserted;
+        }),
+      );
       if (claim.length) {
         yield* pulls
           .dispatchCoordinatorRelease({
@@ -885,10 +1155,7 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
           )
         : previous.id;
     const text = [
-      releasing
-        ? "Request to run the configured release procedure. Recheck selected PR heads, required CI and conflicts, test their combined candidate against the current base, stage and verify that exact candidate, then promote only the verified revision through the authorized release runner and its existing approvals. Verify production health and return its revision, URL and result. Stop on a changed head, failed check, missing authority or active hold. Project playbook:\n" +
-          policy!.instructions
-        : "Prepare a release plan for only the selected handoffs below. Verify their exact revisions and checks, list blockers and draft release notes. Stop after the plan. Any merge, tag, publication or deployment requires a separate request.",
+      "Prepare a release plan for only the selected handoffs below. Verify their exact revisions and checks, list blockers and draft release notes. Stop after the plan. Any merge, tag, publication or deployment requires a separate request.",
       ...items.map((i: CoordinatorBoardItem) =>
         JSON.stringify({
           handoff: i.id,
@@ -914,10 +1181,10 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
       creationSource: "web",
     });
     yield* sql.withTransaction(
-      Effect.forEach(items, (i) =>
-        releasing
-          ? sql`UPDATE coordinator_handoffs SET released_revision=${i.revision} WHERE project_id=${input.projectId} AND message_id=${i.id}`
-          : sql`UPDATE coordinator_handoffs SET prepared_revision=${i.revision} WHERE project_id=${input.projectId} AND message_id=${i.id} AND assets_json IS ${i.storedAssets}`,
+      Effect.forEach(
+        items,
+        (i) =>
+          sql`UPDATE coordinator_handoffs SET prepared_revision=${i.revision} WHERE project_id=${input.projectId} AND message_id=${i.id} AND assets_json IS ${i.storedAssets}`,
       ),
     );
     return { threadId };
@@ -944,7 +1211,20 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
   }
   const updated =
     input.type === "approve"
-      ? yield* sql`UPDATE coordinator_handoffs SET approved_revision=${first.revision} WHERE message_id=${first.id} AND project_id=${input.projectId} AND assets_json IS ${first.storedAssets} AND additional_pulls_json IS ${first.storedPulls} RETURNING message_id`
+      ? yield* sql.withTransaction(
+          Effect.gen(function* () {
+            const now = yield* teamAccess(sql, input.projectId, actor);
+            if (!now.approve || !now.named)
+              return yield* error(
+                "A project administrator must register your name and approval permission first.",
+              );
+            actor = now.actor;
+            const r =
+              yield* sql`UPDATE coordinator_handoffs SET approved_revision=${first.revision},approved_by=${actor.label},approved_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE message_id=${first.id} AND project_id=${input.projectId} AND assets_json IS ${first.storedAssets} AND additional_pulls_json IS ${first.storedPulls} RETURNING message_id`;
+            if (r.length) yield* audit(sql, input.projectId, "approve", actor, first.revision);
+            return r;
+          }),
+        )
       : yield* sql`UPDATE coordinator_handoffs SET assets_json=${encodeAssets({ preview: coordinatorWebUrl(input.assets.preview), before: coordinatorWebUrl(input.assets.before), after: coordinatorWebUrl(input.assets.after) })},assets_revision=${first.base},approved_revision=NULL,prepared_revision=NULL WHERE message_id=${first.id} AND project_id=${input.projectId} AND assets_json IS ${first.storedAssets} AND additional_pulls_json IS ${first.storedPulls} RETURNING message_id`;
   if (!updated.length)
     return yield* error("Another reviewer changed this handoff. Refresh and try again.");
@@ -1009,13 +1289,19 @@ export const reconcileCoordinatorQueues = Effect.fn("CoordinatorBoard.reconcile"
       for (const item of items) {
         if (item.external || newest.has(item.threadId)) continue;
         newest.add(item.threadId);
-        if (item.phase !== "failed" || item.repairState) continue;
+        if (
+          item.phase !== "failed" ||
+          item.repairState ||
+          !item.pulls.some((p) => p.evidence?.ciDiagnosis?.kind === "pr")
+        )
+          continue;
         yield* actOnCoordinatorBoard(
           { type: "repair", projectId, item: { id: item.id, revision: item.revision } },
           sql,
           projects,
           threads,
           pulls,
+          workerActor,
         ).pipe(Effect.ignore);
       }
     }).pipe(Effect.catch((e) => Effect.logDebug("Coordinator queue refresh failed", e._tag)));

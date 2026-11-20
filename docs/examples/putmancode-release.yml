@@ -33,15 +33,12 @@ jobs:
           set -euo pipefail
           [[ "$GITHUB_REF" == "refs/heads/$DEFAULT_BRANCH" && "$REVISION" == "$GITHUB_SHA" ]]
           jq -e 'type == "array" and length > 0 and length <= 100 and all(.[]; type == "number" and floor == . and . > 0)' <<< "$PULLS" >/dev/null
-          selected_tip=false
           for pr in $(jq -r '.[]' <<< "$PULLS"); do
             record=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr")
             jq -e --arg branch "$DEFAULT_BRANCH" '.merged and .base.ref == $branch' <<< "$record" >/dev/null
             merge=$(jq -er '.merge_commit_sha' <<< "$record")
             git merge-base --is-ancestor "$merge" "$REVISION"
-            if [[ "$merge" == "$REVISION" ]]; then selected_tip=true; fi
           done
-          [[ "$selected_tip" == true ]]
           .github/putmancode/release test "$REVISION"
   staging:
     needs: verify

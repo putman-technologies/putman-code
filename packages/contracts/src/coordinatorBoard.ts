@@ -6,7 +6,9 @@ import {
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
-import { PullRequestCheck } from "./pullRequest.ts";
+import { PullRequestCheck, PullRequestListEntry } from "./pullRequest.ts";
+
+import { CiReason, TeamActions, TeamBoard, ShipRange } from "./coordinatorTeam.ts";
 
 const text = Schema.String;
 const maybeText = Schema.NullOr(text);
@@ -26,6 +28,7 @@ export const CoordinatorChange = Schema.Struct({
   state: text,
   head: text,
   title: Schema.optional(text),
+  ciDiagnosis: Schema.optional(Schema.Struct({ kind: CiReason, detail: text })),
   defaultBranch: Schema.optional(text),
   defaultRevision: Schema.optional(text),
   headChecksComplete: Schema.optional(Schema.Boolean),
@@ -91,6 +94,8 @@ export const CoordinatorBoardItem = Schema.Struct({
   phase: BoardPhase,
   revision: text,
   approved: Schema.Boolean,
+  approvedBy: Schema.optional(maybeText),
+  approvedAt: Schema.optional(maybeText),
   prepared: Schema.Boolean,
   live: Schema.NullOr(Schema.Boolean),
   assets: ReviewAssets,
@@ -107,6 +112,15 @@ export const CoordinatorBoardItem = Schema.Struct({
 export type CoordinatorBoardItem = typeof CoordinatorBoardItem.Type;
 export const CoordinatorBoard = Schema.Struct({
   items: Schema.Array(CoordinatorBoardItem),
+  team: Schema.optional(TeamBoard),
+  github: Schema.optional(
+    Schema.Struct({
+      title: text,
+      open: Schema.NullOr(Schema.Array(PullRequestListEntry)),
+      truncated: Schema.Boolean,
+      unshipped: Schema.NullOr(ShipRange),
+    }),
+  ),
   playbook: Schema.optional(text),
   autoRepair: Schema.optional(Schema.Boolean),
   githubRelease: Schema.optional(Schema.Boolean),
@@ -123,6 +137,28 @@ export const CoordinatorBoard = Schema.Struct({
 export type CoordinatorBoard = typeof CoordinatorBoard.Type;
 const selection = Schema.Struct({ id: MessageId, revision: TrimmedNonEmptyString });
 export const CoordinatorBoardAction = Schema.Union([
+  ...TeamActions,
+  Schema.Struct({
+    type: Schema.Literal("askPull"),
+    projectId: ProjectId,
+    url: TrimmedNonEmptyString.check(Schema.isMaxLength(4096)),
+    question: TrimmedNonEmptyString.check(Schema.isMaxLength(4000)),
+    requestId: TrimmedNonEmptyString.check(Schema.isMaxLength(100)),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("inspectRelease"),
+    projectId: ProjectId,
+    items: Schema.Array(selection).check(Schema.isMinLength(1), Schema.isMaxLength(100)),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("feedback"),
+    projectId: ProjectId,
+    item: selection,
+    requestId: TrimmedNonEmptyString.check(Schema.isMaxLength(100)),
+    screen: TrimmedNonEmptyString.check(Schema.isMaxLength(500)),
+    note: TrimmedNonEmptyString.check(Schema.isMaxLength(4000)),
+    preview: TrimmedNonEmptyString.check(Schema.isMaxLength(4096)),
+  }),
   Schema.Struct({
     type: Schema.Literal("submitPull"),
     projectId: ProjectId,
@@ -138,6 +174,7 @@ export const CoordinatorBoardAction = Schema.Union([
   Schema.Struct({ type: Schema.Literal("repair"), projectId: ProjectId, item: selection }),
   Schema.Struct({
     type: Schema.Literal("release"),
+    manifest: Schema.optional(text),
     projectId: ProjectId,
     items: Schema.Array(selection).check(Schema.isMinLength(1), Schema.isMaxLength(100)),
   }),

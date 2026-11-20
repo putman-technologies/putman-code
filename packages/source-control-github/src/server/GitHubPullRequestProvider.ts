@@ -476,6 +476,8 @@ export const make = Effect.gen(function* () {
         })
         .pipe(Effect.mapError(fail("listChangeRequestStats"))),
 
+    coordinatorRange: (input) =>
+      cli.coordinatorRange(input).pipe(Effect.mapError(fail("coordinatorRange"))),
     coordinatorIncludes: (input) =>
       cli.coordinatorIncludes(input).pipe(Effect.mapError(fail("coordinatorIncludes"))),
     dispatchCoordinatorRelease: (input) =>

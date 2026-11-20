@@ -1,3 +1,4 @@
+import { randomUUID } from "../../lib/utils";
 import { useAtomValue } from "@effect/atom-react";
 import {
   coordinatorWebUrl,
@@ -7,6 +8,8 @@ import {
   type CoordinatorBoardAction,
   type EnvironmentId,
   type ProjectId,
+  type ShipManifest,
+  type TeamBoard,
   type ReviewAssets,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -18,6 +21,7 @@ import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { coordinatorBoardQuery, coordinatorOverlapsQuery } from "../../state/projects";
 import { orchestrationEnvironment } from "../../state/orchestration";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { CoordinatorTeamPanel } from "./CoordinatorTeamPanel";
 import { Button } from "../ui/button";
 import { Dialog, DialogHeader, DialogPanel, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
@@ -128,10 +132,12 @@ export function ReleaseBoardButton({
   projects,
   onOpen,
   startInProject = false,
+  focusItemId,
 }: {
   projects: readonly Project[];
   onOpen: OpenThread;
   startInProject?: boolean;
+  focusItemId?: string;
 }) {
   const gt = useGT();
   const [open, setOpen] = useState(false);
@@ -153,7 +159,7 @@ export function ReleaseBoardButton({
         }}
       >
         <ClipboardListIcon aria-hidden />
-        {gt("Release board")}
+        {focusItemId ? gt("Review handoff") : gt("Release board")}
       </Button>
       {open && (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -183,6 +189,7 @@ export function ReleaseBoardButton({
                 <ProjectReview
                   key={projectKey(project)}
                   project={project}
+                  focusItemId={focusItemId}
                   attention={!single}
                   onOpen={dismissAndOpen}
                   onProject={() => setScope(projectKey(project))}
@@ -199,11 +206,13 @@ export function ReleaseBoardButton({
 function ProjectReview({
   project,
   attention,
+  focusItemId,
   onOpen,
   onProject,
 }: {
   project: Project;
   attention: boolean;
+  focusItemId?: string | undefined;
   onOpen: OpenThread;
   onProject: () => void;
 }) {
@@ -219,6 +228,7 @@ function ProjectReview({
   const [autoRepair, setAutoRepair] = useState(false);
   const [githubRelease, setGithubRelease] = useState(false);
   const [confirmRelease, setConfirmRelease] = useState(false);
+  const [manifest, setManifest] = useState<{ range: ShipManifest; selection: string } | null>(null);
   const lock = useRef(false);
   const action = orchestrationEnvironment.coordinatorBoardAction;
   const allowed = useAtomValue(action.permissionAtom(environmentId));
@@ -229,8 +239,14 @@ function ProjectReview({
     setBusy(true);
     return run({ environmentId, input })
       .then((result) => {
+        if (result._tag === "Success" && input.type === "inspectRelease" && result.value.manifest) {
+          setManifest({ range: result.value.manifest, selection: JSON.stringify(input.items) });
+          setConfirmRelease(true);
+        }
         if (result._tag === "Success" && (input.type === "prepare" || input.type === "release")) {
           setSelection(new Map());
+          setManifest(null);
+          setConfirmRelease(false);
           if (input.type === "release" && state._tag === "Success" && state.value.githubRelease) {
             toastManager.add({ type: "success", title: gt("Release requested") });
           } else {
@@ -282,6 +298,9 @@ function ProjectReview({
   const picked = pending.filter(
     (i) => selection.get(i.id) === i.revision && ["ready", "merged"].includes(i.phase),
   );
+  const pickedRefs = picked.map((i) => ({ id: i.id, revision: i.revision }));
+  const range = manifest?.selection === JSON.stringify(pickedRefs) ? manifest.range : null;
+  const selectedPrs = new Set(picked.flatMap((i) => i.pulls.map((p) => p.number)));
   const open = (id: ThreadId) => onOpen(id, environmentId);
   const productionFailed = failedDeployment(board);
   if (attention && !needsAttention(board)) return null;
@@ -331,6 +350,15 @@ function ProjectReview({
         </details>
       )}
       {!attention && <LiveStatus board={board} />}
+      {!attention && board.team && (
+        <CoordinatorTeamPanel
+          team={board.team}
+          projectId={projectId}
+          act={execute}
+          open={open}
+          disabled={!allowed || busy}
+        />
+      )}
       {!attention && allowed && board.playbook !== undefined && (
         <div className="space-y-2">
           <form
@@ -351,7 +379,7 @@ function ProjectReview({
               size="sm"
               variant="outline"
               type="submit"
-              disabled={busy || !coordinatorWebUrl(pullUrl)}
+              disabled={busy || board.team?.submit === false || !coordinatorWebUrl(pullUrl)}
             >
               {gt("Send PR to Coordinator")}
             </Button>
@@ -359,6 +387,7 @@ function ProjectReview({
           <Button
             size="xs"
             variant="ghost"
+            disabled={board.team?.release === false}
             aria-expanded={editingPolicy}
             onClick={() => {
               setInstructions(board.playbook ?? "");
@@ -424,7 +453,7 @@ function ProjectReview({
             <h4 className="font-medium">{gt("Release queue")}</h4>
             <Button
               size="sm"
-              disabled={!allowed || busy || !picked.length}
+              disabled={!allowed || busy || board.team?.submit === false || !picked.length}
               onClick={() =>
                 void execute({
                   type: "prepare",
@@ -440,31 +469,89 @@ function ProjectReview({
         )}
         {!attention &&
           allowed &&
+          board.team?.release !== false &&
           board.playbook &&
           picked.length > 0 &&
           picked.every((i) => i.approved && i.pulls.length > 0) && (
             <div className="flex flex-wrap items-center gap-2">
-              {!confirmRelease ? (
+              {!confirmRelease || (board.team && !range) ? (
                 <Button
                   size="sm"
                   variant="outline"
                   disabled={busy}
-                  onClick={() => setConfirmRelease(true)}
+                  onClick={() =>
+                    board.team
+                      ? void execute({ type: "inspectRelease", projectId, items: pickedRefs })
+                      : setConfirmRelease(true)
+                  }
                 >
-                  {gt("Request release")}
+                  {board.team ? gt("What will ship?") : gt("Request release")}
                 </Button>
               ) : (
                 <>
+                  {range && (
+                    <div className="w-full space-y-1 rounded-md border p-3 text-sm">
+                      <strong>{gt("What will ship?")}</strong> · {range.repository}{" "}
+                      <WebLink
+                        url={
+                          picked[0]?.pulls[0]?.url
+                            ? new URL(picked[0].pulls[0].url).origin +
+                              "/" +
+                              range.repository +
+                              "/compare/" +
+                              range.base +
+                              "..." +
+                              range.head
+                            : null
+                        }
+                      >
+                        <code>
+                          {range.base.slice(0, 12)} → {range.head.slice(0, 12)}
+                        </code>
+                      </WebLink>
+                      {range.commits.map((c) => (
+                        <p key={c.sha}>
+                          <code>{c.sha.slice(0, 8)}</code> {c.title} ·{" "}
+                          {c.pulls.length
+                            ? c.pulls
+                                .map(
+                                  (n) =>
+                                    "#" +
+                                    n +
+                                    (selectedPrs.has(n) ? "" : " · " + gt("Outside selection")),
+                                )
+                                .join(", ")
+                            : gt("Direct commit")}
+                        </p>
+                      ))}
+                      <details>
+                        <summary>
+                          {gt("Changed files")} ({range.files.length})
+                        </summary>
+                        {range.files.map((f) => (
+                          <div key={f}>
+                            <code>{f}</code>
+                          </div>
+                        ))}
+                      </details>
+                      {[...new Set(range.holds)].map((h) => (
+                        <p key={h} className="text-destructive">
+                          {gt("Release holds")} · {h}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                   <span className="text-sm">
                     {gt("Run the project release playbook for the selected revisions?")}
                   </span>
                   <Button
                     size="sm"
-                    disabled={busy}
+                    disabled={busy || Boolean(range?.holds.length)}
                     onClick={() => {
                       setConfirmRelease(false);
                       void execute({
                         type: "release",
+                        ...(range ? { manifest: range.token } : {}),
                         projectId,
                         items: picked.map((i) => ({ id: i.id, revision: i.revision })),
                       });
@@ -479,26 +566,30 @@ function ProjectReview({
               )}
             </div>
           )}
-        {pending.map((item) => (
-          <Handoff
-            key={JSON.stringify([item.id, item.revision])}
-            item={item}
-            project={project}
-            disabled={!allowed || busy}
-            onOpen={() => open(item.threadId)}
-            onAction={execute}
-            selectable={!attention && (item.phase === "ready" || item.phase === "merged")}
-            selected={selection.get(item.id) === item.revision}
-            onSelect={(checked) =>
-              setSelection((prev) => {
-                const next = new Map(prev);
-                if (checked) next.set(item.id, item.revision);
-                else next.delete(item.id);
-                return next;
-              })
-            }
-          />
-        ))}
+        {pending
+          .filter((i) => !focusItemId || i.id === focusItemId)
+          .map((item) => (
+            <Handoff
+              key={JSON.stringify([item.id, item.revision])}
+              item={item}
+              initiallyOpen={item.id === focusItemId}
+              project={project}
+              team={board.team}
+              disabled={!allowed || busy}
+              onOpen={() => open(item.threadId)}
+              onAction={execute}
+              selectable={!attention && (item.phase === "ready" || item.phase === "merged")}
+              selected={selection.get(item.id) === item.revision}
+              onSelect={(checked) =>
+                setSelection((prev) => {
+                  const next = new Map(prev);
+                  if (checked) next.set(item.id, item.revision);
+                  else next.delete(item.id);
+                  return next;
+                })
+              }
+            />
+          ))}
         {!pending.length &&
           (!attention ||
             (!board.questions.length && !board.overlaps.length && !productionFailed)) && (
@@ -600,6 +691,8 @@ function Handoff({
   disabled,
   onOpen,
   onAction,
+  team,
+  initiallyOpen = false,
   selectable = false,
   selected = false,
   onSelect,
@@ -609,6 +702,8 @@ function Handoff({
   disabled: boolean;
   onOpen: () => void;
   onAction: (input: CoordinatorBoardAction) => Promise<boolean>;
+  team?: TeamBoard | undefined;
+  initiallyOpen?: boolean;
   selectable?: boolean;
   selected?: boolean;
   onSelect?: (v: boolean) => void;
@@ -616,12 +711,13 @@ function Handoff({
   const gt = useGT();
   const m = useMessages();
   const [pullUrl, setPullUrl] = useState("");
-  const [inspect, setInspect] = useState(false);
+  const [inspect, setInspect] = useState(initiallyOpen);
   const [edit, setEdit] = useState(false);
   const [draft, setDraft] = useState<ReviewAssets>(item.assets);
   const retry = orchestrationEnvironment.coordinatorRetry;
   const retryAllowed = useAtomValue(retry.permissionAtom(project.environmentId));
   const rerun = useAtomCommand(retry);
+  const feedbackId = useRef("");
   const [retrying, setRetrying] = useState(false);
   const retryLock = useRef(false);
   const ref = { id: item.id, revision: item.revision };
@@ -679,6 +775,12 @@ function Handoff({
             {item.phase === "failed" && item.repairState === "needs-review"
               ? gt("Repair needs review")
               : gt("Returned to feature chat")}
+          </span>
+        )}
+        {item.approvedBy && (
+          <span>
+            {gt("Approved")} · {item.approvedBy}
+            {item.approvedAt && " · " + date(item.approvedAt)}
           </span>
         )}
         {item.prepared && <span>{gt("Release plan requested")}</span>}
@@ -784,6 +886,18 @@ function Handoff({
                 #{p.number} · {p.evidence?.checks ?? gt("Checks unavailable")}{" "}
                 {p.evidence?.head && <code>{p.evidence.head.slice(0, 8)}</code>}
               </div>
+              {p.evidence?.ciDiagnosis && (
+                <p className="text-xs">
+                  {p.evidence.ciDiagnosis.kind === "pr"
+                    ? gt("PR-specific failure")
+                    : p.evidence.ciDiagnosis.kind === "baseline"
+                      ? gt("Already failing on base")
+                      : p.evidence.ciDiagnosis.kind === "runner"
+                        ? gt("Runner failure")
+                        : gt("Cause unverified")}{" "}
+                  · {p.evidence.ciDiagnosis.detail}
+                </p>
+              )}
               {p.evidence?.criteria?.map((c) => {
                 const matches = (
                   p.evidence?.headChecksComplete ? (p.evidence.headChecks ?? []) : []
@@ -799,6 +913,56 @@ function Handoff({
                   </div>
                 );
               })}
+              {team?.previewOrigin &&
+                p.evidence?.preview &&
+                coordinatorWebUrl(p.evidence.preview) &&
+                new URL(p.evidence.preview).pathname.split("/").includes(p.evidence.head) &&
+                new URL(p.evidence.preview).origin === team.previewOrigin && (
+                  <div className="space-y-2 rounded-md border p-2">
+                    <WebLink url={p.evidence.preview}>{gt("Try this change")}</WebLink>
+                    {team.submit && !disabled && (
+                      <form
+                        className="grid gap-2"
+                        onChange={() => {
+                          feedbackId.current = "";
+                        }}
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          const form = e.currentTarget;
+                          const f = new FormData(form);
+                          feedbackId.current ||= randomUUID();
+                          if (
+                            await onAction({
+                              type: "feedback",
+                              projectId: project.projectId,
+                              item: ref,
+                              requestId: feedbackId.current,
+                              screen: String(f.get("screen")),
+                              note: String(f.get("note")),
+                              preview: p.evidence!.preview!,
+                            })
+                          ) {
+                            form.reset();
+                            feedbackId.current = "";
+                            toastManager.add({ type: "success", title: gt("Feedback sent") });
+                          }
+                        }}
+                      >
+                        <label>
+                          {gt("Screen or path")}
+                          <Input required name="screen" maxLength={500} />
+                        </label>
+                        <label>
+                          {gt("Feedback")}
+                          <Input required name="note" maxLength={4000} />
+                        </label>
+                        <Button size="xs" type="submit">
+                          {gt("Send feedback")}
+                        </Button>
+                      </form>
+                    )}
+                  </div>
+                )}
               {p.checks.map((c) => (
                 <div className="pl-2 text-xs" key={JSON.stringify([c.name, c.url, c.description])}>
                   {coordinatorWebUrl(c.url) ? <WebLink url={c.url}>{c.name}</WebLink> : c.name} ·{" "}
@@ -873,10 +1037,10 @@ function Handoff({
             >
               {gt("Edit preview links")}
             </Button>
-            {item.phase === "review" && (
+            {["review", "ready", "merged"].includes(item.phase) && (
               <Button
                 size="xs"
-                disabled={disabled || item.approved}
+                disabled={disabled || team?.approve === false || item.approved}
                 onClick={() =>
                   void onAction({ type: "approve", projectId: project.projectId, item: ref })
                 }

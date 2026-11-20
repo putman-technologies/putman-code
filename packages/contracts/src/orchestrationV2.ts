@@ -2,6 +2,7 @@ import { OrchestrationMessageContext } from "./composerContext.ts";
 import { withRecordIdTable } from "./orchestrationV2IdTable.ts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import { ShipManifest } from "./coordinatorTeam.ts";
 import { CoordinatorBoard, CoordinatorBoardAction, FileOverlap } from "./coordinatorBoard.ts";
 import * as Schema from "effect/Schema";
 import * as SchemaAST from "effect/SchemaAST";
@@ -4619,14 +4620,17 @@ export const OrchestrationV2RpcSchemas = {
     }),
     output: Schema.Struct({ count: NonNegativeInt }),
   },
-  coordinatorBoard: { input: Schema.Struct({ projectId: ProjectId }), output: CoordinatorBoard },
+  coordinatorBoard: {
+    input: Schema.Struct({ projectId: ProjectId, github: Schema.optional(Schema.Boolean) }),
+    output: CoordinatorBoard,
+  },
   coordinatorOverlaps: {
     input: Schema.Struct({ projectId: ProjectId }),
     output: Schema.Array(FileOverlap),
   },
   coordinatorBoardAction: {
     input: CoordinatorBoardAction,
-    output: Schema.Struct({ threadId: ThreadId }),
+    output: Schema.Struct({ threadId: ThreadId, manifest: Schema.optional(ShipManifest) }),
   },
   coordinatorStatus: { input: Schema.Struct({ projectId: ProjectId }), output: CoordinatorStatus },
   projectCoordinator: {

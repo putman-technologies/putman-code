@@ -1,0 +1,78 @@
+name: PutmanCode private preview
+on:
+  workflow_run:
+    workflows: ["PutmanCode review"]
+    types: [completed]
+permissions: {}
+jobs:
+  build:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions: { contents: read, pull-requests: read }
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SHA" =~ ^[a-f0-9]{40}$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/pulls" | jq -e --arg s "$SHA" --arg repo "$GITHUB_REPOSITORY" 'any(.[]; .state=="open" and .head.sha==$s and .head.repo.full_name==$repo)' >/dev/null
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with: { ref: "${{ steps.resolve.outputs.sha }}", persist-credentials: false }
+      - name: Build interactive site using synthetic fixtures
+        env:
+          SHA: ${{ steps.resolve.outputs.sha }}
+          FIXTURE_MODE: synthetic
+        run: .github/putmancode/preview "$SHA" "$RUNNER_TEMP/preview"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: preview-site
+          path: ${{ runner.temp }}/preview
+          if-no-files-found: error
+          retention-days: 1
+  publish-preview:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: private-preview
+    permissions: { deployments: write }
+    env:
+      SHA: ${{ needs.build.outputs.sha }}
+      ORIGIN: ${{ vars.PRIVATE_PREVIEW_ORIGIN }}
+      BUCKET: ${{ vars.PRIVATE_PREVIEW_BUCKET }}
+      AWS_DEFAULT_REGION: ${{ vars.PREVIEW_AWS_REGION }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with: { name: preview-site, path: site }
+      - name: Verify access gate and upload static files
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.PREVIEW_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.PREVIEW_AWS_SECRET_ACCESS_KEY }}
+          LOGIN_ORIGIN: ${{ vars.PREVIEW_ACCESS_LOGIN_ORIGIN }}
+        run: |
+          set -euo pipefail
+          [[ "$SHA" =~ ^[a-f0-9]{40}$ && "$ORIGIN" =~ ^https://[a-zA-Z0-9.-]+$ && -f site/index.html ]]
+          URL="$ORIGIN/$SHA/index.html"
+          check_gate() {
+            local code redirect
+            read -r code redirect < <(curl --silent --show-error --output /dev/null --write-out '%{http_code} %{redirect_url}\n' "$URL")
+            case "$code" in
+              401|403) ;;
+              302|303|307) [[ "$LOGIN_ORIGIN" =~ ^https://[a-zA-Z0-9.-]+$ && "$redirect" == "$LOGIN_ORIGIN/"* ]] ;;
+              *) return 1 ;;
+            esac
+          }
+          check_gate
+          [[ -z "$(find site -type l -print -quit)" ]]
+          aws s3 cp site "s3://$BUCKET/$SHA/" --recursive --no-follow-symlinks --only-show-errors
+          check_gate
+      - name: Record the successful preview on the exact pull request commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          id=$(jq -n --arg sha "$SHA" '{ref:$sha,environment:"preview",auto_merge:false,required_contexts:[],production_environment:false,transient_environment:true}' | gh api "repos/$GITHUB_REPOSITORY/deployments" --input - --jq '.id')
+          gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses" -f state=success -f environment_url="$ORIGIN/$SHA/index.html"

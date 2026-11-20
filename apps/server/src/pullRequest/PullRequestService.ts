@@ -21,6 +21,7 @@ import {
   resolvePullRequestAuthorFilter,
   type CoordinatorStatus,
   type CoordinatorChange,
+  type ShipRange,
   type ProductionDeployment,
   type OrchestrationProjectShell,
   type ProjectId,
@@ -209,6 +210,13 @@ export class PullRequestService extends Context.Service<
         pullNumbers: string;
       },
     ) => Effect.Effect<void, PullRequestError>;
+    readonly coordinatorSinceProduction?: (
+      projectId: ProjectId,
+      base: string,
+    ) => Effect.Effect<import("@t3tools/contracts").ShipRange | null>;
+    readonly coordinatorRange?: (
+      input: PullRequestRef & { base: string; head: string; branch: string },
+    ) => Effect.Effect<ShipRange | null>;
     readonly coordinatorIncludes: (
       input: PullRequestRef & { base: string; head: string },
     ) => Effect.Effect<boolean | null>;
@@ -610,6 +618,9 @@ function withRateLimitBackoff(
     ...(api.getChangeRequestPreview === undefined
       ? {}
       : { getChangeRequestPreview: wrap("getChangeRequestPreview", api.getChangeRequestPreview) }),
+    ...(api.coordinatorRange
+      ? { coordinatorRange: wrap("coordinatorRange", api.coordinatorRange) }
+      : {}),
     ...(api.coordinatorIncludes
       ? { coordinatorIncludes: wrap("coordinatorIncludes", api.coordinatorIncludes) }
       : {}),
@@ -4227,6 +4238,40 @@ export const make = Effect.gen(function* () {
       );
       return yield* listStats({ ...input, refs: refs.flatMap(Option.toArray) });
     }),
+    coordinatorSinceProduction: Effect.fn("PullRequestService.coordinatorSinceProduction")(
+      (projectId, base) =>
+        listWorkspaceProjects({ projectId }).pipe(
+          Effect.flatMap(({ supported }) => {
+            const own = supported[0];
+            return (
+              own?.api.coordinatorRange?.({
+                host: own.host,
+                repository: own.repository,
+                cwd: own.project.workspaceRoot,
+                base,
+                head: "HEAD",
+                branch: "",
+              }) ?? Effect.succeed(null)
+            );
+          }),
+          Effect.orElseSucceed(() => null),
+        ),
+    ),
+    coordinatorRange: Effect.fn("PullRequestService.coordinatorRange")((input) =>
+      credentialCached((ref) =>
+        requireProject(ref).pipe(
+          Effect.flatMap(
+            (p) =>
+              p.api.coordinatorRange?.({
+                ...input,
+                host: p.host,
+                repository: p.repository,
+                cwd: p.project.workspaceRoot,
+              }) ?? Effect.succeed(null),
+          ),
+        ),
+      )(input).pipe(Effect.orElseSucceed(() => null)),
+    ),
     coordinatorIncludes: Effect.fn("PullRequestService.coordinatorIncludes")((input) =>
       credentialCached((ref) =>
         Cache.get(containsCache, encodeCompareKey([refCacheKey(ref), input.base, input.head])),

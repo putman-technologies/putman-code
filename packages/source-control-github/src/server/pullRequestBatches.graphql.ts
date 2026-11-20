@@ -3,6 +3,78 @@ import { GraphQL, GraphQLGroup } from "effect/graphql"
 import * as Schema from "effect/Schema"
 import * as Shared from "../../schema/github.graphql.ts"
 
+/** Information about pagination in a connection. */
+export const PageInfo = Schema.Struct({
+  /** When paginating forwards, are there more items? */
+  hasNextPage: Schema.Boolean
+})
+export interface PageInfo extends Schema.Struct.Type<typeof PageInfo.fields> {}
+
+/** A GitHub App. */
+export const App = Schema.Struct({
+  /** A slug based on the name of the app for use in URLs. */
+  slug: Schema.String
+})
+export interface App extends Schema.Struct.Type<typeof App.fields> {}
+
+/** A check suite. */
+export const CheckSuite = Schema.Struct({
+  /** The GitHub App which created this check suite. */
+  app: Schema.NullOr(App)
+})
+export interface CheckSuite extends Schema.Struct.Type<typeof CheckSuite.fields> {}
+
+/** A check run. */
+export const CheckRun = Schema.Struct({
+  __typename: Schema.Literal("CheckRun"),
+  /** The name of the check for this check run. */
+  name: Schema.String,
+  /** The current status of the check run. */
+  status: GraphQL.enumLiterals(Shared.CheckStatusState.literals),
+  /** The conclusion of the check run. */
+  conclusion: Schema.NullOr(GraphQL.enumLiterals(Shared.CheckConclusionState.literals)),
+  /** The URL from which to find full details of the check run on the integrator's site. */
+  detailsUrl: Schema.NullOr(Shared.URI),
+  /** The check suite that this run is a part of. */
+  checkSuite: CheckSuite
+})
+export interface CheckRun extends Schema.Struct.Type<typeof CheckRun.fields> {}
+
+/** Represents an individual commit status context */
+export const StatusContext = Schema.Struct({
+  __typename: Schema.Literal("StatusContext"),
+  /** The name of this status context. */
+  context: Schema.String,
+  /** The state of this status context. */
+  state: GraphQL.enumLiterals(Shared.StatusState.literals),
+  /** The URL for this status context. */
+  targetUrl: Schema.NullOr(Shared.URI)
+})
+export interface StatusContext extends Schema.Struct.Type<typeof StatusContext.fields> {}
+
+/** Types that can be inside a StatusCheckRollup context. */
+export const StatusCheckRollupContextOther = Schema.Struct({
+  __typename: GraphQL.otherTypename<Shared.Typename.StatusCheckRollupContext>()(["CheckRun", "StatusContext"])
+})
+export interface StatusCheckRollupContextOther extends Schema.Struct.Type<typeof StatusCheckRollupContextOther.fields> {}
+
+/**
+ * `fragment CoordinatorCi on StatusCheckRollupContextConnection`
+ *
+ * The connection type for StatusCheckRollupContext.
+ */
+export const CoordinatorCi = Schema.Struct({
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo,
+  /** A list of nodes. */
+  nodes: Schema.NullOr(Schema.Array(Schema.NullOr(Schema.Union([
+    CheckRun,
+    StatusContext,
+    StatusCheckRollupContextOther
+  ]))))
+})
+export interface CoordinatorCi extends Schema.Struct.Type<typeof CoordinatorCi.fields> {}
+
 /** A user is an individual's account on GitHub that owns repositories and can make new content. */
 export const User = Schema.Struct({
   __typename: Schema.Literal("User"),
@@ -335,18 +407,18 @@ export const StatusContextStateCount = Schema.Struct({
 export interface StatusContextStateCount extends Schema.Struct.Type<typeof StatusContextStateCount.fields> {}
 
 /** The connection type for StatusCheckRollupContext. */
-export const PullRequestWatchFingerprintRepositoryPullRequestCommitsNodesCommitStatusCheckRollupContextsStatusCheckRollupContextConnection = Schema.Struct({
+export const StatusCheckRollupContextConnection = Schema.Struct({
   /** Counts of check runs by state. */
   checkRunCountsByState: Schema.NullOr(Schema.Array(CheckRunStateCount)),
   /** Counts of status contexts by state. */
   statusContextCountsByState: Schema.NullOr(Schema.Array(StatusContextStateCount))
 })
-export interface PullRequestWatchFingerprintRepositoryPullRequestCommitsNodesCommitStatusCheckRollupContextsStatusCheckRollupContextConnection extends Schema.Struct.Type<typeof PullRequestWatchFingerprintRepositoryPullRequestCommitsNodesCommitStatusCheckRollupContextsStatusCheckRollupContextConnection.fields> {}
+export interface StatusCheckRollupContextConnection extends Schema.Struct.Type<typeof StatusCheckRollupContextConnection.fields> {}
 
 /** Represents the rollup for both the check runs and status for a commit. */
 export const PullRequestWatchFingerprintRepositoryPullRequestCommitsNodesCommitStatusCheckRollupStatusCheckRollup = Schema.Struct({
   /** A list of status contexts and check runs for this commit. */
-  contexts: PullRequestWatchFingerprintRepositoryPullRequestCommitsNodesCommitStatusCheckRollupContextsStatusCheckRollupContextConnection
+  contexts: StatusCheckRollupContextConnection
 })
 export interface PullRequestWatchFingerprintRepositoryPullRequestCommitsNodesCommitStatusCheckRollupStatusCheckRollup extends Schema.Struct.Type<typeof PullRequestWatchFingerprintRepositoryPullRequestCommitsNodesCommitStatusCheckRollupStatusCheckRollup.fields> {}
 
@@ -518,72 +590,53 @@ export const GitObject = Schema.Struct({
 export interface GitObject extends Schema.Struct.Type<typeof GitObject.fields> {}
 
 /** Represents a Git reference. */
-export const Ref = Schema.Struct({
+export const DefaultBranchRefRef = Schema.Struct({
   /** The ref name. */
   name: Schema.String,
   /** The object the ref points to. Returns null when object does not exist. */
   target: Schema.NullOr(GitObject)
 })
-export interface Ref extends Schema.Struct.Type<typeof Ref.fields> {}
+export interface DefaultBranchRefRef extends Schema.Struct.Type<typeof DefaultBranchRefRef.fields> {}
 
-/** Information about pagination in a connection. */
-export const PageInfo = Schema.Struct({
-  /** When paginating forwards, are there more items? */
-  hasNextPage: Schema.Boolean
+/** Represents the rollup for both the check runs and status for a commit. */
+export const TargetStatusCheckRollupStatusCheckRollup = Schema.Struct({
+  /** A list of status contexts and check runs for this commit. */
+  contexts: CoordinatorCi
 })
-export interface PageInfo extends Schema.Struct.Type<typeof PageInfo.fields> {}
+export interface TargetStatusCheckRollupStatusCheckRollup extends Schema.Struct.Type<typeof TargetStatusCheckRollupStatusCheckRollup.fields> {}
 
-/** A check run. */
-export const CheckRun = Schema.Struct({
-  __typename: Schema.Literal("CheckRun"),
-  /** The name of the check for this check run. */
-  name: Schema.String,
-  /** The current status of the check run. */
-  status: GraphQL.enumLiterals(Shared.CheckStatusState.literals),
-  /** The conclusion of the check run. */
-  conclusion: Schema.NullOr(GraphQL.enumLiterals(Shared.CheckConclusionState.literals)),
-  /** The URL from which to find full details of the check run on the integrator's site. */
-  detailsUrl: Schema.NullOr(Shared.URI)
+/** Represents a Git commit. */
+export const TargetCommit = Schema.Struct({
+  __typename: Schema.Literal("Commit"),
+  /** The Git object ID */
+  oid: Shared.GitObjectID,
+  /** Check and Status rollup information for this commit. */
+  statusCheckRollup: Schema.NullOr(TargetStatusCheckRollupStatusCheckRollup)
 })
-export interface CheckRun extends Schema.Struct.Type<typeof CheckRun.fields> {}
+export interface TargetCommit extends Schema.Struct.Type<typeof TargetCommit.fields> {}
 
-/** Represents an individual commit status context */
-export const StatusContext = Schema.Struct({
-  __typename: Schema.Literal("StatusContext"),
-  /** The name of this status context. */
-  context: Schema.String,
-  /** The state of this status context. */
-  state: GraphQL.enumLiterals(Shared.StatusState.literals),
-  /** The URL for this status context. */
-  targetUrl: Schema.NullOr(Shared.URI)
+/** Represents a Git object. */
+export const GitObjectOther = Schema.Struct({
+  __typename: GraphQL.otherTypename<Shared.Typename.GitObject>()(["Commit"])
 })
-export interface StatusContext extends Schema.Struct.Type<typeof StatusContext.fields> {}
+export interface GitObjectOther extends Schema.Struct.Type<typeof GitObjectOther.fields> {}
 
-/** Types that can be inside a StatusCheckRollup context. */
-export const StatusCheckRollupContextOther = Schema.Struct({
-  __typename: GraphQL.otherTypename<Shared.Typename.StatusCheckRollupContext>()(["CheckRun", "StatusContext"])
+/** Represents a Git reference. */
+export const BaseRefRef = Schema.Struct({
+  /** The object the ref points to. Returns null when object does not exist. */
+  target: Schema.NullOr(Schema.Union([
+    TargetCommit,
+    GitObjectOther
+  ]))
 })
-export interface StatusCheckRollupContextOther extends Schema.Struct.Type<typeof StatusCheckRollupContextOther.fields> {}
-
-/** The connection type for StatusCheckRollupContext. */
-export const CoordinatorChangeRepositoryPullRequestCommitsNodesCommitStatusCheckRollupContextsStatusCheckRollupContextConnection = Schema.Struct({
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo,
-  /** A list of nodes. */
-  nodes: Schema.NullOr(Schema.Array(Schema.NullOr(Schema.Union([
-    CheckRun,
-    StatusContext,
-    StatusCheckRollupContextOther
-  ]))))
-})
-export interface CoordinatorChangeRepositoryPullRequestCommitsNodesCommitStatusCheckRollupContextsStatusCheckRollupContextConnection extends Schema.Struct.Type<typeof CoordinatorChangeRepositoryPullRequestCommitsNodesCommitStatusCheckRollupContextsStatusCheckRollupContextConnection.fields> {}
+export interface BaseRefRef extends Schema.Struct.Type<typeof BaseRefRef.fields> {}
 
 /** Represents the rollup for both the check runs and status for a commit. */
 export const CoordinatorChangeRepositoryPullRequestCommitsNodesCommitStatusCheckRollupStatusCheckRollup = Schema.Struct({
   /** The combined status for the commit. */
   state: GraphQL.enumLiterals(Shared.StatusState.literals),
   /** A list of status contexts and check runs for this commit. */
-  contexts: CoordinatorChangeRepositoryPullRequestCommitsNodesCommitStatusCheckRollupContextsStatusCheckRollupContextConnection
+  contexts: CoordinatorCi
 })
 export interface CoordinatorChangeRepositoryPullRequestCommitsNodesCommitStatusCheckRollupStatusCheckRollup extends Schema.Struct.Type<typeof CoordinatorChangeRepositoryPullRequestCommitsNodesCommitStatusCheckRollupStatusCheckRollup.fields> {}
 
@@ -679,6 +732,8 @@ export const CoordinatorChangeRepositoryPullRequestPullRequest = Schema.Struct({
   isDraft: Schema.Boolean,
   /** Identifies the oid of the head ref associated with the pull request, even if the ref has been deleted. */
   headRefOid: Shared.GitObjectID,
+  /** Identifies the base Ref associated with the pull request. */
+  baseRef: Schema.NullOr(BaseRefRef),
   /** The current status of this pull request with respect to code review. */
   reviewDecision: Schema.NullOr(GraphQL.enumLiterals(Shared.PullRequestReviewDecision.literals)),
   /** Whether or not the pull request can be merged based on the existence of merge conflicts. */
@@ -693,7 +748,7 @@ export interface CoordinatorChangeRepositoryPullRequestPullRequest extends Schem
 /** A repository contains the content for a project. */
 export const CoordinatorChangeRepositoryRepository = Schema.Struct({
   /** The Ref associated with the repository's default branch. */
-  defaultBranchRef: Schema.NullOr(Ref),
+  defaultBranchRef: Schema.NullOr(DefaultBranchRefRef),
   /** Returns a single pull request from the current repository by number. */
   pullRequest: Schema.NullOr(CoordinatorChangeRepositoryPullRequestPullRequest)
 })
@@ -708,9 +763,11 @@ export const CoordinatorChange = GraphQL.query("CoordinatorChange", {
       { name: "number", body: "Int!" }
     ],
     selections: [
-      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){defaultBranchRef{name target{__typename oid}}pullRequest(number:$", "number", "){title body state isDraft headRefOid reviewDecision mergeable commits(last:1){nodes{commit{statusCheckRollup{state contexts(first:100){pageInfo{hasNextPage}nodes{__typename...on CheckRun{name status conclusion detailsUrl}...on StatusContext{context state targetUrl}}}}deployments(first:20 orderBy:{field:CREATED_AT direction:DESC}){nodes{environment latestStatus{state environmentUrl}}}}}}mergeCommit{oid deployments(first:1 environments:[\"Production\" \"production\" \"Prod\" \"prod\" \"PRODUCTION\" \"PROD\"]orderBy:{field:CREATED_AT direction:DESC}){nodes{latestStatus{state createdAt}}}}}}"] }
+      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){defaultBranchRef{name target{__typename oid}}pullRequest(number:$", "number", "){title body state isDraft headRefOid baseRef{target{__typename...on Commit{oid statusCheckRollup{contexts(first:100){...CoordinatorCi}}}}}reviewDecision mergeable commits(last:1){nodes{commit{statusCheckRollup{state contexts(first:100){...CoordinatorCi}}deployments(first:20 orderBy:{field:CREATED_AT direction:DESC}){nodes{environment latestStatus{state environmentUrl}}}}}}mergeCommit{oid deployments(first:1 environments:[\"Production\" \"production\" \"Prod\" \"prod\" \"PRODUCTION\" \"PROD\"]orderBy:{field:CREATED_AT direction:DESC}){nodes{latestStatus{state createdAt}}}}}}"] }
     ],
-    fragments: []
+    fragments: [
+      { name: "CoordinatorCi", body: ["on StatusCheckRollupContextConnection{pageInfo{hasNextPage}nodes{__typename...on CheckRun{name status conclusion detailsUrl checkSuite{app{slug}}}...on StatusContext{context state targetUrl}}}"] }
+    ]
   },
   variables: {
     owner: Schema.String,

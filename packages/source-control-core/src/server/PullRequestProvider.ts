@@ -7,6 +7,7 @@ import type {
   PullRequestStackHead,
   CoordinatorStatus,
   CoordinatorChange,
+  ShipRange,
   ProductionDeployment,
   PullRequestActor,
   PullRequestReferenceCandidate,
@@ -444,6 +445,9 @@ export interface PullRequestProviderApi {
       pullNumbers: string;
     },
   ) => Effect.Effect<void, PullRequestProviderError>;
+  readonly coordinatorRange?: (
+    input: ProviderRepositoryRef & { base: string; head: string; branch: string },
+  ) => Effect.Effect<ShipRange | null, PullRequestProviderError>;
   readonly coordinatorIncludes?: (input: {
     cwd: string;
     host: string;

@@ -175,6 +175,31 @@ query CoordinatorRelease($owner: String!, $name: String!, $number: Int!) {
   }
 }
 
+fragment CoordinatorCi on StatusCheckRollupContextConnection {
+  pageInfo {
+    hasNextPage
+  }
+  nodes {
+    __typename
+    ... on CheckRun {
+      name
+      status
+      conclusion
+      detailsUrl
+      checkSuite {
+        app {
+          slug
+        }
+      }
+    }
+    ... on StatusContext {
+      context
+      state
+      targetUrl
+    }
+  }
+}
+
 query CoordinatorChange($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     defaultBranchRef {
@@ -189,6 +214,18 @@ query CoordinatorChange($owner: String!, $name: String!, $number: Int!) {
       state
       isDraft
       headRefOid
+      baseRef {
+        target {
+          ... on Commit {
+            oid
+            statusCheckRollup {
+              contexts(first: 100) {
+                ...CoordinatorCi
+              }
+            }
+          }
+        }
+      }
       reviewDecision
       mergeable
       commits(last: 1) {
@@ -197,23 +234,7 @@ query CoordinatorChange($owner: String!, $name: String!, $number: Int!) {
             statusCheckRollup {
               state
               contexts(first: 100) {
-                pageInfo {
-                  hasNextPage
-                }
-                nodes {
-                  __typename
-                  ... on CheckRun {
-                    name
-                    status
-                    conclusion
-                    detailsUrl
-                  }
-                  ... on StatusContext {
-                    context
-                    state
-                    targetUrl
-                  }
-                }
+                ...CoordinatorCi
               }
             }
             deployments(first: 20, orderBy: { field: CREATED_AT, direction: DESC }) {

@@ -4,6 +4,7 @@ import {
   type CoordinatorStatus,
   type ScopedProjectRef,
 } from "@t3tools/contracts";
+import { Link } from "@tanstack/react-router";
 import { Atom } from "effect/reactivity";
 import { msg, useGT, useMessages } from "gt-react";
 import { coordinatorStatusQuery } from "../../state/projects";
@@ -21,16 +22,17 @@ const presentation = {
 
 const statusForMembers = Atom.family((members: readonly ScopedProjectRef[]) =>
   Atom.make((get) => {
-    const states: CoordinatorStatus[] = [];
+    const states: Array<{ status: CoordinatorStatus; target: ScopedProjectRef }> = [];
     let loading = false;
-    for (const { environmentId, projectId } of members) {
+    for (const target of members) {
+      const { environmentId, projectId } = target;
       const config = get(serverEnvironment.configValueAtom(environmentId));
       if (!config?.environment.capabilities.coordinatorStatus) {
-        if (members.length > 1) states.push("unavailable");
+        if (members.length > 1) states.push({ status: "unavailable", target });
         continue;
       }
       if (get(environmentShell.statusAtom(environmentId)) !== "live") {
-        states.push("unavailable");
+        states.push({ status: "unavailable", target });
         continue;
       }
       const answer = get(coordinatorStatusQuery({ environmentId, input: { projectId } }));
@@ -38,28 +40,41 @@ const statusForMembers = Atom.family((members: readonly ScopedProjectRef[]) =>
         loading = true;
         continue;
       }
-      states.push(answer._tag === "Success" ? answer.value : "unavailable");
+      states.push({ status: answer._tag === "Success" ? answer.value : "unavailable", target });
     }
-    if (loading) return null;
-    return states.length ? summarizeCoordinatorStatuses(states) : null;
+    const status = states.length ? summarizeCoordinatorStatuses(states.map((s) => s.status)) : null;
+    return {
+      status: loading ? null : status,
+      target: states.find((s) => s.status === status)?.target ?? members[0],
+    };
   }),
 );
 
 export function CoordinatorStatusBadge({ members }: { members: readonly ScopedProjectRef[] }) {
   const gt = useGT();
   const resolve = useMessages();
-  const status = useAtomValue(statusForMembers(members));
-  if (status === null) return null;
-  const [message, colors] = presentation[status];
-  const label = resolve(message);
+  const { status, target } = useAtomValue(statusForMembers(members));
+  if (!target) return null;
+  const colors = status ? presentation[status][1] : "bg-muted text-muted-foreground";
+  const label = status ? resolve(presentation[status][0]) : "GitHub";
   const description = gt("Coordinator status: {status}", { status: label });
   return (
-    <span
+    <Link
+      to="/pull-requests"
+      search={{
+        projectTab: "github",
+        environmentId: target.environmentId,
+        projectId: target.projectId,
+        involvement: "all",
+        state: "open",
+      }}
+      title={"GitHub · " + label}
+      aria-label={"GitHub · " + description}
       className={`ml-auto inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-0.5 text-3xs font-medium leading-tight ${colors}`}
     >
       <span aria-hidden className="size-1.5 rounded-full bg-current" />
       <span className="sr-only">{description}</span>
       <span aria-hidden>{label}</span>
-    </span>
+    </Link>
   );
 }

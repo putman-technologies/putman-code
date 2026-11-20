@@ -417,8 +417,10 @@ it.effect("hands off a completed feature once and preserves the source when deli
     const fresh = firstBoard.items.find((i) => i.threadId === nextSource)!;
     assert.equal(fresh.phase, "review");
     const item = { id: fresh.id, revision: fresh.revision };
+    const actor = { key: "fixture-austin", label: "Austin", admin: true };
+    yield* readCoordinatorBoard(projectId, sql, projects, threads, receipt, undefined, actor);
     const act = (mutation: Parameters<typeof actOnCoordinatorBoard>[0]) =>
-      actOnCoordinatorBoard(mutation, sql, projects, threads, receipt);
+      actOnCoordinatorBoard(mutation, sql, projects, threads, receipt, actor);
     const assets = {
       preview: "https://demo.example/preview",
       before: "https://demo.example/before.png",
@@ -491,6 +493,7 @@ it.effect("hands off a completed feature once and preserves the source when deli
             projects,
             threads,
             changedInGitHub,
+            actor,
           ),
         ),
       ),
@@ -518,7 +521,7 @@ it.effect("hands off a completed feature once and preserves the source when deli
       projectId,
       items: [{ id: reverted.id, revision: reverted.revision }],
     };
-    yield* actOnCoordinatorBoard(queued, sql, projects, threads, productionReceipt(false));
+    yield* actOnCoordinatorBoard(queued, sql, projects, threads, productionReceipt(false), actor);
     const includedInLaterRelease = {
       ...productionReceipt(true),
       coordinatorChange: () =>
@@ -529,7 +532,7 @@ it.effect("hands off a completed feature once and preserves the source when deli
     assert.isTrue(
       Exit.isFailure(
         yield* Effect.exit(
-          actOnCoordinatorBoard(queued, sql, projects, threads, includedInLaterRelease),
+          actOnCoordinatorBoard(queued, sql, projects, threads, includedInLaterRelease, actor),
         ),
       ),
     );
@@ -585,7 +588,13 @@ it.effect("hands off a completed feature once and preserves the source when deli
     const broken = {
       ...receipt,
       coordinatorChange: () =>
-        receipt.coordinatorChange().pipe(Effect.map((c) => ({ ...c, checks: "FAILURE" }))),
+        receipt.coordinatorChange().pipe(
+          Effect.map((c) => ({
+            ...c,
+            checks: "FAILURE",
+            ciDiagnosis: { kind: "pr" as const, detail: "Baseline passed" },
+          })),
+        ),
     };
     yield* act({
       type: "playbook",
@@ -606,6 +615,20 @@ it.effect("hands off a completed feature once and preserves the source when deli
           nextCursors: {},
         }),
     };
+    for (const kind of ["baseline", "runner", "unknown"] as const) {
+      yield* reconcileCoordinatorQueues(sql, ownProjects, threads, {
+        ...worker,
+        coordinatorChange: () =>
+          broken
+            .coordinatorChange()
+            .pipe(Effect.map((c) => ({ ...c, ciDiagnosis: { kind, detail: "Review manually" } }))),
+      });
+    }
+    assert.isFalse(
+      (yield* orchestrator.getThreadProjection(source)).messages.some((m) =>
+        m.id.startsWith("repair:"),
+      ),
+    );
     yield* reconcileCoordinatorQueues(sql, ownProjects, threads, worker);
     yield* reconcileCoordinatorQueues(sql, ownProjects, threads, worker);
     const repaired = yield* readCoordinatorBoard(projectId, sql, ownProjects, threads, broken);
@@ -619,7 +642,15 @@ it.effect("hands off a completed feature once and preserves the source when deli
     );
     let dispatches = 0;
     const runner = {
-      ...receipt,
+      ...productionReceipt(false),
+      coordinatorRange: () =>
+        Effect.succeed({
+          commits: [
+            { sha: candidate, title: "Feature", pulls: [17] },
+            { sha: "c".repeat(40), title: "Extra direct commit", pulls: [] },
+          ],
+          files: ["apps/example.ts"],
+        }),
       coordinatorChange: () =>
         receipt.coordinatorChange().pipe(
           Effect.map((c) => ({
@@ -644,10 +675,28 @@ it.effect("hands off a completed feature once and preserves the source when deli
       runner,
     )).items.find((i) => i.external)!;
     const ref = { id: external.id, revision: external.revision };
-    const release = { type: "release" as const, projectId, items: [ref] };
+    const view = yield* actOnCoordinatorBoard(
+      { type: "inspectRelease", projectId, items: [ref] },
+      sql,
+      ownProjects,
+      threads,
+      runner,
+      actor,
+    );
+    assert.isTrue("manifest" in view);
+    if (!("manifest" in view) || !view.manifest) throw Error("No release manifest");
+    assert.lengthOf(view.manifest.commits, 2);
+    const release = {
+      type: "release" as const,
+      projectId,
+      items: [ref],
+      manifest: view.manifest.token,
+    };
     assert.isTrue(
       Exit.isFailure(
-        yield* Effect.exit(actOnCoordinatorBoard(release, sql, ownProjects, threads, runner)),
+        yield* Effect.exit(
+          actOnCoordinatorBoard(release, sql, ownProjects, threads, runner, actor),
+        ),
       ),
     );
     yield* actOnCoordinatorBoard(
@@ -656,10 +705,206 @@ it.effect("hands off a completed feature once and preserves the source when deli
       ownProjects,
       threads,
       runner,
+      actor,
     );
-    yield* actOnCoordinatorBoard(release, sql, ownProjects, threads, runner);
-    yield* actOnCoordinatorBoard(release, sql, ownProjects, threads, runner);
+    const denied = (actorKey: string) => ({ key: actorKey, label: "Device browser", admin: false });
+    const viewer = denied("untrusted-browser");
+    yield* readCoordinatorBoard(projectId, sql, ownProjects, threads, runner, undefined, viewer);
+    const attempt = (input: Parameters<typeof act>[0], who = actor) =>
+      actOnCoordinatorBoard(input, sql, ownProjects, threads, runner, who);
+    assert.isTrue(Exit.isFailure(yield* Effect.exit(attempt(release, viewer))));
+    assert.isTrue(
+      Exit.isFailure(
+        yield* Effect.exit(attempt({ type: "approve", projectId, item: ref }, viewer)),
+      ),
+    );
+    const approved = (yield* readCoordinatorBoard(
+      projectId,
+      sql,
+      ownProjects,
+      threads,
+      runner,
+      undefined,
+      actor,
+    )).items.find((i) => i.id === ref.id);
+    assert.equal(approved?.approvedBy, "Austin");
+    yield* attempt({ type: "hold", projectId, id: "hold", scope: "apps", reason: "Owner review" });
+    assert.isTrue(Exit.isFailure(yield* Effect.exit(attempt(release))));
+    assert.equal(dispatches, 0);
+    yield* attempt({ type: "lift", projectId, id: "hold" });
+    assert.isTrue(Exit.isFailure(yield* Effect.exit(attempt({ ...release, manifest: "stale" }))));
+    const task = {
+      type: "task" as const,
+      projectId,
+      id: "task1",
+      version: 0,
+      threadId: source,
+      title: "Edit preview",
+      criteria: "Form accepts a fixture",
+      owner: "Austin",
+      state: "planned" as const,
+      dependencies: [],
+    };
+    yield* attempt(task);
+    yield* attempt({ ...task, id: "task2", dependencies: ["task1"] });
+    assert.isTrue(
+      Exit.isFailure(yield* Effect.exit(attempt({ ...task, version: 1, dependencies: ["task2"] }))),
+    );
+    assert.isTrue(
+      Exit.isFailure(
+        yield* Effect.exit(
+          attempt({ type: "job", kind: "browser", projectId, task: "task2", id: "blocked" }),
+        ),
+      ),
+    );
+    yield* attempt({ type: "job", kind: "agent", projectId, task: "task1", id: "start" });
+    assert.isTrue(
+      Exit.isFailure(
+        yield* Effect.exit(
+          attempt({ type: "job", kind: "agent", projectId, task: "task1", id: "duplicate" }),
+        ),
+      ),
+    );
+    yield* sql`UPDATE coordinator_jobs SET state='interrupted' WHERE project_id=${projectId} AND id='start'`;
+    assert.isTrue(
+      Exit.isFailure(
+        yield* Effect.exit(
+          attempt({ type: "job", kind: "agent", projectId, task: "task1", id: "over-budget" }),
+        ),
+      ),
+    );
+    const grant = {
+      type: "extendBudget" as const,
+      projectId,
+      task: "task1",
+      id: "grant",
+      turns: 2,
+      dollars: 0.4,
+    };
+    assert.isTrue(Exit.isFailure(yield* Effect.exit(attempt(grant, viewer))));
+    yield* attempt(grant);
+    yield* attempt(grant);
+    yield* attempt({ type: "job", kind: "agent", projectId, task: "task1", id: "resume" });
+    const [allocation] = yield* sql<{
+      turns: number;
+      dollars: number;
+    }>`SELECT turns,dollars FROM coordinator_jobs WHERE project_id=${projectId} AND id='resume'`;
+    assert.equal(allocation?.turns, 2);
+    assert.equal(allocation?.dollars, 0.4);
+    yield* actOnCoordinatorBoard(release, sql, ownProjects, threads, runner, actor);
+    yield* actOnCoordinatorBoard(release, sql, ownProjects, threads, runner, actor);
     assert.equal(dispatches, 1);
+    const githubBoard = yield* readCoordinatorBoard(
+      projectId,
+      sql,
+      ownProjects,
+      threads,
+      {
+        ...runner,
+        list: () =>
+          Effect.succeed({
+            entries: [],
+            providers: [
+              {
+                kind: "github" as import("@t3tools/contracts").SourceControlProviderKind,
+                host: "github.com",
+                searchesOnHost: true,
+                projectCount: 1,
+                configured: true,
+                detail: null,
+              },
+            ],
+            errors: [],
+            viewers: {},
+            truncated: false,
+            nextCursors: {},
+          }),
+        coordinatorSinceProduction: (p, base) => {
+          assert.equal(p, projectId);
+          assert.equal(base, "latersha");
+          return Effect.succeed({
+            head: candidate,
+            files: ["example"],
+            commits: [{ sha: candidate, title: "Merged after production", pulls: [17] }],
+          });
+        },
+      },
+      undefined,
+      actor,
+      true,
+    );
+    assert.deepEqual(githubBoard.github?.open, []);
+    assert.equal(githubBoard.github?.unshipped?.commits[0]?.title, "Merged after production");
+    const ask = {
+      type: "askPull" as const,
+      projectId,
+      url,
+      requestId: "ask-once",
+      question: "Which files change?",
+    };
+    assert.isTrue(
+      Exit.isFailure(
+        yield* Effect.exit(attempt({ ...ask, url: "https://github.com/other/project/pull/17" })),
+      ),
+    );
+    const answer = yield* attempt(ask);
+    yield* attempt(ask);
+    const asked = (yield* orchestrator.getThreadProjection(answer.threadId)).messages.filter((m) =>
+      m.id.startsWith("ask-pr:"),
+    );
+    assert.lengthOf(asked, 1);
+    assert.include(asked[0]!.text, url);
+    assert.include(asked[0]!.text, "abc123");
+    const previewHead = "f".repeat(40);
+    const preview = "https://private.example/" + previewHead + "/index.html";
+    yield* attempt({
+      type: "limits",
+      projectId,
+      limits: { agents: 2, browsers: 1, turns: 12, dollars: 3 },
+      previewOrigin: "https://private.example",
+    });
+    const reviewed = {
+      ...receipt,
+      coordinatorChange: () =>
+        receipt.coordinatorChange().pipe(Effect.map((c) => ({ ...c, head: previewHead, preview }))),
+    };
+    const previewRow = (yield* readCoordinatorBoard(
+      projectId,
+      sql,
+      ownProjects,
+      threads,
+      reviewed,
+    )).items.find((i) => i.threadId === source)!;
+    const note = {
+      type: "feedback" as const,
+      projectId,
+      item: { id: previewRow.id, revision: previewRow.revision },
+      requestId: "one-note",
+      preview,
+      screen: "/invoices/fixture",
+      note: "Back loses our filter.",
+    };
+    assert.isTrue(
+      Exit.isFailure(
+        yield* Effect.exit(
+          actOnCoordinatorBoard(
+            { ...note, preview: "https://public.example/" },
+            sql,
+            ownProjects,
+            threads,
+            reviewed,
+            actor,
+          ),
+        ),
+      ),
+    );
+    yield* actOnCoordinatorBoard(note, sql, ownProjects, threads, reviewed, actor);
+    yield* actOnCoordinatorBoard(note, sql, ownProjects, threads, reviewed, actor);
+    const notes = (yield* orchestrator.getThreadProjection(source)).messages.filter((m) =>
+      m.id.startsWith("preview:"),
+    );
+    assert.lengthOf(notes, 1);
+    assert.include(notes[0]!.text, previewHead);
     const prior = yield* threads.getThreadShell(source);
     const other = yield* threads.getThreadShell(nextSource);
     const pair = yield* threads.getShellSnapshot({ projectId });

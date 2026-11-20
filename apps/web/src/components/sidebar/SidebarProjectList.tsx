@@ -56,8 +56,8 @@ export function SidebarProjectList(props: SidebarProjectListProps) {
                   machineByEnvironmentId={props.machineByEnvironmentId}
                 />
               )}
-              <CoordinatorStatusBadge members={project.memberProjectRefs} />
             </button>
+            <CoordinatorStatusBadge members={project.memberProjectRefs} />
             <span className="opacity-0 group-hover/project:opacity-100 group-focus-within/project:opacity-100 pointer-coarse:opacity-100">
               <SidebarHeaderIconButton
                 label={gt("New thread in {project}", { project: project.displayName })}

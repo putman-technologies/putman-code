@@ -1,3 +1,4 @@
+import { actorFromSession } from "./orchestration-v2/CoordinatorTeam.ts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- A synchronous digest inside the pure provider mapping.
 import * as NodeCrypto from "node:crypto";
@@ -1425,6 +1426,10 @@ export const layerWsRpc = (
   Layer.effectContext(
     Effect.gen(function* () {
       const currentSessionId = currentSession.sessionId;
+      const boardActor = actorFromSession(
+        currentSession,
+        "Device " + currentSession.sessionId.slice(-8),
+      );
       const sql = yield* SqlClient.SqlClient;
       const threadManagement = yield* ThreadManagementService.ThreadManagementService;
       const intakeContext = yield* Effect.context<
@@ -2026,7 +2031,7 @@ export const layerWsRpc = (
                 ),
             ),
           ),
-        [ORCHESTRATION_V2_WS_METHODS.coordinatorBoard]: ({ projectId }) =>
+        [ORCHESTRATION_V2_WS_METHODS.coordinatorBoard]: ({ projectId, github }) =>
           readCoordinatorBoard(
             projectId,
             sql,
@@ -2034,6 +2039,8 @@ export const layerWsRpc = (
             threadManagement,
             pullRequests,
             vcsStatusBroadcaster.refreshLocalStatus,
+            boardActor,
+            github,
           ),
         [ORCHESTRATION_V2_WS_METHODS.coordinatorOverlaps]: ({ projectId }) =>
           readCoordinatorOverlaps(
@@ -2044,7 +2051,14 @@ export const layerWsRpc = (
             vcsStatusBroadcaster.refreshLocalStatus,
           ),
         [ORCHESTRATION_V2_WS_METHODS.coordinatorBoardAction]: (input) =>
-          actOnCoordinatorBoard(input, sql, projectService, threadManagement, pullRequests),
+          actOnCoordinatorBoard(
+            input,
+            sql,
+            projectService,
+            threadManagement,
+            pullRequests,
+            boardActor,
+          ),
         [ORCHESTRATION_V2_WS_METHODS.coordinatorRetry]: (input) =>
           retryCoordinatorChecks(input, pullRequests),
         [ORCHESTRATION_V2_WS_METHODS.coordinatorStatus]: ({ projectId }) =>

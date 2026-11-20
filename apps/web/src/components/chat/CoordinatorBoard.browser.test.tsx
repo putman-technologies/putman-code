@@ -180,6 +180,74 @@ describe("release board", () => {
         input: { type: "prepare", projectId: one, items: [{ id: row.id, revision: "reviewed" }] },
       });
       expect(onOpen).toHaveBeenCalledWith(coord, env);
+      const feature = {
+        ...row,
+        approved: true,
+        phase: "merged" as const,
+        pulls: [
+          {
+            repository: "acme/web",
+            host: "github.com",
+            number: 17,
+            url: "https://github.com/acme/web/pull/17",
+            checks: [],
+            evidence: null,
+          },
+        ],
+      };
+      boards.set(one, {
+        ...boards.get(one)!,
+        playbook: "Use staging",
+        githubRelease: true,
+        items: [feature],
+        team: {
+          me: "alice",
+          admin: false,
+          submit: true,
+          approve: false,
+          release: true,
+          members: [],
+          holds: [],
+          tasks: [],
+          jobs: [],
+          audits: [],
+          threads: [],
+          previewOrigin: "",
+          limits: { agents: 2, browsers: 1, turns: 12, dollars: 3 },
+        },
+      });
+      const range = {
+        base: "a".repeat(40),
+        head: "b".repeat(40),
+        repository: "acme/web",
+        token: "manifest",
+        holds: [],
+        files: ["web/example"],
+        commits: [
+          { sha: "c".repeat(40), title: "Another team change", pulls: [23] },
+          { sha: "d".repeat(40), title: "Unrelated direct commit", pulls: [] },
+        ],
+      };
+      action.mockResolvedValue(AsyncResult.success({ threadId: coord, manifest: range }));
+      await act(async () =>
+        registry.refresh(coordinatorBoardQuery({ environmentId: env, input: { projectId: one } })),
+      );
+      await act(async () =>
+        document.querySelector<HTMLInputElement>('input[aria-label="Invoice detail"]')!.click(),
+      );
+      await act(async () => button("What will ship?")!.click());
+      expect(document.body.textContent).toContain("Outside selection");
+      expect(document.body.textContent).toContain("Unrelated direct commit");
+      await act(async () => button("Confirm release request")!.click());
+      expect(action).toHaveBeenCalledWith({
+        environmentId: env,
+        input: {
+          type: "release",
+          projectId: one,
+          items: [{ id: row.id, revision: row.revision }],
+          manifest: "manifest",
+        },
+      });
     } finally {
       registry.dispose();
       boards.clear();

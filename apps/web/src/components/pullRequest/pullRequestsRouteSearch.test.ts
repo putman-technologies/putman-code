@@ -27,6 +27,17 @@ function matchedSearch(url: string) {
 }
 
 describe("pull requests route search", () => {
+  it("keeps a GitHub project tab scoped to its own machine", () => {
+    const page = matchedSearch(
+      "/pull-requests?projectTab=github&projectId=sapphire&environmentId=vps",
+    );
+    expect(page).toMatchObject({
+      projectTab: "github",
+      projectId: "sapphire",
+      environmentId: "vps",
+    });
+    expect(matchedSearch("/pull-requests?projectTab=github")?.projectTab).toBeUndefined();
+  });
   it("drops a q the URL parser turned into a number", () => {
     expect(matchedSearch("/pull-requests?q=4089")?.q).toBeUndefined();
     expect(matchedSearch("/pull-requests?q=true")?.q).toBeUndefined();
