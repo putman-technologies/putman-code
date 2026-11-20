@@ -217,52 +217,6 @@ export function AppearanceSettingsPanel() {
         />
 
         <SettingsRow
-          {...searchableSetting("setting-glass-opacity")}
-          description={gt("Higher values make menus, dialogs, and the composer more solid.")}
-          resetAction={
-            settings.glassOpacity !== DEFAULT_UNIFIED_SETTINGS.glassOpacity ? (
-              <SettingResetButton
-                ariaLabel={gt("Reset glass opacity to default")}
-                onClick={() =>
-                  updateSettings({ glassOpacity: DEFAULT_UNIFIED_SETTINGS.glassOpacity })
-                }
-              />
-            ) : null
-          }
-          control={
-            <div className="flex w-full items-center gap-3 sm:w-52">
-              <output
-                className="min-w-12 rounded-md bg-muted px-2 py-1 text-center font-mono text-xs font-medium tabular-nums text-foreground"
-                htmlFor="glass-opacity"
-              >
-                {settings.glassOpacity}%
-              </output>
-              <input
-                aria-label={gt("Glass opacity")}
-                className="settings-slider min-w-0 flex-1"
-                id="glass-opacity"
-                max={MAX_GLASS_OPACITY}
-                min={MIN_GLASS_OPACITY}
-                onChange={(event) => {
-                  const glassOpacity = Number(event.currentTarget.value);
-                  if (
-                    Number.isInteger(glassOpacity) &&
-                    glassOpacity >= MIN_GLASS_OPACITY &&
-                    glassOpacity <= MAX_GLASS_OPACITY
-                  ) {
-                    updateSettings({ glassOpacity });
-                  }
-                }}
-                step={5}
-                style={glassOpacitySliderStyle}
-                type="range"
-                value={settings.glassOpacity}
-              />
-            </div>
-          }
-        />
-
-        <SettingsRow
           {...searchableSetting("chat-width")}
           description={gt("Set how wide messages and the composer can grow on large screens.")}
           resetAction={
@@ -295,74 +249,11 @@ export function AppearanceSettingsPanel() {
           }
         />
         <ThreadDetailsItemsRow />
-        <SettingsRow
-          {...searchableSetting("effort-display")}
-          description={gt(
-            "Show reasoning effort in the composer as its name, such as High, or as bars.",
-          )}
-          resetAction={
-            settings.effortDisplay !== DEFAULT_UNIFIED_SETTINGS.effortDisplay ? (
-              <SettingResetButton
-                ariaLabel={gt("Reset effort display to default")}
-                onClick={() =>
-                  updateSettings({ effortDisplay: DEFAULT_UNIFIED_SETTINGS.effortDisplay })
-                }
-              />
-            ) : null
-          }
-          control={
-            <div className="w-full sm:w-40">
-              <Select
-                value={settings.effortDisplay}
-                onValueChange={(value) => {
-                  if (value === "bars" || value === "label")
-                    updateSettings({ effortDisplay: value });
-                }}
-              >
-                <SelectTrigger
-                  size="sm"
-                  className="w-full min-w-0"
-                  aria-label={gt("Effort display")}
-                >
-                  <SelectValue>{m(EFFORT_DISPLAY_LABELS[settings.effortDisplay])}</SelectValue>
-                </SelectTrigger>
-                <SelectPopup align="end" alignItemWithTrigger={false}>
-                  <SelectItem value="label">{gt("Word (default)")}</SelectItem>
-                  <SelectItem value="bars">{m(EFFORT_DISPLAY_LABELS.bars)}</SelectItem>
-                </SelectPopup>
-              </Select>
-            </div>
-          }
-        />
-        <SettingsRow
-          {...searchableSetting("math-rendering")}
-          description={gt(
-            "Typeset LaTeX math, such as $x^2$ or \\[x^2\\], in messages and Markdown previews. The composer keeps TeX source editable.",
-          )}
-          resetAction={
-            settings.mathRenderingEnabled !== DEFAULT_UNIFIED_SETTINGS.mathRenderingEnabled ? (
-              <SettingResetButton
-                ariaLabel={gt("Reset math rendering to default")}
-                onClick={() =>
-                  updateSettings({
-                    mathRenderingEnabled: DEFAULT_UNIFIED_SETTINGS.mathRenderingEnabled,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.mathRenderingEnabled}
-              onCheckedChange={(checked) =>
-                updateSettings({ mathRenderingEnabled: Boolean(checked) })
-              }
-              aria-label={gt("Render math")}
-            />
-          }
-        />
         <AdvancedSettings
           targetIds={[
+            searchableSetting("setting-glass-opacity").id,
+            searchableSetting("effort-display").id,
+            searchableSetting("math-rendering").id,
             searchableSetting("panel-animations").id,
             searchableSetting("environment-identification").id,
             // Environment identification's search result lands on this section.
@@ -370,6 +261,118 @@ export function AppearanceSettingsPanel() {
             searchableSetting("composer-context").id,
           ]}
         >
+          <SettingsRow
+            {...searchableSetting("setting-glass-opacity")}
+            description={gt("Higher values make menus, dialogs, and the composer more solid.")}
+            resetAction={
+              settings.glassOpacity !== DEFAULT_UNIFIED_SETTINGS.glassOpacity ? (
+                <SettingResetButton
+                  ariaLabel={gt("Reset glass opacity to default")}
+                  onClick={() =>
+                    updateSettings({ glassOpacity: DEFAULT_UNIFIED_SETTINGS.glassOpacity })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <div className="flex w-full items-center gap-3 sm:w-52">
+                <output
+                  className="min-w-12 rounded-md bg-muted px-2 py-1 text-center font-mono text-xs font-medium tabular-nums text-foreground"
+                  htmlFor="glass-opacity"
+                >
+                  {settings.glassOpacity}%
+                </output>
+                <input
+                  aria-label={gt("Glass opacity")}
+                  className="settings-slider min-w-0 flex-1"
+                  id="glass-opacity"
+                  max={MAX_GLASS_OPACITY}
+                  min={MIN_GLASS_OPACITY}
+                  onChange={(event) => {
+                    const glassOpacity = Number(event.currentTarget.value);
+                    if (
+                      Number.isInteger(glassOpacity) &&
+                      glassOpacity >= MIN_GLASS_OPACITY &&
+                      glassOpacity <= MAX_GLASS_OPACITY
+                    ) {
+                      updateSettings({ glassOpacity });
+                    }
+                  }}
+                  step={5}
+                  style={glassOpacitySliderStyle}
+                  type="range"
+                  value={settings.glassOpacity}
+                />
+              </div>
+            }
+          />
+
+          <SettingsRow
+            {...searchableSetting("effort-display")}
+            description={gt(
+              "Show reasoning effort in the composer as its name, such as High, or as bars.",
+            )}
+            resetAction={
+              settings.effortDisplay !== DEFAULT_UNIFIED_SETTINGS.effortDisplay ? (
+                <SettingResetButton
+                  ariaLabel={gt("Reset effort display to default")}
+                  onClick={() =>
+                    updateSettings({ effortDisplay: DEFAULT_UNIFIED_SETTINGS.effortDisplay })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <div className="w-full sm:w-40">
+                <Select
+                  value={settings.effortDisplay}
+                  onValueChange={(value) => {
+                    if (value === "bars" || value === "label")
+                      updateSettings({ effortDisplay: value });
+                  }}
+                >
+                  <SelectTrigger
+                    size="sm"
+                    className="w-full min-w-0"
+                    aria-label={gt("Effort display")}
+                  >
+                    <SelectValue>{m(EFFORT_DISPLAY_LABELS[settings.effortDisplay])}</SelectValue>
+                  </SelectTrigger>
+                  <SelectPopup align="end" alignItemWithTrigger={false}>
+                    <SelectItem value="label">{gt("Word (default)")}</SelectItem>
+                    <SelectItem value="bars">{m(EFFORT_DISPLAY_LABELS.bars)}</SelectItem>
+                  </SelectPopup>
+                </Select>
+              </div>
+            }
+          />
+          <SettingsRow
+            {...searchableSetting("math-rendering")}
+            description={gt(
+              "Typeset LaTeX math, such as $x^2$ or \\[x^2\\], in messages and Markdown previews. The composer keeps TeX source editable.",
+            )}
+            resetAction={
+              settings.mathRenderingEnabled !== DEFAULT_UNIFIED_SETTINGS.mathRenderingEnabled ? (
+                <SettingResetButton
+                  ariaLabel={gt("Reset math rendering to default")}
+                  onClick={() =>
+                    updateSettings({
+                      mathRenderingEnabled: DEFAULT_UNIFIED_SETTINGS.mathRenderingEnabled,
+                    })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <Switch
+                checked={settings.mathRenderingEnabled}
+                onCheckedChange={(checked) =>
+                  updateSettings({ mathRenderingEnabled: Boolean(checked) })
+                }
+                aria-label={gt("Render math")}
+              />
+            }
+          />
           <SettingsRow
             {...searchableSetting("panel-animations")}
             description={gt("Set how fast panels open and close.")}

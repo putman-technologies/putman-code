@@ -124,7 +124,21 @@ export const SETTINGS_NAV_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/access": msg("Sharing & access", { $context: "settings navigation item" }),
 };
 
-/** Sidebar order. A group with a hidden heading is set apart on screen by space alone. */
+/** The desktop and web share a short primary menu. Search also covers folded sections. */
+export const ADVANCED_SETTINGS_PATHS: ReadonlyArray<SettingsPath> = [
+  "/settings/archived",
+  "/settings/scheduled-tasks",
+  "/settings/worktrees",
+  "/settings/diffs",
+  "/settings/keybindings",
+  "/settings/browser",
+  "/settings/voice",
+  ...(isElectron ? (["/settings/snap-shot"] as const) : []),
+  "/settings/devices",
+  "/settings/maintenance",
+  "/settings/labs",
+];
+
 export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
   readonly heading: string;
   readonly headingHidden?: true;
@@ -133,29 +147,15 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
   {
     heading: msg("Preferences"),
     headingHidden: true,
-    paths: [
-      "/settings/general",
-      "/settings/appearance",
-      "/settings/chat",
-      "/settings/diffs",
-      "/settings/keybindings",
-      "/settings/voice",
-      "/settings/snap-shot",
-    ],
-  },
-  {
-    heading: msg("Agents"),
-    paths: [
-      "/settings/providers",
-      "/settings/threads",
-      "/settings/browser",
-      "/settings/devices",
-      "/settings/scheduled-tasks",
-    ],
+    paths: ["/settings/general", "/settings/appearance", "/settings/chat", "/settings/about"],
   },
   {
     heading: msg("Code"),
-    paths: ["/settings/projects", "/settings/source-control", "/settings/worktrees"],
+    paths: ["/settings/projects", "/settings/source-control"],
+  },
+  {
+    heading: msg("Agents"),
+    paths: ["/settings/providers", "/settings/threads"],
   },
   {
     heading: msg("Connections"),
@@ -164,11 +164,6 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
       "/settings/access",
       ...(isSecretsFeatureEnabled ? (["/settings/secrets"] as const) : []),
     ],
-  },
-  {
-    heading: msg("More"),
-    headingHidden: true,
-    paths: ["/settings/maintenance", "/settings/labs", "/settings/about", "/settings/archived"],
   },
 ];
 
@@ -958,11 +953,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: msg("SnapShots"),
     searchTerms: [msg("window capture screenshot")],
     to: "/settings/snap-shot",
+    desktopOnly: true,
   },
   {
     id: "snap-shot-accessibility",
     title: msg("Include app text"),
     to: "/settings/snap-shot",
+    desktopOnly: true,
     targetId: "snap-shot-enabled",
     searchTerms: [
       msg("capture accessibility data text UI structure elements privacy omit agent context"),
@@ -972,24 +969,28 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "snap-shot-shortcut",
     title: msg("Capture shortcut"),
     to: "/settings/snap-shot",
+    desktopOnly: true,
     targetId: "snap-shot-enabled",
   },
   {
     id: "snap-shot-sound",
     title: msg("Capture sound"),
     to: "/settings/snap-shot",
+    desktopOnly: true,
     targetId: "snap-shot-enabled",
   },
   {
     id: "snap-shot-flash",
     title: msg("Capture flash"),
     to: "/settings/snap-shot",
+    desktopOnly: true,
     targetId: "snap-shot-enabled",
   },
   {
     id: "snap-shot-animations",
     title: msg("Capture animations"),
     to: "/settings/snap-shot",
+    desktopOnly: true,
     targetId: "snap-shot-enabled",
   },
   {

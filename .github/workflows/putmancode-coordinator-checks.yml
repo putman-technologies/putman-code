@@ -6,6 +6,7 @@ on:
     paths:
       - ".gitmodules"
       - ".github/workflows/putmancode-coordinator-checks.yml"
+      - "apps/web/src/components/settings/**"
       - "apps/web/src/components/chat/CoordinatorBoard*"
       - "apps/web/src/components/pullRequest/PullRequest*"
       - "apps/server/src/mcp/OrchestratorMcpService.ts"
@@ -45,6 +46,11 @@ jobs:
       - name: Test the release board in Chromium
         working-directory: apps/web
         run: vp test run --project browser src/components/chat/CoordinatorBoard.browser.test.tsx src/components/pullRequest/PullRequestActionsMenu.browser.test.tsx
+      - name: Test settings navigation and search
+        working-directory: apps/web
+        run: |
+          vp test run --project browser src/components/settings/SettingsSidebarNav.composition.browser.test.tsx
+          vp test run --project unit src/components/settings/settingsSearch.test.ts
       - name: Test coordinator handoffs and local storage isolation
         working-directory: apps/server
         run: >-

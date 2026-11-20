@@ -297,7 +297,11 @@ function AboutVersionSection() {
           </Tooltip>
         }
       />
-      {hasDesktopBridge ? <CliCommandSettingsRow /> : null}
+      {hasDesktopBridge ? (
+        <AdvancedSettings targetIds={["cli-command"]}>
+          <CliCommandSettingsRow />
+        </AdvancedSettings>
+      ) : null}
     </>
   );
 }
@@ -806,58 +810,6 @@ export function GeneralSettingsPanel() {
 
       <SettingsSection id="confirmations" title={gt("Confirmations")}>
         <SettingsRow
-          {...setting("unpin-confirmation")}
-          description={<T>Ask before unpinning a thread from the pinned section.</T>}
-          resetAction={
-            settings.confirmThreadUnpin !== DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin ? (
-              <SettingResetButton
-                ariaLabel={gt("Reset unpin confirmation to default")}
-                onClick={() =>
-                  updateSettings({
-                    confirmThreadUnpin: DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.confirmThreadUnpin}
-              onCheckedChange={(checked) =>
-                updateSettings({ confirmThreadUnpin: Boolean(checked) })
-              }
-              aria-label={gt("Confirm thread unpinning")}
-            />
-          }
-        />
-        <SettingsRow
-          {...setting("archive-confirmation")}
-          description={
-            <T>Require a second click on the inline archive action before a thread is archived.</T>
-          }
-          resetAction={
-            settings.confirmThreadArchive !== DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive ? (
-              <SettingResetButton
-                ariaLabel={gt("Reset archive confirmation to default")}
-                onClick={() =>
-                  updateSettings({
-                    confirmThreadArchive: DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.confirmThreadArchive}
-              onCheckedChange={(checked) =>
-                updateSettings({ confirmThreadArchive: Boolean(checked) })
-              }
-              aria-label={gt("Confirm thread archiving")}
-            />
-          }
-        />
-        <SettingsRow
           {...setting("delete-confirmation")}
           description={<T>Ask before deleting a thread and its chat history.</T>}
           resetAction={
@@ -882,74 +834,137 @@ export function GeneralSettingsPanel() {
             />
           }
         />
-        <SettingsRow
-          {...setting("terminal-close-confirmation")}
-          description={<T>Ask before closing terminals and stopping their running processes.</T>}
-          resetAction={
-            settings.confirmTerminalClose !== DEFAULT_UNIFIED_SETTINGS.confirmTerminalClose ? (
-              <SettingResetButton
-                ariaLabel={gt("Reset terminal close confirmation to default")}
-                onClick={() =>
-                  updateSettings({
-                    confirmTerminalClose: DEFAULT_UNIFIED_SETTINGS.confirmTerminalClose,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.confirmTerminalClose}
-              onCheckedChange={(checked) =>
-                updateSettings({ confirmTerminalClose: Boolean(checked) })
-              }
-              aria-label={gt("Confirm terminal closing")}
-            />
-          }
-        />
-        {isElectron ? (
+        <AdvancedSettings
+          targetIds={[
+            "unpin-confirmation",
+            "archive-confirmation",
+            "terminal-close-confirmation",
+            "quit-confirmation",
+          ]}
+        >
           <SettingsRow
-            {...setting("quit-confirmation")}
-            description={<T>Hold mode also quits on two quick presses.</T>}
+            {...setting("unpin-confirmation")}
+            description={<T>Ask before unpinning a thread from the pinned section.</T>}
             resetAction={
-              settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit ? (
+              settings.confirmThreadUnpin !== DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin ? (
                 <SettingResetButton
-                  ariaLabel={gt("Reset quit shortcut behavior to default")}
+                  ariaLabel={gt("Reset unpin confirmation to default")}
                   onClick={() =>
-                    updateSettings({ confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit })
+                    updateSettings({
+                      confirmThreadUnpin: DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin,
+                    })
                   }
                 />
               ) : null
             }
             control={
-              <Select
-                value={settings.confirmQuit}
-                onValueChange={(value) => {
-                  if (value === "direct" || value === "hold" || value === "double-click") {
-                    updateSettings({ confirmQuit: value });
-                  }
-                }}
-              >
-                <SelectTrigger
-                  size="sm"
-                  className="w-full sm:w-40"
-                  aria-label={gt("Quit shortcut behavior")}
-                >
-                  <SelectValue>
-                    {m(QUIT_CONFIRMATION_MODE_LABELS[settings.confirmQuit])}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectPopup align="end" alignItemWithTrigger={false}>
-                  {Object.entries(QUIT_CONFIRMATION_MODE_LABELS).map(([value, label]) => (
-                    <SelectItem hideIndicator key={value} value={value}>
-                      {m(label)}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
+              <Switch
+                checked={settings.confirmThreadUnpin}
+                onCheckedChange={(checked) =>
+                  updateSettings({ confirmThreadUnpin: Boolean(checked) })
+                }
+                aria-label={gt("Confirm thread unpinning")}
+              />
             }
           />
-        ) : null}
+          <SettingsRow
+            {...setting("archive-confirmation")}
+            description={
+              <T>
+                Require a second click on the inline archive action before a thread is archived.
+              </T>
+            }
+            resetAction={
+              settings.confirmThreadArchive !== DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive ? (
+                <SettingResetButton
+                  ariaLabel={gt("Reset archive confirmation to default")}
+                  onClick={() =>
+                    updateSettings({
+                      confirmThreadArchive: DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive,
+                    })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <Switch
+                checked={settings.confirmThreadArchive}
+                onCheckedChange={(checked) =>
+                  updateSettings({ confirmThreadArchive: Boolean(checked) })
+                }
+                aria-label={gt("Confirm thread archiving")}
+              />
+            }
+          />
+          <SettingsRow
+            {...setting("terminal-close-confirmation")}
+            description={<T>Ask before closing terminals and stopping their running processes.</T>}
+            resetAction={
+              settings.confirmTerminalClose !== DEFAULT_UNIFIED_SETTINGS.confirmTerminalClose ? (
+                <SettingResetButton
+                  ariaLabel={gt("Reset terminal close confirmation to default")}
+                  onClick={() =>
+                    updateSettings({
+                      confirmTerminalClose: DEFAULT_UNIFIED_SETTINGS.confirmTerminalClose,
+                    })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <Switch
+                checked={settings.confirmTerminalClose}
+                onCheckedChange={(checked) =>
+                  updateSettings({ confirmTerminalClose: Boolean(checked) })
+                }
+                aria-label={gt("Confirm terminal closing")}
+              />
+            }
+          />
+          {isElectron ? (
+            <SettingsRow
+              {...setting("quit-confirmation")}
+              description={<T>Hold mode also quits on two quick presses.</T>}
+              resetAction={
+                settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit ? (
+                  <SettingResetButton
+                    ariaLabel={gt("Reset quit shortcut behavior to default")}
+                    onClick={() =>
+                      updateSettings({ confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit })
+                    }
+                  />
+                ) : null
+              }
+              control={
+                <Select
+                  value={settings.confirmQuit}
+                  onValueChange={(value) => {
+                    if (value === "direct" || value === "hold" || value === "double-click") {
+                      updateSettings({ confirmQuit: value });
+                    }
+                  }}
+                >
+                  <SelectTrigger
+                    size="sm"
+                    className="w-full sm:w-40"
+                    aria-label={gt("Quit shortcut behavior")}
+                  >
+                    <SelectValue>
+                      {m(QUIT_CONFIRMATION_MODE_LABELS[settings.confirmQuit])}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectPopup align="end" alignItemWithTrigger={false}>
+                    {Object.entries(QUIT_CONFIRMATION_MODE_LABELS).map(([value, label]) => (
+                      <SelectItem hideIndicator key={value} value={value}>
+                        {m(label)}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+              }
+            />
+          ) : null}
+        </AdvancedSettings>
       </SettingsSection>
 
       <SettingsSection id="display" title={gt("Display")}>
@@ -2287,7 +2302,6 @@ export function AboutSettingsPanel() {
   const setting = useSearchableSetting();
   const gt = useGT();
   const primaryPolicy = usePrimaryManagedPolicy();
-  // The Welcome page sets up this computer, so it needs one.
   return (
     <SettingsPageContainer>
       <SettingsSection id="about" title={gt("App")}>

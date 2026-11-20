@@ -11,6 +11,8 @@ import {
   ArchiveIcon,
   FlaskConicalIcon,
   BotIcon,
+  ChevronRightIcon,
+  SlidersHorizontalIcon,
   createLucideIcon,
   CalendarClockIcon,
   FileDiffIcon,
@@ -37,6 +39,7 @@ import { resolveEventKeys } from "@t3tools/shared/keybindings";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { T, useGT, useMessages } from "gt-react";
 
+import { hasCloudPublicConfig } from "../../cloud/publicConfig";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Kbd } from "../ui/kbd";
@@ -51,6 +54,7 @@ import {
 } from "../ui/sidebar";
 import { scrollToSettingsTarget } from "./settingsLayout";
 import {
+  ADVANCED_SETTINGS_PATHS,
   searchSettings,
   revealSettingsSearchTarget,
   SETTINGS_NAV_GROUPS,
@@ -137,6 +141,13 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const navigate = useNavigate();
   const currentHash = useLocation({ select: (location) => location.hash });
   const activePath = SETTINGS_DETAIL_PAGE_PARENTS[pathname] ?? pathname;
+  const isAdvancedPage = ADVANCED_SETTINGS_PATHS.some((path) => path === activePath);
+  const [advancedOpen, setAdvancedOpen] = useState(isAdvancedPage);
+  const [previousPath, setPreviousPath] = useState(activePath);
+  if (previousPath !== activePath) {
+    setPreviousPath(activePath);
+    if (isAdvancedPage) setAdvancedOpen(true);
+  }
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   // Below md the nav is an icon rail; searching expands it over the page.
@@ -252,6 +263,26 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
       const result = results[activeResultIndex];
       if (result) handleSearchResultClick(result);
     }
+  };
+
+  const sectionButton = (to: SettingsPath) => {
+    const Icon = SETTINGS_SECTION_ICONS[to];
+    const isActive = activePath === to || activePath.startsWith(`${to}/`);
+    return (
+      <SidebarMenuItem key={to}>
+        <SidebarMenuButton
+          data-settings-section={to}
+          aria-current={isActive ? "page" : undefined}
+          isActive={isActive}
+          onClick={() => handleSectionClick(to)}
+        >
+          <Icon />
+          <span className={cn("truncate", !compactSearchOpen && "max-md:sr-only")}>
+            {m(SETTINGS_NAV_LABELS[to])}
+          </span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
   };
 
   return (
@@ -395,49 +426,54 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                       </h3>
                       {/* The heading stays outside the group it names so NVDA does not read the name twice. */}
                       <div role="group" aria-labelledby={`settings-nav-group-${index}`}>
-                        <SidebarMenu>
-                          {group.paths.map((to) => {
-                            const Icon = SETTINGS_SECTION_ICONS[to];
-                            const isActive = activePath === to || activePath.startsWith(`${to}/`);
-                            return (
-                              <SidebarMenuItem key={to}>
-                                <SidebarMenuButton
-                                  data-settings-section={to}
-                                  aria-current={isActive ? "page" : undefined}
-                                  isActive={isActive}
-                                  onClick={() => handleSectionClick(to)}
-                                >
-                                  <Icon />
-                                  <span
-                                    className={cn(
-                                      "truncate",
-                                      !compactSearchOpen && "max-md:sr-only",
-                                    )}
-                                  >
-                                    {m(SETTINGS_NAV_LABELS[to])}
-                                  </span>
-                                </SidebarMenuButton>
-                              </SidebarMenuItem>
-                            );
-                          })}
-                        </SidebarMenu>
+                        <SidebarMenu>{group.paths.map(sectionButton)}</SidebarMenu>
                       </div>
                     </div>
                   ))}
+                  <div className="flex flex-col gap-1 border-t border-sidebar-border pt-2">
+                    <SidebarMenuButton
+                      type="button"
+                      data-settings-section="advanced"
+                      aria-expanded={advancedOpen}
+                      aria-controls="settings-nav-advanced"
+                      onClick={() => setAdvancedOpen(!advancedOpen)}
+                    >
+                      <SlidersHorizontalIcon />
+                      <span className={cn("truncate", !compactSearchOpen && "max-md:sr-only")}>
+                        {gt("Advanced")}
+                      </span>
+                      <ChevronRightIcon
+                        aria-hidden
+                        className={cn(
+                          "ms-auto size-3.5",
+                          !compactSearchOpen && "max-md:hidden",
+                          advancedOpen && "rotate-90",
+                        )}
+                      />
+                    </SidebarMenuButton>
+                    <div id="settings-nav-advanced" hidden={!advancedOpen}>
+                      {advancedOpen && (
+                        <SidebarMenu>{ADVANCED_SETTINGS_PATHS.map(sectionButton)}</SidebarMenu>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
           </div>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="max-md:hidden">
-        <Suspense fallback={null}>
-          <T3ConnectSidebarSignIn />
-        </Suspense>
-        <Suspense fallback={null}>
-          <T3ConnectSidebarAvatar />
-        </Suspense>
-      </SidebarFooter>
+      {hasCloudPublicConfig() &&
+        (activePath === "/settings/connections" || activePath === "/settings/access") && (
+          <SidebarFooter className="max-md:hidden">
+            <Suspense fallback={null}>
+              <T3ConnectSidebarSignIn />
+            </Suspense>
+            <Suspense fallback={null}>
+              <T3ConnectSidebarAvatar />
+            </Suspense>
+          </SidebarFooter>
+        )}
     </nav>
   );
 }

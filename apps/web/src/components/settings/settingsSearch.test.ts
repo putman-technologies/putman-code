@@ -15,6 +15,7 @@ import {
   isSettingsSearchScopeAvailable,
   movedSettingsPath,
   searchSettings,
+  ADVANCED_SETTINGS_PATHS,
   SETTINGS_NAV_GROUPS,
   SETTINGS_SEARCH_ITEMS,
   sourceControlHostSearchItems,
@@ -25,6 +26,7 @@ import {
 vi.mock("~/env", async (importOriginal) => ({
   ...(await importOriginal<typeof import("~/env")>()),
   isSecretsFeatureEnabled: false,
+  isElectron: false,
 }));
 
 const ITEMS: ReadonlyArray<SettingsSearchItem> = [
@@ -79,6 +81,17 @@ describe("searchSettings", () => {
   it("hides the Secrets page from nav and search while the secrets feature is disabled", () => {
     expect(SETTINGS_NAV_GROUPS.flatMap((group) => group.paths)).not.toContain("/settings/secrets");
     expect(searchSettings("1password").map((item) => item.to)).not.toContain("/settings/secrets");
+  });
+
+  it("keeps specialist tools searchable and omits desktop capture controls on the web", () => {
+    const primary = SETTINGS_NAV_GROUPS.flatMap((group) => group.paths);
+    expect(primary).toHaveLength(10);
+    expect(ADVANCED_SETTINGS_PATHS.every((path) => !primary.includes(path))).toBe(true);
+    expect(ADVANCED_SETTINGS_PATHS).toContain("/settings/scheduled-tasks");
+    expect(ADVANCED_SETTINGS_PATHS).not.toContain("/settings/snap-shot");
+    expect(
+      searchSettings("capture shortcut").some((item) => item.to === "/settings/snap-shot"),
+    ).toBe(false);
   });
 
   it("finds the Scheduled tasks page", () => {

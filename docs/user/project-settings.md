@@ -174,6 +174,8 @@ than** on the task.
 
 ## Defaults and inheritance
 
+On desktop and web, **Projects**, **Providers**, **Threads** and **Source control & issues** are in the main settings list. Use **About** to see the installed version and check for desktop updates. Expand **Advanced** for scheduled tasks, worktrees, browser and device tools, the archive, and maintenance. Settings search opens the matching control directly, including controls inside an Advanced section.
+
 Threads contains the model and workspace for new threads. Browser controls agent browser
 access. Source control & issues contains automatic pull, the default pull request merge method and text
 generation. The same rows edit environment defaults or project overrides depending on the
