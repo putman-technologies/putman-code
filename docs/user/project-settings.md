@@ -299,7 +299,7 @@ local work, resolve it yourself before automatic pulls can resume.
 
 ## Project GitHub tab
 
-Select the status badge beside a project in the sidebar to open its GitHub tab. **Needs your attention** explains failed checks, review requests and pending coordinator approvals. **What changed** shows the handoff or PR description. **Review changes** opens the file comparison and existing GitHub review and merge controls. **Ask coordinator** sends your question with the PR and its current commit. **What’s live?** shows the last successful production deployment and the PRs and direct commits on the default branch since then. The tab reports when GitHub cannot verify that comparison.
+Select **GitHub** in a project chat header or the status badge beside the project in the sidebar. **Needs your attention** explains failed checks, review requests and pending coordinator approvals. **What changed** shows the handoff or PR description. **Review changes** opens the file comparison and existing GitHub review and merge controls. **Ask coordinator** sends your question with the PR and its current commit. **What’s live?** shows the last successful production deployment and the PRs and direct commits on the default branch since then. The tab reports when GitHub cannot verify that comparison.
 
 ## PutmanCode coordinator releases
 

@@ -9,6 +9,7 @@ on:
       - "apps/web/src/components/settings/**"
       - "apps/web/src/components/chat/CoordinatorBoard*"
       - "apps/web/src/components/chat/CoordinatorTeamPanel.tsx"
+      - "apps/web/src/components/chat/ChatHeader.tsx"
       - "apps/web/src/components/pullRequest/ProjectGitHubTab*"
       - "apps/web/src/components/sidebar/CoordinatorStatusBadge.tsx"
       - "apps/web/src/components/sidebar/SidebarProjectList.tsx"
@@ -56,7 +57,7 @@ jobs:
         run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
       - name: Test the release board in Chromium
         working-directory: apps/web
-        run: vp test run --project browser src/components/chat/CoordinatorBoard.browser.test.tsx src/components/pullRequest/PullRequestActionsMenu.browser.test.tsx src/components/pullRequest/ProjectGitHubTab.browser.test.tsx
+        run: vp test run --project browser src/components/chat/CoordinatorBoard.browser.test.tsx src/components/chat/ChatHeader.browser.test.tsx src/components/pullRequest/PullRequestActionsMenu.browser.test.tsx src/components/pullRequest/ProjectGitHubTab.browser.test.tsx
       - name: Test settings navigation and search
         working-directory: apps/web
         run: |
