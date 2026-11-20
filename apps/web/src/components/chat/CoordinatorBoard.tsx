@@ -213,6 +213,12 @@ function ProjectReview({
   const state = useAtomValue(atom);
   const [selection, setSelection] = useState<ReadonlyMap<string, string>>(new Map());
   const [busy, setBusy] = useState(false);
+  const [pullUrl, setPullUrl] = useState("");
+  const [editingPolicy, setEditingPolicy] = useState(false);
+  const [instructions, setInstructions] = useState("");
+  const [autoRepair, setAutoRepair] = useState(false);
+  const [githubRelease, setGithubRelease] = useState(false);
+  const [confirmRelease, setConfirmRelease] = useState(false);
   const lock = useRef(false);
   const action = orchestrationEnvironment.coordinatorBoardAction;
   const allowed = useAtomValue(action.permissionAtom(environmentId));
@@ -223,9 +229,13 @@ function ProjectReview({
     setBusy(true);
     return run({ environmentId, input })
       .then((result) => {
-        if (result._tag === "Success" && input.type === "prepare") {
+        if (result._tag === "Success" && (input.type === "prepare" || input.type === "release")) {
           setSelection(new Map());
-          onOpen(result.value.threadId, environmentId);
+          if (input.type === "release" && state._tag === "Success" && state.value.githubRelease) {
+            toastManager.add({ type: "success", title: gt("Release requested") });
+          } else {
+            onOpen(result.value.threadId, environmentId);
+          }
         }
         return result._tag === "Success";
       })
@@ -321,6 +331,93 @@ function ProjectReview({
         </details>
       )}
       {!attention && <LiveStatus board={board} />}
+      {!attention && allowed && board.playbook !== undefined && (
+        <div className="space-y-2">
+          <form
+            className="flex gap-2"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (await execute({ type: "submitPull", projectId, url: pullUrl })) setPullUrl("");
+            }}
+          >
+            <Input
+              type="url"
+              aria-label={gt("Pull request URL")}
+              placeholder="https://github.com/…"
+              value={pullUrl}
+              onChange={(e) => setPullUrl(e.target.value)}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              type="submit"
+              disabled={busy || !coordinatorWebUrl(pullUrl)}
+            >
+              {gt("Send PR to Coordinator")}
+            </Button>
+          </form>
+          <Button
+            size="xs"
+            variant="ghost"
+            aria-expanded={editingPolicy}
+            onClick={() => {
+              setInstructions(board.playbook ?? "");
+              setAutoRepair(board.autoRepair ?? false);
+              setGithubRelease(board.githubRelease ?? false);
+              setEditingPolicy(!editingPolicy);
+            }}
+          >
+            {gt("Project release playbook")}
+          </Button>
+          {editingPolicy && (
+            <form
+              className="space-y-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (
+                  await execute({
+                    type: "playbook",
+                    projectId,
+                    instructions,
+                    autoRepair,
+                    githubRelease,
+                  })
+                )
+                  setEditingPolicy(false);
+              }}
+            >
+              <label className="block text-sm">
+                {gt("Staging, production approvals, and health checks")}
+                <textarea
+                  className="block min-h-20 w-full rounded-md border bg-background p-2"
+                  value={instructions}
+                  maxLength={4000}
+                  onChange={(e) => setInstructions(e.target.value)}
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={autoRepair}
+                  onChange={(e) => setAutoRepair(e.target.checked)}
+                />
+                {gt("Return failed CI to the feature chat automatically")}
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={githubRelease}
+                  onChange={(e) => setGithubRelease(e.target.checked)}
+                />
+                {gt("Use the repository’s putmancode-release.yml workflow")}
+              </label>
+              <Button size="xs" type="submit" disabled={busy}>
+                {gt("Save")}
+              </Button>
+            </form>
+          )}
+        </div>
+      )}
       <div className="space-y-2">
         {!attention && (
           <div className="flex items-center justify-between gap-2">
@@ -341,6 +438,47 @@ function ProjectReview({
             </Button>
           </div>
         )}
+        {!attention &&
+          allowed &&
+          board.playbook &&
+          picked.length > 0 &&
+          picked.every((i) => i.approved && i.pulls.length > 0) && (
+            <div className="flex flex-wrap items-center gap-2">
+              {!confirmRelease ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setConfirmRelease(true)}
+                >
+                  {gt("Request release")}
+                </Button>
+              ) : (
+                <>
+                  <span className="text-sm">
+                    {gt("Run the project release playbook for the selected revisions?")}
+                  </span>
+                  <Button
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => {
+                      setConfirmRelease(false);
+                      void execute({
+                        type: "release",
+                        projectId,
+                        items: picked.map((i) => ({ id: i.id, revision: i.revision })),
+                      });
+                    }}
+                  >
+                    {gt("Confirm release request")}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setConfirmRelease(false)}>
+                    {gt("Cancel")}
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
         {pending.map((item) => (
           <Handoff
             key={JSON.stringify([item.id, item.revision])}
@@ -535,6 +673,14 @@ function Handoff({
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         {reviewReason && <span>{reviewReason}</span>}
+        {item.releaseRequested && <span>{gt("Release requested")}</span>}
+        {item.repairState && (
+          <span>
+            {item.phase === "failed" && item.repairState === "needs-review"
+              ? gt("Repair needs review")
+              : gt("Returned to feature chat")}
+          </span>
+        )}
         {item.prepared && <span>{gt("Release plan requested")}</span>}
         {item.pulls.map((p) => (
           <WebLink key={p.url ?? p.repository + p.number} url={p.url}>
@@ -591,8 +737,27 @@ function Handoff({
               {gt("Retry CI")} · #{p.number}
             </Button>
           ))}
+      {item.phase === "failed" && item.external === false && !item.repairState && (
+        <Button
+          variant="outline"
+          size="xs"
+          disabled={disabled}
+          onClick={() => void onAction({ type: "repair", projectId: project.projectId, item: ref })}
+        >
+          {gt("Return to feature chat")}
+        </Button>
+      )}
       {inspect && (
         <div className="mt-3 space-y-3 border-t pt-2">
+          {item.usage && (
+            <p className="text-xs text-muted-foreground">
+              {item.usage.route === "feature" ? gt("Feature work") : gt("Routine coordinator task")}{" "}
+              · {item.usage.models.join(", ")} ·{" "}
+              {item.usage.estimatedUsd === null
+                ? gt("Cost unavailable")
+                : gt("Estimated model cost") + " $" + item.usage.estimatedUsd.toFixed(4)}
+            </p>
+          )}
           {item.summary && (
             <p className="max-h-40 overflow-auto whitespace-pre-wrap break-words">{item.summary}</p>
           )}
@@ -619,9 +784,25 @@ function Handoff({
                 #{p.number} · {p.evidence?.checks ?? gt("Checks unavailable")}{" "}
                 {p.evidence?.head && <code>{p.evidence.head.slice(0, 8)}</code>}
               </div>
+              {p.evidence?.criteria?.map((c) => {
+                const matches = (
+                  p.evidence?.headChecksComplete ? (p.evidence.headChecks ?? []) : []
+                ).filter((check) => check.name === c.check && !check.placeholder);
+                return (
+                  <div className="my-1 text-sm" key={JSON.stringify([c.label, c.check])}>
+                    {c.label} ·{" "}
+                    {matches.length === 1
+                      ? matches[0]!.status
+                      : c.check
+                        ? gt("Check unverified")
+                        : gt("Manual review")}
+                  </div>
+                );
+              })}
               {p.checks.map((c) => (
                 <div className="pl-2 text-xs" key={JSON.stringify([c.name, c.url, c.description])}>
-                  {c.name} · {c.status}
+                  {coordinatorWebUrl(c.url) ? <WebLink url={c.url}>{c.name}</WebLink> : c.name} ·{" "}
+                  {c.status}
                 </div>
               ))}
             </div>
@@ -679,7 +860,7 @@ function Handoff({
           )}
           <div className="flex flex-wrap gap-2">
             <Button variant="ghost" size="xs" onClick={onOpen}>
-              {gt("Open feature chat")}
+              {item.external ? gt("Open coordinator") : gt("Open feature chat")}
             </Button>
             <Button
               variant="outline"

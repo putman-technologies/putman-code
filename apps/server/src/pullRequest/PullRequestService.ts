@@ -201,6 +201,14 @@ export class PullRequestService extends Context.Service<
       input: PullRequestRef,
       operation: Effect.Effect<A, E, R>,
     ) => Effect.Effect<A, E | PullRequestError, R>;
+    readonly dispatchCoordinatorRelease: (
+      input: PullRequestRef & {
+        branch: string;
+        revision: string;
+        requestId: string;
+        pullNumbers: string;
+      },
+    ) => Effect.Effect<void, PullRequestError>;
     readonly coordinatorIncludes: (
       input: PullRequestRef & { base: string; head: string },
     ) => Effect.Effect<boolean | null>;
@@ -604,6 +612,14 @@ function withRateLimitBackoff(
       : { getChangeRequestPreview: wrap("getChangeRequestPreview", api.getChangeRequestPreview) }),
     ...(api.coordinatorIncludes
       ? { coordinatorIncludes: wrap("coordinatorIncludes", api.coordinatorIncludes) }
+      : {}),
+    ...(api.dispatchCoordinatorRelease
+      ? {
+          dispatchCoordinatorRelease: wrap(
+            "dispatchCoordinatorRelease",
+            api.dispatchCoordinatorRelease,
+          ),
+        }
       : {}),
     ...(api.coordinatorChange
       ? { coordinatorChange: wrap("coordinatorChange", api.coordinatorChange) }
@@ -4215,6 +4231,24 @@ export const make = Effect.gen(function* () {
       credentialCached((ref) =>
         Cache.get(containsCache, encodeCompareKey([refCacheKey(ref), input.base, input.head])),
       )(input).pipe(Effect.orElseSucceed(() => null)),
+    ),
+    dispatchCoordinatorRelease: Effect.fn("PullRequestService.dispatchCoordinatorRelease")(
+      function* (input) {
+        const project = yield* requireProject(input);
+        if (!project.api.dispatchCoordinatorRelease)
+          return yield* new PullRequestOperationError({
+            operation: "dispatchCoordinatorRelease",
+            detail: "This repository does not support release workflows.",
+          });
+        yield* project.api
+          .dispatchCoordinatorRelease({
+            ...input,
+            host: project.host,
+            repository: project.repository,
+            cwd: project.project.workspaceRoot,
+          })
+          .pipe(Effect.mapError(toPullRequestError("dispatchCoordinatorRelease")));
+      },
     ),
     coordinatorChange: Effect.fn("PullRequestService.coordinatorChange")((input, options) =>
       credentialCached((ref) =>

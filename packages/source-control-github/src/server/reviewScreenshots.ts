@@ -37,3 +37,25 @@ export function reviewScreenshots(body: string) {
   }
   return result;
 }
+
+/** A PR author's checkbox is a requirement. Only a matching CI result supplies evidence. */
+export function reviewCriteria(body: string) {
+  const section =
+    /^#{1,6} +Acceptance criteria[^\S\r\n]*\r?\n([\s\S]*?)(?=^#{1,6} |(?![\s\S]))/im.exec(
+      body,
+    )?.[1] ?? "";
+  const unique = new Set<string>();
+  return section
+    .split(/\r?\n/)
+    .flatMap((line) => {
+      const item = /^\s*[-*] \[[ xX]\] (.+?)\s*$/.exec(line);
+      if (!item) return [];
+      if (unique.has(item[1]!)) return [];
+      unique.add(item[1]!);
+      const match = /^(.*?)\s+\[check: ([^\]]+)\]$/.exec(item[1]!);
+      return [
+        { label: (match?.[1] ?? item[1]!).slice(0, 500), check: match?.[2]?.slice(0, 200) ?? null },
+      ];
+    })
+    .slice(0, 40);
+}

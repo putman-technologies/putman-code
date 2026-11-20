@@ -1,6 +1,7 @@
 import {
   CommandId,
   MessageId,
+  HandoffUsage,
   ProjectCoordinatorError,
   ProjectId,
   ThreadId,
@@ -38,7 +39,8 @@ type ProjectsApi = Pick<Projects.ProjectService["Service"], "getById">;
 type Pulls = Pick<
   PullRequestService["Service"],
   "coordinatorChange" | "coordinatorProduction" | "coordinatorIncludes" | "checks"
->;
+> &
+  Partial<Pick<PullRequestService["Service"], "checkLogs" | "dispatchCoordinatorRelease">>;
 const pullSchema = Schema.Struct({
   host: Schema.String,
   repository: Schema.String,
@@ -49,6 +51,7 @@ const pullListJson = Schema.fromJsonString(Schema.Array(pullSchema));
 const decodePulls = Schema.decodeUnknownEffect(pullListJson);
 const encodePulls = Schema.encodeSync(pullListJson);
 const snapshotSchema = Schema.Struct({
+  usage: Schema.optional(HandoffUsage),
   scripts: Schema.Array(Schema.Struct({ name: Schema.String, status: Schema.String })),
   title: Schema.String,
   summary: Schema.String,
@@ -60,6 +63,7 @@ const encodeSnapshot = Schema.encodeSync(Schema.fromJsonString(snapshotSchema));
 const decodeSnapshot = Schema.decodeUnknownEffect(Schema.fromJsonString(snapshotSchema));
 const decodeAssets = Schema.decodeUnknownEffect(Schema.fromJsonString(ReviewAssets));
 const encodeAssets = Schema.encodeSync(Schema.fromJsonString(ReviewAssets));
+const encodeNumbers = Schema.encodeSync(Schema.fromJsonString(Schema.Array(Schema.Int)));
 const encodeStrings = Schema.encodeSync(Schema.fromJsonString(Schema.Array(Schema.String)));
 const isBoardError = Schema.is(ProjectCoordinatorError);
 export type SaveHandoff = (
@@ -71,12 +75,93 @@ const error = (message: string) => new ProjectCoordinatorError({ message });
 const boardError = (cause: unknown) =>
   isBoardError(cause) ? cause : error("The project review data could not be loaded.");
 export const saveBoardHandoff =
-  (sql: Sql): SaveHandoff =>
-  (projectId, id, snapshot) =>
-    sql`INSERT INTO coordinator_handoffs (project_id,message_id,snapshot_json) VALUES (${projectId},${id},${encodeSnapshot(snapshot)}) ON CONFLICT(message_id) DO NOTHING`.pipe(
-      Effect.asVoid,
-      Effect.mapError(boardError),
-    );
+  (
+    sql: Sql,
+    estimate?: NonNullable<
+      import("../usage/UsageService.ts").UsageService["Service"]["estimateCoordinatorTurn"]
+    >,
+  ): SaveHandoff =>
+  (projectId, id, inputSnapshot) =>
+    Effect.gen(function* () {
+      const [run] = yield* sql<{
+        model: string;
+        quick: number;
+      }>`SELECT json_extract(payload_json,'$.modelSelection.model') model, json_type(payload_json,'$.coordinatorWorkModel') IS NOT NULL quick FROM orchestration_v2_projection_runs WHERE run_id=json_extract(substr(${id},9),'$[2]') AND thread_id=json_extract(substr(${id},9),'$[1]')`;
+      const turns = yield* sql<{
+        model: string | null;
+        input: number | null;
+        output: number | null;
+        cached: number | null;
+        writes: number | null;
+        reasoning: number | null;
+        complete: number;
+      }>`SELECT json_extract(p.payload_json,'$.model') model,
+      json_extract(p.payload_json,'$.turnTokenUsage.inputTokens') input,json_extract(p.payload_json,'$.turnTokenUsage.outputTokens') output,
+      json_extract(p.payload_json,'$.turnTokenUsage.cachedInputTokens') cached,json_extract(p.payload_json,'$.turnTokenUsage.cacheCreationTokens') writes,
+      json_extract(p.payload_json,'$.turnTokenUsage.reasoningTokens') reasoning,
+      json_extract(p.payload_json,'$.turnTokenUsage.usageStatus')='complete' complete
+      FROM orchestration_v2_projection_provider_turns p JOIN orchestration_v2_projection_run_attempts a ON a.attempt_id=p.run_attempt_id
+      WHERE a.run_id=json_extract(substr(${id},9),'$[2]') AND a.thread_id=json_extract(substr(${id},9),'$[1]')`;
+      const prices =
+        run && estimate
+          ? yield* Effect.forEach(turns, (t) => {
+              if (!t.complete || t.input === null || t.output === null) return Effect.succeed(null);
+              return estimate(t.model ?? run.model, {
+                uncachedInputTokens: Math.max(0, t.input - (t.cached ?? 0) - (t.writes ?? 0)),
+                cachedInputTokens: t.cached ?? 0,
+                cacheCreationTokens: t.writes ?? 0,
+                outputTokens: t.output,
+                reasoningTokens: t.reasoning ?? 0,
+              });
+            })
+          : [];
+      const usage: HandoffUsage | undefined = run?.model
+        ? {
+            models: [
+              ...new Set(turns.length ? turns.map((t) => t.model ?? run.model) : [run.model]),
+            ],
+            route: run.quick ? "routine" : "feature",
+            estimatedUsd:
+              prices.length && prices.every((p): p is number => p !== null)
+                ? prices.reduce((a, b) => a + b, 0)
+                : null,
+          }
+        : undefined;
+      const snapshot = { ...inputSnapshot, ...(usage ? { usage } : {}) };
+      yield* sql.withTransaction(
+        Effect.gen(function* () {
+          const added =
+            yield* sql`INSERT INTO coordinator_handoffs (project_id,message_id,snapshot_json) VALUES (${projectId},${id},${encodeSnapshot(snapshot)}) ON CONFLICT(message_id) DO NOTHING RETURNING message_id`;
+          if (!added.length || !id.startsWith("handoff:")) return;
+          const [prior] = yield* sql<{
+            message_id: string;
+            snapshot_json: string;
+            additional_pulls_json: string | null;
+          }>`SELECT message_id,snapshot_json,additional_pulls_json FROM coordinator_handoffs
+        WHERE project_id=${projectId} AND repair_base IS NOT NULL AND message_id GLOB 'handoff:*' AND snapshot_json IS NOT NULL
+        AND json_extract(substr(message_id,9),'$[1]')=json_extract(substr(${id},9),'$[1]') ORDER BY rowid DESC LIMIT 1`;
+          if (!prior) return;
+          const old = yield* decodeSnapshot(prior.snapshot_json);
+          const known = [
+            ...old.pulls,
+            ...(prior.additional_pulls_json ? yield* decodePulls(prior.additional_pulls_json) : []),
+          ];
+          if (
+            !snapshot.pulls.some((p) =>
+              known.some(
+                (q) =>
+                  p.host === q.host &&
+                  p.number === q.number &&
+                  p.repository.toLowerCase() === q.repository.toLowerCase(),
+              ),
+            )
+          )
+            return;
+          yield* sql`UPDATE coordinator_handoffs SET snapshot_json=${encodeSnapshot(snapshot)}, approved_revision=NULL,prepared_revision=NULL,released_revision=NULL WHERE message_id=${prior.message_id}`;
+          yield* sql`UPDATE coordinator_handoffs SET continuation_of=${prior.message_id} WHERE message_id=${id}`;
+        }),
+      );
+    }).pipe(Effect.mapError(boardError));
 
 const findProject = Effect.fn("CoordinatorBoard.project")(function* (
   projects: ProjectsApi,
@@ -177,17 +262,125 @@ interface Row {
   assets_revision: string | null;
   approved_revision: string | null;
   prepared_revision: string | null;
+  external_thread: string | null;
+  repair_base: string | null;
+  released_revision: string | null;
 }
 const rowsFor = (sql: Sql, projectId: ProjectId, ids?: readonly MessageId[]) => sql<Row>`
  SELECT m.message_id id,m.thread_id coord,m.created_at at,json_extract(m.payload_json,'$.text') text,
  json_extract(substr(m.message_id,9),'$[1]') source,json_extract(substr(m.message_id,9),'$[2]') run,
- h.additional_pulls_json,h.snapshot_json,h.assets_json,h.assets_revision,h.approved_revision,h.prepared_revision
+ h.additional_pulls_json,h.snapshot_json,h.assets_json,h.assets_revision,h.approved_revision,h.prepared_revision,h.external_thread,h.repair_base,h.released_revision
  FROM orchestration_v2_projection_threads t JOIN orchestration_v2_projection_messages m ON m.thread_id=t.thread_id
  LEFT JOIN coordinator_handoffs h ON h.project_id=t.project_id AND h.message_id=m.message_id
- WHERE t.project_id=${projectId} AND t.deleted_at IS NULL AND m.role='user' AND m.message_id GLOB 'handoff:*'
+ WHERE t.project_id=${projectId} AND t.deleted_at IS NULL AND h.continuation_of IS NULL AND m.role='user' AND m.message_id GLOB 'handoff:*'
  AND CASE WHEN json_valid(substr(m.message_id,9)) THEN json_extract(substr(m.message_id,9),'$[0]')=m.thread_id ELSE 0 END
  ${ids ? sql`AND m.message_id IN (SELECT value FROM json_each(${encodeStrings(ids)}))` : sql``}
- ORDER BY m.created_at DESC,m.message_id`;
+ UNION ALL
+ SELECT h.message_id,h.external_thread,h.received_at,'',h.external_thread,'external',
+ h.additional_pulls_json,h.snapshot_json,h.assets_json,h.assets_revision,h.approved_revision,h.prepared_revision,
+ h.external_thread,h.repair_base,h.released_revision FROM coordinator_handoffs h
+ JOIN orchestration_v2_projection_threads t ON t.thread_id=h.external_thread AND t.project_id=h.project_id AND t.deleted_at IS NULL
+ WHERE h.project_id=${projectId} AND h.external_thread IS NOT NULL
+ ${ids ? sql`AND h.message_id IN (SELECT value FROM json_each(${encodeStrings(ids)}))` : sql``}
+ ORDER BY at DESC,id`;
+
+function pullLink(value: string) {
+  const safe = coordinatorWebUrl(value.trim());
+  const url = safe ? new URL(safe) : null;
+  const parts = url && /^\/([\w.-]+)\/([\w.-]+)\/pull\/([1-9]\d*)\/?$/.exec(url.pathname);
+  if (!url || !parts || !Number.isSafeInteger(Number(parts[3]))) return null;
+  return {
+    host: url.host,
+    repository: (parts[1] + "/" + parts[2]).toLowerCase(),
+    number: Number(parts[3]),
+    url:
+      url.origin +
+      "/" +
+      parts[1]!.toLowerCase() +
+      "/" +
+      parts[2]!.toLowerCase() +
+      "/pull/" +
+      parts[3],
+  };
+}
+
+// The Hub has already delivered its message. Desktop submissions also wake the coordinator.
+export const submitCoordinatorPull = Effect.fn("CoordinatorBoard.submitPull")(function* (
+  projectId: ProjectId,
+  url: string,
+  sql: Sql,
+  projects: ProjectsApi,
+  threads: ThreadManagementServiceShape,
+  pulls: Pick<Pulls, "coordinatorChange">,
+  deliveredTo?: ThreadId,
+) {
+  const project = yield* findProject(projects, projectId);
+  const shorthand = /^#?([1-9]\d*)$/.exec(url.trim());
+  const link = pullLink(
+    shorthand && project.repositoryIdentity?.canonicalKey
+      ? "https://" + project.repositoryIdentity.canonicalKey + "/pull/" + shorthand[1]
+      : url,
+  );
+  if (!link) return yield* error("Enter a GitHub pull request URL.");
+  const identity = project.repositoryIdentity?.canonicalKey.toLowerCase();
+  if (!identity || identity !== link.host.toLowerCase() + "/" + link.repository)
+    return yield* error("This pull request belongs to another project.");
+  const [feature] = yield* sql<{
+    coord: string;
+  }>`SELECT m.thread_id coord FROM coordinator_handoffs h
+    JOIN orchestration_v2_projection_messages m ON m.message_id=h.message_id
+    JOIN orchestration_v2_projection_threads t ON t.thread_id=m.thread_id AND t.deleted_at IS NULL AND t.project_id=h.project_id
+    WHERE h.project_id=${projectId} AND h.external_thread IS NULL AND h.continuation_of IS NULL
+    AND (EXISTS(SELECT 1 FROM json_each(h.snapshot_json,'$.pulls') p WHERE lower(json_extract(p.value,'$.url'))=lower(${link.url}))
+      OR EXISTS(SELECT 1 FROM json_each(h.additional_pulls_json) p WHERE lower(json_extract(p.value,'$.url'))=lower(${link.url}))) LIMIT 1`;
+  if (feature) return { threadId: ThreadId.make(feature.coord) };
+  const evidence = yield* pulls.coordinatorChange({ projectId, ...link }, { bypassCache: true });
+  if (!evidence) return yield* error("This pull request could not be verified for this project.");
+  let target = deliveredTo;
+  if (target) {
+    const shell = yield* threads.getThreadShell(target);
+    if (!shell || shell.deletedAt || shell.projectId !== projectId)
+      return yield* error("The coordinator is unavailable.");
+  } else {
+    const latest = yield* sql<{
+      thread_id: string;
+    }>`SELECT thread_id FROM orchestration_v2_projection_threads WHERE project_id=${projectId} AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 1`;
+    const previous = latest[0]
+      ? yield* threads.getThreadShell(ThreadId.make(latest[0].thread_id))
+      : null;
+    const model = project.defaultModelSelection ?? previous?.modelSelection;
+    if (!model) return yield* error("Open the project coordinator once to select its model.");
+    target = yield* ensureCoordinator(threads, project, model, () => Effect.undefined);
+  }
+  const id = MessageId.make(
+    "queue-pr:" + revision([projectId, link.host, link.repository, link.number]),
+  );
+  const title = evidence.title ?? link.repository + " #" + link.number;
+  const snap = encodeSnapshot({ title, summary: link.url, files: [], scripts: [], pulls: [link] });
+  const [record] = yield* sql<{
+    external_thread: string;
+    delivered: number;
+  }>`INSERT INTO coordinator_handoffs
+   (project_id,message_id,external_thread,received_at,snapshot_json) VALUES(${projectId},${id},${target},strftime('%Y-%m-%dT%H:%M:%fZ','now'),${snap})
+   ON CONFLICT(message_id) DO UPDATE SET snapshot_json=excluded.snapshot_json RETURNING external_thread,delivered`;
+  const threadId = ThreadId.make(record!.external_thread);
+  if (!deliveredTo && !record!.delivered) {
+    yield* threads.sendToThread({
+      projectId,
+      threadId,
+      messageId: id,
+      commandId: CommandId.make("deliver:" + id),
+      text: "Review this submitted pull request and its acceptance criteria: " + link.url,
+      attachments: [],
+      mode: "queue",
+      createdBy: "user",
+      creationSource: "web",
+    });
+  }
+  if (!record!.delivered)
+    yield* sql`UPDATE coordinator_handoffs SET delivered=1 WHERE message_id=${id}`;
+  return { threadId };
+}, Effect.mapError(boardError));
 
 const loadItems = Effect.fn("CoordinatorBoard.handoffs")(function* (
   projectId: ProjectId,
@@ -198,7 +391,8 @@ const loadItems = Effect.fn("CoordinatorBoard.handoffs")(function* (
 ) {
   const rows = (yield* rowsFor(sql, projectId, ids)).filter(
     (row) =>
-      isProjectCoordinatorThread(projectId, ThreadId.make(row.coord)) &&
+      (row.external_thread === row.coord ||
+        isProjectCoordinatorThread(projectId, ThreadId.make(row.coord))) &&
       typeof row.source === "string" &&
       typeof row.run === "string",
   );
@@ -250,11 +444,12 @@ const loadItems = Effect.fn("CoordinatorBoard.handoffs")(function* (
           const evidence = yield* pulls.coordinatorChange(ref, { bypassCache: ids !== undefined });
           const checks =
             evidence?.state === "OPEN"
-              ? yield* pulls.checks(ref).pipe(
+              ? (evidence.headChecks ??
+                (yield* pulls.checks(ref).pipe(
                   Effect.map((c) => c?.checks ?? []),
                   Effect.orElseSucceed(() => []),
-                )
-              : [];
+                )))
+              : (evidence?.headChecks ?? []);
           return { ...link, evidence, checks };
         }),
       );
@@ -272,12 +467,23 @@ const loadItems = Effect.fn("CoordinatorBoard.handoffs")(function* (
           manualAssets.before ?? linked.find((p) => p.evidence?.before)?.evidence?.before ?? null,
         after: manualAssets.after ?? linked.find((p) => p.evidence?.after)?.evidence?.after ?? null,
       };
-      const token = revision([base, assets, linked.map((p) => p.evidence?.preview ?? null)]);
+      const originalToken = [base, assets, linked.map((p) => p.evidence?.preview ?? null)];
+      const criteria = linked.flatMap((p) => p.evidence?.criteria ?? []);
+      const token = revision(criteria.length ? [...originalToken, criteria] : originalToken);
       const approved = row.approved_revision === token;
       return {
+        ...(snapshot.usage ? { usage: snapshot.usage } : {}),
+        external: row.external_thread !== null,
+        ...(row.repair_base
+          ? {
+              repairState: row.repair_base === base ? ("sent" as const) : ("needs-review" as const),
+            }
+          : {}),
+        releaseRequested: row.released_revision === token,
         live: null,
         id: MessageId.make(row.id),
         coordinatorId: ThreadId.make(row.coord),
+        sourceRun: row.run,
         threadId,
         title: snapshot.title,
         summary: snapshot.summary,
@@ -348,6 +554,11 @@ export const readCoordinatorBoard = Effect.fn("CoordinatorBoard.read")(function*
   const project = yield* findProject(projects, projectId);
   const shells = yield* activeShells(threads, projectId);
   const items = yield* loadItems(projectId, sql, threads, pulls);
+  const [policy] = yield* sql<{
+    instructions: string;
+    auto_repair: number;
+    github_release: number;
+  }>`SELECT instructions,auto_repair,github_release FROM coordinator_playbooks WHERE project_id=${projectId}`;
   const production = yield* pulls.coordinatorProduction(projectId);
   const deployed = production?.find((d) => d.state === "SUCCESS");
   const resolved = yield* Effect.forEach(
@@ -355,6 +566,7 @@ export const readCoordinatorBoard = Effect.fn("CoordinatorBoard.read")(function*
     Effect.fnUntraced(function* (item) {
       const {
         base: _base,
+        sourceRun: _run,
         storedAssets: _stored,
         storedPulls: _pulls,
         additional: _additional,
@@ -381,7 +593,21 @@ export const readCoordinatorBoard = Effect.fn("CoordinatorBoard.read")(function*
       : [],
   );
   return {
-    items: resolved,
+    // When a feature chat arrives after a teammate submits its PR, keep the actionable chat row.
+    items: resolved.filter(
+      (item) =>
+        !item.external ||
+        !resolved.some(
+          (peer) =>
+            !peer.external &&
+            item.pulls.every((p) =>
+              peer.pulls.some((link) => link.url?.toLowerCase() === p.url?.toLowerCase()),
+            ),
+        ),
+    ),
+    playbook: policy?.instructions ?? "",
+    autoRepair: policy?.auto_repair === 1,
+    githubRelease: policy?.github_release === 1,
     questions,
     overlaps: yield* overlapsFor(sql, shells, project.workspaceRoot, readCheckout),
     production,
@@ -396,7 +622,19 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
   pulls: Pulls,
 ) {
   const project = yield* findProject(projects, input.projectId);
-  const requested = input.type === "prepare" ? input.items : [input.item];
+  if (input.type === "submitPull")
+    return yield* submitCoordinatorPull(input.projectId, input.url, sql, projects, threads, pulls);
+  if (input.type === "playbook") {
+    const coordinator = (yield* activeShells(threads, input.projectId)).find((t) =>
+      isProjectCoordinatorThread(input.projectId, t.id),
+    );
+    const policyThread =
+      coordinator?.id ?? ThreadId.make("coordinator-" + encodeURIComponent(input.projectId) + "-0");
+    yield* sql`INSERT INTO coordinator_playbooks(project_id,instructions,auto_repair,github_release) VALUES(${input.projectId},${input.instructions.trim()},${input.autoRepair ? 1 : 0},${input.githubRelease ? 1 : 0}) ON CONFLICT(project_id) DO UPDATE SET instructions=excluded.instructions,auto_repair=excluded.auto_repair,github_release=excluded.github_release`;
+    return { threadId: policyThread };
+  }
+  const requested =
+    input.type === "prepare" || input.type === "release" ? input.items : [input.item];
   const rows = yield* loadItems(
     input.projectId,
     sql,
@@ -413,7 +651,79 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
   const first = items[0]!;
   for (const item of items)
     yield* sql`INSERT OR IGNORE INTO coordinator_handoffs (message_id,project_id) VALUES (${item.id},${input.projectId})`;
-  if (input.type === "prepare") {
+  if (input.type === "repair") {
+    if (first.phase !== "failed" || first.external || first.repairState)
+      return yield* error(
+        "This handoff is ineligible for automatic repair. Review the failure in its chat.",
+      );
+    const source = yield* threads.getThreadShell(first.threadId);
+    if (!source || source.deletedAt || source.projectId !== input.projectId)
+      return yield* error("The feature chat is unavailable.");
+    const target = first.pulls.find(
+      (p) => p.evidence?.state === "OPEN" && ["ERROR", "FAILURE"].includes(p.evidence.checks ?? ""),
+    );
+    if (!target?.evidence?.head) return yield* error("No failed open PR was verified.");
+    const repairId = MessageId.make("repair:" + first.base);
+    const previous = yield* threads.getProjectThreadRecords(
+      { projectId: input.projectId, threadId: source.id },
+      ["messages"],
+      { messageIds: [repairId] },
+    );
+    if (previous.messages.length) {
+      yield* sql`UPDATE coordinator_handoffs SET repair_base=${first.base} WHERE message_id=${first.id} AND repair_base IS NULL`;
+      return { threadId: source.id };
+    }
+    if (source.latestRunId && source.latestRunId !== first.sourceRun)
+      return yield* error("The feature chat already has newer work. Review the failure there.");
+    if (source.archivedAt !== null)
+      yield* threads.dispatch({
+        type: "thread.unarchive",
+        threadId: source.id,
+        commandId: CommandId.make("repair:open:" + first.base),
+      });
+    const logs = pulls.checkLogs
+      ? yield* pulls
+          .checkLogs({
+            projectId: input.projectId,
+            repository: target.repository,
+            host: target.host,
+            number: target.number,
+            tailLines: 12,
+          })
+          .pipe(Effect.orElseSucceed(() => []))
+      : [];
+    const checks = target.checks.filter((c) => c.status === "failure" && !c.placeholder);
+    const text = [
+      "CI failed on " +
+        target.url +
+        " at " +
+        target.evidence.head +
+        ". Diagnose and fix the failing checks in this feature chat. Return the fix to the same pull request for review.",
+      ...checks.map((c) =>
+        [c.name, c.description, c.url].filter(Boolean).join(" · ").slice(0, 1200),
+      ),
+      ...logs
+        .slice(0, 3)
+        .map((log) =>
+          JSON.stringify({ check: log.name, logTail: log.log?.slice(-1500) ?? log.detail }),
+        ),
+    ].join("\n");
+    // A crash after delivery is safe to retry. The command and message IDs remain stable.
+    yield* threads.sendToThread({
+      projectId: input.projectId,
+      threadId: source.id,
+      text,
+      attachments: [],
+      mode: "queue",
+      messageId: repairId,
+      commandId: CommandId.make("repair:" + first.base),
+      createdBy: "user",
+      creationSource: "server",
+    });
+    yield* sql`UPDATE coordinator_handoffs SET repair_base=${first.base} WHERE message_id=${first.id} AND repair_base IS NULL`;
+    return { threadId: source.id };
+  }
+  if (input.type === "prepare" || input.type === "release") {
     if (items.some((i) => i.phase !== "ready" && i.phase !== "merged"))
       return yield* error("Only ready or merged changes can be prepared.");
     if (items.some((i) => i.phase === "merged")) {
@@ -427,7 +737,141 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
       if (live.includes(true))
         return yield* error("A selected change is already live. Refresh the release board.");
     }
-    const key = revision([input.projectId, items.map((i) => [i.id, i.revision]).sort()]);
+    const [policy] = yield* sql<{
+      instructions: string;
+      github_release: number;
+    }>`SELECT instructions,github_release FROM coordinator_playbooks WHERE project_id=${input.projectId}`;
+    const releasing = input.type === "release";
+    if (
+      releasing &&
+      (!policy?.instructions ||
+        items.some((i) => !i.approved || !i.pulls.length || i.pulls.some((p) => !p.evidence?.head)))
+    )
+      return yield* error(
+        "Approve each revision and configure the project release playbook first.",
+      );
+    if (
+      releasing &&
+      items.some((i) =>
+        i.pulls.some((p) =>
+          p.evidence?.criteria?.some(
+            (c) =>
+              c.check &&
+              (!p.evidence?.headChecksComplete ||
+                p.evidence?.headChecks?.filter((check) => check.name === c.check).length !== 1 ||
+                !p.evidence.headChecks.some(
+                  (check) => check.name === c.check && check.status === "success",
+                )),
+          ),
+        ),
+      )
+    )
+      return yield* error(
+        "A required acceptance check is missing or has not passed for this revision.",
+      );
+    const key = revision([
+      input.type,
+      policy?.instructions ?? "",
+      input.projectId,
+      items.map((i) => [i.id, i.revision]).sort(),
+    ]);
+    if (releasing && policy?.github_release) {
+      const links = items.flatMap((i) => i.pulls);
+      const ref = links[0]!;
+      const branch = ref.evidence?.defaultBranch;
+      const candidate = ref.evidence?.defaultRevision;
+      if (
+        !pulls.dispatchCoordinatorRelease ||
+        !branch ||
+        !candidate ||
+        !/^[a-f0-9]{40}$/i.test(candidate) ||
+        project.repositoryIdentity?.canonicalKey.toLowerCase() !==
+          ref.host.toLowerCase() + "/" + ref.repository.toLowerCase() ||
+        !links.some((p) => p.evidence?.merge === candidate) ||
+        links.some(
+          (p) =>
+            p.host !== ref.host ||
+            p.repository.toLowerCase() !== ref.repository.toLowerCase() ||
+            p.evidence?.state !== "MERGED" ||
+            p.evidence.defaultRevision !== candidate ||
+            !p.evidence.merge,
+        )
+      )
+        return yield* error("Select merged changes including the current default-branch revision.");
+      for (const p of links) {
+        const merge = p.evidence!.merge!;
+        if (
+          merge !== candidate &&
+          (yield* pulls.coordinatorIncludes({
+            projectId: input.projectId,
+            ...p,
+            base: merge,
+            head: candidate,
+          })) !== true
+        )
+          return yield* error(
+            "The release candidate could not be verified to contain all selected changes.",
+          );
+      }
+      const requestId = revision([
+        input.projectId,
+        ref.host,
+        ref.repository.toLowerCase(),
+        candidate,
+      ]);
+      const claim =
+        yield* sql`INSERT INTO coordinator_release_requests(request_id,project_id,revision,state) VALUES(${requestId},${input.projectId},${candidate},'dispatching') ON CONFLICT DO NOTHING RETURNING request_id`;
+      if (claim.length) {
+        yield* pulls
+          .dispatchCoordinatorRelease({
+            projectId: input.projectId,
+            host: ref.host,
+            repository: ref.repository,
+            number: ref.number,
+            branch,
+            revision: candidate,
+            requestId,
+            pullNumbers: encodeNumbers([...new Set(links.map((p) => p.number))]),
+          })
+          .pipe(
+            Effect.catch((e) =>
+              Effect.gen(function* () {
+                if (
+                  e._tag === "PullRequestUnavailableError" ||
+                  (e._tag === "PullRequestOperationError" && e.reason === "not-found")
+                ) {
+                  yield* sql`DELETE FROM coordinator_release_requests WHERE request_id=${requestId} AND state='dispatching'`;
+                  return yield* error(
+                    "GitHub could not start putmancode-release.yml. Check installation and workflow access, then retry.",
+                  );
+                }
+                return yield* error(
+                  "Workflow delivery could not be confirmed. Check GitHub Actions for request " +
+                    requestId +
+                    " before retrying.",
+                );
+              }),
+            ),
+          );
+        yield* sql`UPDATE coordinator_release_requests SET state='accepted' WHERE request_id=${requestId}`;
+      } else {
+        const [prior] = yield* sql<{
+          state: string;
+        }>`SELECT state FROM coordinator_release_requests WHERE request_id=${requestId}`;
+        if (prior?.state !== "accepted")
+          return yield* error(
+            "Check the outstanding release request in GitHub Actions: " + requestId,
+          );
+      }
+      yield* sql.withTransaction(
+        Effect.forEach(
+          items,
+          (i) =>
+            sql`UPDATE coordinator_handoffs SET released_revision=${i.revision} WHERE message_id=${i.id} AND project_id=${input.projectId}`,
+        ),
+      );
+      return { threadId: first.coordinatorId };
+    }
     const previous = yield* threads.getThreadShell(first.coordinatorId);
     if (!previous || previous.projectId !== input.projectId)
       return yield* error("The project coordinator could not be found.");
@@ -441,7 +885,10 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
           )
         : previous.id;
     const text = [
-      "Prepare a release plan for only the selected handoffs below. Verify their exact revisions and checks, list blockers and draft release notes. Stop after the plan. Any merge, tag, publication or deployment requires a separate request.",
+      releasing
+        ? "Request to run the configured release procedure. Recheck selected PR heads, required CI and conflicts, test their combined candidate against the current base, stage and verify that exact candidate, then promote only the verified revision through the authorized release runner and its existing approvals. Verify production health and return its revision, URL and result. Stop on a changed head, failed check, missing authority or active hold. Project playbook:\n" +
+          policy!.instructions
+        : "Prepare a release plan for only the selected handoffs below. Verify their exact revisions and checks, list blockers and draft release notes. Stop after the plan. Any merge, tag, publication or deployment requires a separate request.",
       ...items.map((i: CoordinatorBoardItem) =>
         JSON.stringify({
           handoff: i.id,
@@ -458,8 +905,8 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
     yield* threads.sendToThread({
       projectId: input.projectId,
       threadId,
-      messageId: MessageId.make("prepare:" + key),
-      commandId: CommandId.make("prepare:" + key),
+      messageId: MessageId.make(input.type + ":" + key),
+      commandId: CommandId.make(input.type + ":" + key),
       text,
       attachments: [],
       mode: "queue",
@@ -467,26 +914,17 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
       creationSource: "web",
     });
     yield* sql.withTransaction(
-      Effect.forEach(
-        items,
-        (i) =>
-          sql`UPDATE coordinator_handoffs SET prepared_revision=${i.revision} WHERE project_id=${input.projectId} AND message_id=${i.id} AND assets_json IS ${i.storedAssets}`,
+      Effect.forEach(items, (i) =>
+        releasing
+          ? sql`UPDATE coordinator_handoffs SET released_revision=${i.revision} WHERE project_id=${input.projectId} AND message_id=${i.id}`
+          : sql`UPDATE coordinator_handoffs SET prepared_revision=${i.revision} WHERE project_id=${input.projectId} AND message_id=${i.id} AND assets_json IS ${i.storedAssets}`,
       ),
     );
     return { threadId };
   }
   if (input.type === "linkPull") {
-    const url = coordinatorWebUrl(input.url);
-    const parsed = url ? new URL(url) : null;
-    const match = parsed && /^\/([\w.-]+)\/([\w.-]+)\/pull\/([1-9]\d*)\/?$/.exec(parsed.pathname);
-    if (!parsed || !match || !Number.isSafeInteger(Number(match[3])))
-      return yield* error("Enter a GitHub pull request URL.");
-    const link = {
-      host: parsed.host,
-      repository: match[1] + "/" + match[2],
-      number: Number(match[3]),
-      url: parsed.origin + parsed.pathname.replace(/\/$/, ""),
-    };
+    const link = pullLink(input.url);
+    if (!link) return yield* error("Enter a GitHub pull request URL.");
     if (
       first.pulls.some(
         (p) =>
@@ -512,6 +950,168 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
     return yield* error("Another reviewer changed this handoff. Refresh and try again.");
   return { threadId: first.coordinatorId };
 }, Effect.mapError(boardError));
+
+export const reconcileCoordinatorQueues = Effect.fn("CoordinatorBoard.reconcile")(function* (
+  sql: Sql,
+  projects: ProjectsApi,
+  threads: ThreadManagementServiceShape,
+  pulls: Pulls & Pick<PullRequestService["Service"], "list">,
+) {
+  const policies = yield* sql<{
+    project_id: string;
+    auto_repair: number;
+  }>`SELECT project_id,auto_repair FROM coordinator_playbooks`;
+  for (const policy of policies) {
+    const projectId = ProjectId.make(policy.project_id);
+    yield* Effect.gen(function* () {
+      const active = Option.getOrNull(yield* projects.getById(projectId));
+      if (!active || active.archivedAt || active.deletedAt) return;
+      let cursors: import("@t3tools/contracts").PullRequestListCursors | undefined;
+      do {
+        const page = yield* pulls
+          .list({
+            projectId,
+            state: "open",
+            involvement: "all",
+            filters: { labels: [["coordinator"]] },
+            limit: 100,
+            ...(cursors ? { cursors } : {}),
+          })
+          .pipe(
+            Effect.catch((e) =>
+              Effect.logDebug("Coordinator PR list unavailable", e._tag).pipe(Effect.as(null)),
+            ),
+          );
+        if (!page) break;
+        for (const pr of page.entries) {
+          if (
+            pr.projectId !== projectId ||
+            !pr.labels.some((l) => l.name.toLowerCase() === "coordinator")
+          )
+            continue;
+          const link = pullLink(pr.url);
+          if (!link) continue;
+          const id = MessageId.make(
+            "queue-pr:" + revision([projectId, link.host, link.repository, link.number]),
+          );
+          const exists =
+            yield* sql`SELECT 1 FROM coordinator_handoffs WHERE message_id=${id} AND delivered=1`;
+          if (!exists.length)
+            yield* submitCoordinatorPull(projectId, pr.url, sql, projects, threads, pulls).pipe(
+              Effect.catch((e) => Effect.logDebug("Coordinator PR intake failed", e._tag)),
+            );
+        }
+        cursors = page.nextCursors;
+      } while (Object.keys(cursors).length);
+      if (!policy.auto_repair) return;
+      const items = yield* loadItems(projectId, sql, threads, pulls);
+      const newest = new Set<ThreadId>();
+      for (const item of items) {
+        if (item.external || newest.has(item.threadId)) continue;
+        newest.add(item.threadId);
+        if (item.phase !== "failed" || item.repairState) continue;
+        yield* actOnCoordinatorBoard(
+          { type: "repair", projectId, item: { id: item.id, revision: item.revision } },
+          sql,
+          projects,
+          threads,
+          pulls,
+        ).pipe(Effect.ignore);
+      }
+    }).pipe(Effect.catch((e) => Effect.logDebug("Coordinator queue refresh failed", e._tag)));
+  }
+});
+
+export function boardQuestion(text: string) {
+  const q = text
+    .trim()
+    .toLowerCase()
+    .replace(/[?!.\s]+$/u, "")
+    .replace(/what['’]s/g, "what is");
+  if (["what is live", "what is deployed", "what is in production"].includes(q))
+    return "production";
+  if (
+    [
+      "did ci pass",
+      "is ci green",
+      "did the tests pass",
+      "ci status",
+      "what is the ci status",
+    ].includes(q)
+  )
+    return "ci";
+  return null;
+}
+
+/** Direct factual answers never infer a successful check or deployment from a conversation. */
+export const answerBoardQuestion = Effect.fn("CoordinatorBoard.answer")(function* (
+  kind: "ci" | "production",
+  projectId: ProjectId,
+  sql: Sql,
+  pulls: Pick<Pulls, "coordinatorChange" | "coordinatorProduction">,
+) {
+  if (kind === "production") {
+    const history = yield* pulls.coordinatorProduction(projectId);
+    const success = history?.find((d) => d.state === "SUCCESS");
+    const latest = history?.[0];
+    const answer = success
+      ? "Last verified production deployment: " +
+        success.repository +
+        " at " +
+        success.revision +
+        " (" +
+        success.at +
+        ")." +
+        (success.url ? "\n" + success.url : "")
+      : history
+        ? "No successful production deployment is recorded."
+        : "Production deployment status is unavailable.";
+    return (
+      answer +
+      (latest && latest !== success
+        ? "\nLatest deployment attempt: " + latest.revision + " · " + latest.state
+        : "")
+    );
+  }
+  const rows = yield* rowsFor(sql, projectId);
+  const refs = new Map<string, typeof pullSchema.Type>();
+  for (const row of rows) {
+    const snapshot = row.snapshot_json ? yield* decodeSnapshot(row.snapshot_json) : null;
+    const additional = row.additional_pulls_json
+      ? yield* decodePulls(row.additional_pulls_json)
+      : [];
+    const legacy = snapshot
+      ? []
+      : (row.text?.match(/^Pull request: https:\/\/\S+/gm) ?? []).flatMap(
+          (line) => pullLink(line.slice("Pull request: ".length)) ?? [],
+        );
+    for (const link of [...(snapshot?.pulls ?? legacy), ...additional])
+      refs.set(link.host + "/" + link.repository.toLowerCase() + "#" + link.number, link);
+  }
+  if (!refs.size) return "There are no pull requests linked to the coordinator queue.";
+  const checks = yield* Effect.forEach(
+    refs.values(),
+    (link) =>
+      pulls
+        .coordinatorChange({ projectId, ...link })
+        .pipe(
+          Effect.map((e) =>
+            e?.state === "CLOSED" || e?.state === "MERGED"
+              ? null
+              : link.repository +
+                " #" +
+                link.number +
+                " · " +
+                (e?.checks ?? "checks unavailable") +
+                (e?.head ? " · " + e.head.slice(0, 8) : ""),
+          ),
+        ),
+    { concurrency: 3 },
+  );
+  return checks.some(Boolean)
+    ? checks.filter(Boolean).join("\n")
+    : "There are no open pull requests in the coordinator queue.";
+});
 
 export const retryCoordinatorChecks = Effect.fn("CoordinatorBoard.retryChecks")(function* (
   input: typeof OrchestrationV2RpcSchemas.coordinatorRetry.input.Type,

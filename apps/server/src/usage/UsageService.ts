@@ -42,6 +42,7 @@ import type {
 import { canonicalModelFilter, resolveModelAliases, UsageAggregator } from "./usageAggregation.ts";
 import {
   createOverrideRateTable,
+  priceUsage,
   isUnlistedModel,
   parseRateTable,
   type RateTable,
@@ -160,6 +161,10 @@ export class UsageService extends Context.Service<
   UsageService,
   {
     readonly readSummary: (input: UsageSummaryInput) => Effect.Effect<UsageSummary, UsageReadError>;
+    readonly estimateCoordinatorTurn?: (
+      model: string,
+      totals: import("@t3tools/contracts").UsageTokenTotals,
+    ) => Effect.Effect<number | null>;
     readonly refreshRates: Effect.Effect<UsagePricing>;
   }
 >()("t3/usage/UsageService") {}
@@ -1252,7 +1257,20 @@ export const make = Effect.gen(function* () {
     return yield* Deferred.await(deferred);
   });
 
-  return { readSummary, refreshRates, awaitPersisted } as const;
+  const estimateCoordinatorTurn = Effect.fn("UsageService.estimateCoordinatorTurn")(
+    function* (model: string, totals: import("@t3tools/contracts").UsageTokenTotals) {
+      yield* loadSavedRates;
+      const settings = yield* settingsService.getSettings;
+      const priced = priceUsage(
+        rates,
+        { model, totals, speed: "standard", reportedCostUsd: null },
+        createOverrideRateTable(settings.usagePriceOverrides),
+      );
+      return priced.costSource === "unpriced" ? null : priced.costUsd;
+    },
+    Effect.orElseSucceed(() => null),
+  );
+  return { readSummary, refreshRates, awaitPersisted, estimateCoordinatorTurn } as const;
 });
 
 export const layer = Layer.effect(UsageService, make);

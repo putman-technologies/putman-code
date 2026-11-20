@@ -71,6 +71,23 @@ export const readCoordinatorStatus = Effect.fn("ProjectCoordinator.status")(
     SELECT message_id, created_at FROM orchestration_v2_projection_messages
     WHERE thread_id = ${coordinator.id} AND role = 'user' AND message_id GLOB 'handoff:*'
     ORDER BY created_at DESC, rowid DESC LIMIT 1`;
+    const external = yield* sql<{
+      host: string;
+      repository: string;
+      number: number;
+      received_at: string;
+    }>`SELECT json_extract(p.value,'$.host') host,json_extract(p.value,'$.repository') repository,json_extract(p.value,'$.number') number,h.received_at
+      FROM coordinator_handoffs h,json_each(h.snapshot_json,'$.pulls') p WHERE h.project_id=${projectId} AND h.external_thread=${coordinator.id} ORDER BY h.received_at DESC LIMIT 1`;
+    if (
+      external[0] &&
+      (!handoff || Date.parse(external[0].received_at) > Date.parse(handoff.created_at))
+    )
+      return yield* readPull({
+        projectId,
+        host: external[0].host,
+        repository: external[0].repository,
+        number: external[0].number,
+      });
     let refs = linkedPulls(coordinator, handoff?.created_at);
     if (handoff) {
       const key = Option.getOrNull(decodeHandoff(handoff.message_id.slice("handoff:".length)));

@@ -478,6 +478,10 @@ export const make = Effect.gen(function* () {
 
     coordinatorIncludes: (input) =>
       cli.coordinatorIncludes(input).pipe(Effect.mapError(fail("coordinatorIncludes"))),
+    dispatchCoordinatorRelease: (input) =>
+      cli
+        .dispatchCoordinatorRelease(input)
+        .pipe(Effect.mapError(fail("dispatchCoordinatorRelease"))),
     coordinatorChange: (input) =>
       cli.coordinatorChange(input).pipe(Effect.mapError(fail("coordinatorChange"))),
     coordinatorProduction: (input) =>

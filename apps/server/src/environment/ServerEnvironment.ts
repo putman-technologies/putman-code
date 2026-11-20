@@ -256,6 +256,7 @@ export const make = Effect.gen(function* () {
       projectCoordinator: true,
       coordinatorModelRouting: true,
       coordinatorBoard: true,
+      coordinatorQueue: true,
       coordinatorStatus: true,
       environmentThemes: true,
       usageLimitSources: true,

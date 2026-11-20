@@ -73,6 +73,7 @@ import { useEnvironmentQuery } from "~/state/query";
 import { readEnvironmentScope, useEnvironmentScope } from "~/state/session";
 import { useLiveRefresh } from "~/hooks/useLiveRefresh";
 import { pullRequestEnvironment, usePullRequestTurnRefresh } from "~/state/pullRequests";
+import { orchestrationEnvironment } from "~/state/orchestration";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { PullRequestStackMenu } from "./PullRequestStackMenu";
 import { pullRequestCompletionScope } from "./PullRequestMarkdownTextarea";
@@ -388,6 +389,10 @@ export function PullRequestDetailPanel({
   const gt = useGT();
   const resolve = useMessages();
   const environmentConfigs = useServerConfigs();
+  const submitPull = useAtomCommand(orchestrationEnvironment.coordinatorBoardAction);
+  const queueAllowed = useAtomValue(
+    orchestrationEnvironment.coordinatorBoardAction.permissionAtom(environmentId),
+  );
   const projects = useProjects();
   const project = projects.find(
     (project) =>
@@ -1626,6 +1631,30 @@ export function PullRequestDetailPanel({
               />
               {checkoutControl}
               <PullRequestActionsMenu
+                submitToCoordinator={
+                  queueAllowed &&
+                  environmentConfigs.get(environmentId)?.environment.capabilities
+                    .coordinatorQueue &&
+                  detail.provider === "github" &&
+                  reference.projectId
+                    ? () => {
+                        void submitPull({
+                          environmentId,
+                          input: {
+                            type: "submitPull",
+                            projectId: reference.projectId!,
+                            url: detail.url,
+                          },
+                        }).then((r) => {
+                          if (r._tag === "Success")
+                            toastManager.add({
+                              type: "success",
+                              title: m(msg("Sent to coordinator")),
+                            });
+                        });
+                      }
+                    : undefined
+                }
                 environmentId={environmentId}
                 reference={reference}
                 pullRequestKey={pullRequestKey}

@@ -1,3 +1,8 @@
+import { isProjectCoordinatorThread } from "@t3tools/contracts";
+import * as CoordinatorSql from "effect/sql/SqlClient";
+import { PullRequestService as CoordinatorPulls } from "../pullRequest/PullRequestService.ts";
+import { submitCoordinatorPull } from "../orchestration-v2/CoordinatorBoard.ts";
+import { hubReviewPull } from "../orchestration-v2/coordinatorBoardState.ts";
 import {
   CommandId,
   type RunId,
@@ -1267,6 +1272,10 @@ function timelineItemsWithinBudget(
 }
 
 const make = Effect.gen(function* () {
+  const coordinatorDb = Option.getOrUndefined(
+    yield* Effect.serviceOption(CoordinatorSql.SqlClient),
+  );
+  const coordinatorPulls = Option.getOrUndefined(yield* Effect.serviceOption(CoordinatorPulls));
   const random = yield* SecureRandom.SecureRandom;
   const threadManagement = yield* ThreadManagementService.ThreadManagementService;
   const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
@@ -3488,6 +3497,23 @@ const make = Effect.gen(function* () {
       yield* assertLiveCallerForOtherThread(scope, parent, target);
       yield* assertTargetWithinLimits(limits, target.thread);
 
+      const link = hubReviewPull(input.message, input.clientRequestId);
+      if (link && isProjectCoordinatorThread(target.thread.projectId, input.threadId)) {
+        if (!coordinatorDb || !coordinatorPulls)
+          return yield* failure(
+            "orchestration_error",
+            "The shared coordinator queue is unavailable.",
+          );
+        yield* submitCoordinatorPull(
+          target.thread.projectId,
+          link,
+          coordinatorDb,
+          projects,
+          threadManagement,
+          coordinatorPulls,
+          input.threadId,
+        ).pipe(Effect.mapError((e) => failure("orchestration_error", e.message)));
+      }
       const mode = input.mode ?? "auto";
       const key = yield* requestKey(input.clientRequestId);
       const messageId = stableOperationMessageId({

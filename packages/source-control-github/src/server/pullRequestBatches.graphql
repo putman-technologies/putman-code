@@ -177,7 +177,14 @@ query CoordinatorRelease($owner: String!, $name: String!, $number: Int!) {
 
 query CoordinatorChange($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
+    defaultBranchRef {
+      name
+      target {
+        oid
+      }
+    }
     pullRequest(number: $number) {
+      title
       body
       state
       isDraft
@@ -189,6 +196,25 @@ query CoordinatorChange($owner: String!, $name: String!, $number: Int!) {
           commit {
             statusCheckRollup {
               state
+              contexts(first: 100) {
+                pageInfo {
+                  hasNextPage
+                }
+                nodes {
+                  __typename
+                  ... on CheckRun {
+                    name
+                    status
+                    conclusion
+                    detailsUrl
+                  }
+                  ... on StatusContext {
+                    context
+                    state
+                    targetUrl
+                  }
+                }
+              }
             }
             deployments(first: 20, orderBy: { field: CREATED_AT, direction: DESC }) {
               nodes {

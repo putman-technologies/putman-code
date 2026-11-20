@@ -7,6 +7,10 @@ on:
       - ".gitmodules"
       - ".github/workflows/putmancode-coordinator-checks.yml"
       - "apps/web/src/components/chat/CoordinatorBoard*"
+      - "apps/web/src/components/pullRequest/PullRequest*"
+      - "apps/server/src/mcp/OrchestratorMcpService.ts"
+      - "apps/server/src/persistence/Migrations/101_CoordinatorQueue.ts"
+      - "docs/examples/putmancode-*.yml"
       - "apps/server/src/orchestration-v2/**"
       - "apps/server/src/device/**"
       - "apps/server/src/project/AgentSessionScanner*"
@@ -40,12 +44,16 @@ jobs:
         run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
       - name: Test the release board in Chromium
         working-directory: apps/web
-        run: vp test run --project browser src/components/chat/CoordinatorBoard.browser.test.tsx
+        run: vp test run --project browser src/components/chat/CoordinatorBoard.browser.test.tsx src/components/pullRequest/PullRequestActionsMenu.browser.test.tsx
       - name: Test coordinator handoffs and local storage isolation
         working-directory: apps/server
         run: >-
           vp test run
           src/orchestration-v2/ThreadStop.test.ts
           src/orchestration-v2/coordinatorBoardState.test.ts
+          src/orchestration-v2/coordinatorRouting.test.ts
           src/device/sshDeviceScript.test.ts
           src/project/AgentSessionScanner.test.ts
+      - name: Check review evidence parsing
+        working-directory: packages/source-control-github
+        run: vp test run src/server/reviewScreenshots.test.ts src/server/coordinatorReleaseState.test.ts

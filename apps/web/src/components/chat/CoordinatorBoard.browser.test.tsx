@@ -63,7 +63,14 @@ describe("release board", () => {
       assets: { preview: null, before: null, after: null },
       pulls: [],
     };
-    const empty = { items: [], questions: [], overlaps: [], production: [] };
+    const empty = {
+      items: [],
+      questions: [],
+      overlaps: [],
+      production: [],
+      playbook: "",
+      autoRepair: false,
+    };
     boards.set(one, {
       ...empty,
       production: [
@@ -125,6 +132,10 @@ describe("release board", () => {
       expect(document.body.textContent).toContain("Invoice detail");
       const oldPreview = "https://preview.example/old";
       const newPreview = "https://preview.example/new";
+      expect(button("Send PR to Coordinator")!.disabled).toBe(true);
+      await act(async () => button("Project release playbook")!.click());
+      expect(document.querySelector("textarea")).toBeTruthy();
+      await act(async () => button("Project release playbook")!.click());
       const replaceRevision = (revision: string, preview: string) => {
         const board = boards.get(one)!;
         boards.set(one, {

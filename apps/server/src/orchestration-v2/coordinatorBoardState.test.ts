@@ -1,7 +1,28 @@
 import { describe, it, expect } from "vite-plus/test";
 import { ThreadId, type CoordinatorChange } from "@t3tools/contracts";
-import { emptyAssets, findFileOverlaps, releasePhase } from "./coordinatorBoardState.ts";
+import {
+  hubReviewPull,
+  emptyAssets,
+  findFileOverlaps,
+  releasePhase,
+} from "./coordinatorBoardState.ts";
 
+it("imports submitted Hub reviews and leaves ordinary conversation alone", () => {
+  expect(
+    hubReviewPull(
+      "Jolene (via Putman Hub)\nPlease review the changes and checks for Sapphire PR #50",
+      "putman-hub-123",
+    ),
+  ).toBe("50");
+  expect(
+    hubReviewPull(
+      "Jolene (via Putman Hub)\nSapphire handoff\nPR: https://github.com/owner/repo/pull/33",
+      "putman-hub-123",
+    ),
+  ).toBe("https://github.com/owner/repo/pull/33");
+  expect(hubReviewPull("Jolene (via Putman Hub)\nIs PR #33 live?", "putman-hub-123")).toBeNull();
+  expect(hubReviewPull("Jolene (via Putman Hub)\nReview PR #50", "unrelated")).toBeNull();
+});
 const green: CoordinatorChange = {
   state: "OPEN",
   head: "one",

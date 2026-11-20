@@ -1,9 +1,13 @@
 import {
   readCoordinatorBoard,
+  answerBoardQuestion,
+  submitCoordinatorPull,
+  reconcileCoordinatorQueues,
   readCoordinatorOverlaps,
   actOnCoordinatorBoard,
   saveBoardHandoff,
 } from "./CoordinatorBoard.ts";
+import { PullRequestService } from "../pullRequest/PullRequestService.ts";
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
@@ -172,6 +176,37 @@ const threadState = (threadId: ThreadId) =>
         .map((link) => link.number),
     };
   });
+
+it.effect("answers an idle coordinator status question without starting a provider run", () =>
+  Effect.gen(function* () {
+    const id = ThreadId.make("coordinator-project%3Athread-stop-0");
+    yield* createWatchingThread(id, 3);
+    yield* send(id, "What is live?", "start_immediately");
+    const projection = yield* (yield* Orchestrator.OrchestratorV2).getThreadProjection(id);
+    assert.equal(projection.runs.length, 0);
+    assert.include(
+      projection.messages.find((m) => m.role === "assistant")?.text ?? "",
+      "No successful production deployment",
+    );
+    assert.deepEqual(
+      projection.turnItems.map((i) => i.type),
+      ["user_message", "assistant_message"],
+    );
+  }).pipe(
+    Effect.provide(
+      layerTest.pipe(
+        Layer.provide(
+          Layer.merge(
+            layerDatabase,
+            Layer.succeed(PullRequestService, {
+              coordinatorProduction: () => Effect.succeed([]),
+            } as unknown as PullRequestService["Service"]),
+          ),
+        ),
+      ),
+    ),
+  ),
+);
 
 it.effect("hands off a completed feature once and preserves the source when delivery fails", () =>
   Effect.gen(function* () {
@@ -498,6 +533,133 @@ it.effect("hands off a completed feature once and preserves the source when deli
         ),
       ),
     );
+    assert.equal(yield* status("deployed"), "review");
+    const candidate = "b".repeat(40);
+    const ownProjects = {
+      getById: () =>
+        Effect.succeedSome({
+          ...project,
+          repositoryIdentity: {
+            canonicalKey: "github.com/pingdotgg/t3code",
+            locator: {
+              source: "git-remote" as const,
+              remoteName: "origin",
+              remoteUrl: "https://github.com/pingdotgg/t3code.git",
+            },
+          },
+        }),
+    };
+    const url = "https://github.com/pingdotgg/t3code/pull/17";
+    yield* submitCoordinatorPull(
+      projectId,
+      "17",
+      sql,
+      ownProjects,
+      threads,
+      receipt,
+      target.threadId,
+    );
+    yield* submitCoordinatorPull(projectId, url, sql, ownProjects, threads, receipt);
+    const queuedPr = (yield* board()).items.filter((i) => i.external);
+    assert.lengthOf(queuedPr, 1);
+    assert.equal(queuedPr[0]!.pulls[0]?.number, 17);
+    assert.isTrue(
+      Exit.isFailure(
+        yield* Effect.exit(
+          submitCoordinatorPull(
+            projectId,
+            "https://github.com/unrelated/apps/pull/17",
+            sql,
+            ownProjects,
+            threads,
+            receipt,
+          ),
+        ),
+      ),
+    );
+    assert.include(yield* answerBoardQuestion("ci", projectId, sql, receipt), "#17 · SUCCESS");
+    assert.include(
+      yield* answerBoardQuestion("production", projectId, sql, productionReceipt(true)),
+      "verified production deployment",
+    );
+    const broken = {
+      ...receipt,
+      coordinatorChange: () =>
+        receipt.coordinatorChange().pipe(Effect.map((c) => ({ ...c, checks: "FAILURE" }))),
+    };
+    yield* act({
+      type: "playbook",
+      projectId,
+      instructions: "Use approved deployment environments.",
+      autoRepair: true,
+      githubRelease: true,
+    });
+    const worker = {
+      ...broken,
+      list: () =>
+        Effect.succeed({
+          entries: [],
+          providers: [],
+          viewers: {},
+          errors: [],
+          truncated: false,
+          nextCursors: {},
+        }),
+    };
+    yield* reconcileCoordinatorQueues(sql, ownProjects, threads, worker);
+    yield* reconcileCoordinatorQueues(sql, ownProjects, threads, worker);
+    const repaired = yield* readCoordinatorBoard(projectId, sql, ownProjects, threads, broken);
+    assert.equal(repaired.items.find((i) => i.id === legacy.id)?.repairState, "sent");
+    assert.equal((yield* threads.getThreadShell(source))?.archivedAt, null);
+    assert.equal(
+      (yield* orchestrator.getThreadProjection(source)).messages.filter((m) =>
+        m.id.startsWith("repair:"),
+      ).length,
+      1,
+    );
+    let dispatches = 0;
+    const runner = {
+      ...receipt,
+      coordinatorChange: () =>
+        receipt.coordinatorChange().pipe(
+          Effect.map((c) => ({
+            ...c,
+            state: "MERGED",
+            merge: candidate,
+            defaultBranch: "main",
+            defaultRevision: candidate,
+          })),
+        ),
+      dispatchCoordinatorRelease: (req: { revision: string }) =>
+        Effect.sync(() => {
+          assert.equal(req.revision, candidate);
+          dispatches++;
+        }),
+    };
+    const external = (yield* readCoordinatorBoard(
+      projectId,
+      sql,
+      ownProjects,
+      threads,
+      runner,
+    )).items.find((i) => i.external)!;
+    const ref = { id: external.id, revision: external.revision };
+    const release = { type: "release" as const, projectId, items: [ref] };
+    assert.isTrue(
+      Exit.isFailure(
+        yield* Effect.exit(actOnCoordinatorBoard(release, sql, ownProjects, threads, runner)),
+      ),
+    );
+    yield* actOnCoordinatorBoard(
+      { type: "approve", projectId, item: ref },
+      sql,
+      ownProjects,
+      threads,
+      runner,
+    );
+    yield* actOnCoordinatorBoard(release, sql, ownProjects, threads, runner);
+    yield* actOnCoordinatorBoard(release, sql, ownProjects, threads, runner);
+    assert.equal(dispatches, 1);
     const prior = yield* threads.getThreadShell(source);
     const other = yield* threads.getThreadShell(nextSource);
     const pair = yield* threads.getShellSnapshot({ projectId });
@@ -528,7 +690,6 @@ it.effect("hands off a completed feature once and preserves the source when deli
     );
     assert.equal(overlapping.find((o) => o.path === "migrations/100.sql")?.threads.length, 2);
 
-    assert.equal(yield* status("deployed"), "review");
     assert.equal(
       yield* readCoordinatorStatus(ProjectId.make("unrelated-project"), sql, threads, () =>
         Effect.die("An unrelated project must never read a pull request"),

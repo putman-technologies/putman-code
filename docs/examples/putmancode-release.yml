@@ -1,0 +1,65 @@
+name: PutmanCode project release
+run-name: Release ${{ inputs.revision }} · ${{ inputs.request_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      revision: { description: Approved default-branch commit, required: true, type: string }
+      request_id: { description: Coordinator request ID, required: true, type: string }
+      pull_requests:
+        { description: JSON array of selected pull request numbers, required: true, type: string }
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: putmancode-project-release
+  cancel-in-progress: false
+env:
+  REVISION: ${{ inputs.revision }}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify the selection and test the combined candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULLS: ${{ inputs.pull_requests }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/$DEFAULT_BRANCH" && "$REVISION" == "$GITHUB_SHA" ]]
+          jq -e 'type == "array" and length > 0 and length <= 100 and all(.[]; type == "number" and floor == . and . > 0)' <<< "$PULLS" >/dev/null
+          selected_tip=false
+          for pr in $(jq -r '.[]' <<< "$PULLS"); do
+            record=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr")
+            jq -e --arg branch "$DEFAULT_BRANCH" '.merged and .base.ref == $branch' <<< "$record" >/dev/null
+            merge=$(jq -er '.merge_commit_sha' <<< "$record")
+            git merge-base --is-ancestor "$merge" "$REVISION"
+            if [[ "$merge" == "$REVISION" ]]; then selected_tip=true; fi
+          done
+          [[ "$selected_tip" == true ]]
+          .github/putmancode/release test "$REVISION"
+  staging:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with: { ref: "${{ inputs.revision }}", persist-credentials: false }
+      - run: .github/putmancode/release stage "$REVISION"
+      - run: .github/putmancode/release verify-staging "$REVISION"
+  production:
+    needs: staging
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with: { ref: "${{ inputs.revision }}", persist-credentials: false }
+      - run: .github/putmancode/release promote "$REVISION"
+      - run: .github/putmancode/release verify-production "$REVISION"

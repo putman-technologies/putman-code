@@ -17,6 +17,28 @@ export function revision(value: unknown) {
   return NodeCrypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
+/** Extract a submission from the existing authenticated Hub chat envelope. */
+export function hubReviewPull(message: string, requestId?: string) {
+  if (!requestId?.startsWith("putman-hub-")) return null;
+  const match = /^[^\n]{1,80} \(via Putman Hub\)\n([\s\S]+)$/.exec(message);
+  const body = match?.[1]?.trim() ?? "";
+  const handoff =
+    /^(?:#{1,6} +)?(?:[\w -]+ )?handoff\b/im.test(body) &&
+    /^(?:[-*] +)?(?:PR|pull request)\s*:/im.test(body);
+  if (
+    !handoff &&
+    !/^(?:https:\/\/|#?\d+$|(?:please )?(?:review|submit|publish|request (?:a )?release|release)\b)/i.test(
+      body,
+    )
+  )
+    return null;
+  return (
+    body.match(/https:\/\/[\w.-]+\/[\w.-]+\/[\w.-]+\/pull\/[1-9]\d*\b/i)?.[0] ??
+    body.match(/(?:^|\bPR\s*#?|\bpull request\s*#?|#)([1-9]\d*)\b/i)?.[1] ??
+    null
+  );
+}
+
 export function handoffPulls(shell: OrchestrationV2ThreadShell) {
   const links = (shell.pullRequests ?? [])
     .filter((link) => link.source !== "stack-dismissed")

@@ -1,4 +1,4 @@
-import { reviewScreenshots } from "./reviewScreenshots.ts";
+import { reviewCriteria, reviewScreenshots } from "./reviewScreenshots.ts";
 import { isCommitSha, normalizeHost } from "@t3tools/source-control-core/server/pullRequestUtils";
 import {
   diffFileSection,
@@ -565,6 +565,14 @@ export class GitHubPullRequestApi extends Context.Service<
       }>;
     }) => Effect.Effect<ReadonlyArray<GitHubPullRequestStat>, GitHubPullRequestApiError>;
 
+    readonly dispatchCoordinatorRelease: (input: {
+      host: string;
+      repository: string;
+      branch: string;
+      revision: string;
+      requestId: string;
+      pullNumbers: string;
+    }) => Effect.Effect<void, GitHubPullRequestApiError>;
     readonly coordinatorChange: (input: {
       cwd: string;
       host: string;
@@ -1988,6 +1996,25 @@ export const make = Effect.gen(function* () {
   });
 
   return GitHubPullRequestApi.of({
+    dispatchCoordinatorRelease: Effect.fn("GitHubPullRequestApi.dispatchCoordinatorRelease")(
+      function* (input) {
+        const { owner, name } = parseRepositorySelector(input.repository);
+        yield* api.rest({
+          host: input.host,
+          operation: "dispatchCoordinatorRelease",
+          method: "POST",
+          path: `repos/${owner}/${name}/actions/workflows/putmancode-release.yml/dispatches`,
+          body: {
+            ref: input.branch,
+            inputs: {
+              revision: input.revision,
+              request_id: input.requestId,
+              pull_requests: input.pullNumbers,
+            },
+          },
+        });
+      },
+    ),
     coordinatorChange: Effect.fn("GitHubPullRequestApi.coordinatorChange")((input) => {
       const { owner, name } = parseRepositorySelector(input.repository);
       return client.CoordinatorChange({ owner, name, number: input.number }).pipe(
@@ -2001,6 +2028,53 @@ export const make = Effect.gen(function* () {
             (d) => d && /(?:^|[ _/-])(?:preview|pr[- ]?\d+)(?:$|[ _/-])/i.test(d.environment ?? ""),
           );
           return {
+            ...(result.repository?.defaultBranchRef?.target
+              ? {
+                  defaultBranch: result.repository.defaultBranchRef.name,
+                  defaultRevision: result.repository.defaultBranchRef.target.oid,
+                }
+              : {}),
+            title: pull.title,
+            headChecksComplete: head?.statusCheckRollup?.contexts.pageInfo.hasNextPage === false,
+            headChecks: (head?.statusCheckRollup?.contexts.nodes ?? []).flatMap((c) => {
+              if (!c || !("name" in c || "context" in c)) return [];
+              const check = c.__typename === "CheckRun";
+              const status = check ? (c.conclusion ?? c.status) : c.state;
+              const outcome =
+                status === "SUCCESS"
+                  ? "success"
+                  : status === "SKIPPED"
+                    ? "skipped"
+                    : status === "NEUTRAL"
+                      ? "neutral"
+                      : status === "CANCELLED"
+                        ? "cancelled"
+                        : [
+                              "FAILURE",
+                              "ERROR",
+                              "TIMED_OUT",
+                              "ACTION_REQUIRED",
+                              "STALE",
+                              "STARTUP_FAILURE",
+                            ].includes(status)
+                          ? "failure"
+                          : "pending";
+              return [
+                {
+                  name: check ? c.name : c.context,
+                  status: outcome as
+                    | "success"
+                    | "skipped"
+                    | "neutral"
+                    | "cancelled"
+                    | "failure"
+                    | "pending",
+                  description: null,
+                  url: coordinatorWebUrl(check ? c.detailsUrl : c.targetUrl),
+                },
+              ];
+            }),
+            criteria: reviewCriteria(pull.body),
             ...reviewScreenshots(pull.body),
             state: pull.state,
             head: pull.headRefOid,

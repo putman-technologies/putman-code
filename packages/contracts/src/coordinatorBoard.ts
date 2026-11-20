@@ -25,6 +25,12 @@ export type ReviewAssets = typeof ReviewAssets.Type;
 export const CoordinatorChange = Schema.Struct({
   state: text,
   head: text,
+  title: Schema.optional(text),
+  defaultBranch: Schema.optional(text),
+  defaultRevision: Schema.optional(text),
+  headChecksComplete: Schema.optional(Schema.Boolean),
+  headChecks: Schema.optional(Schema.Array(PullRequestCheck)),
+  criteria: Schema.optional(Schema.Array(Schema.Struct({ label: text, check: maybeText }))),
   merge: maybeText,
   checks: maybeText,
   draft: Schema.Boolean,
@@ -63,6 +69,12 @@ export const BoardPhase = Schema.Literals([
   "unavailable",
 ]);
 export type BoardPhase = typeof BoardPhase.Type;
+export const HandoffUsage = Schema.Struct({
+  models: Schema.Array(text),
+  route: Schema.Literals(["feature", "routine"]),
+  estimatedUsd: Schema.NullOr(Schema.Finite),
+});
+export type HandoffUsage = typeof HandoffUsage.Type;
 export const CoordinatorBoardItem = Schema.Struct({
   id: MessageId,
   threadId: ThreadId,
@@ -70,6 +82,10 @@ export const CoordinatorBoardItem = Schema.Struct({
   title: text,
   summary: text,
   at: IsoDateTime,
+  usage: Schema.optional(HandoffUsage),
+  external: Schema.optional(Schema.Boolean),
+  repairState: Schema.optional(Schema.Literals(["sent", "needs-review"])),
+  releaseRequested: Schema.optional(Schema.Boolean),
   scripts: Schema.Array(Schema.Struct({ name: text, status: text })),
   files: Schema.Array(text),
   phase: BoardPhase,
@@ -91,6 +107,9 @@ export const CoordinatorBoardItem = Schema.Struct({
 export type CoordinatorBoardItem = typeof CoordinatorBoardItem.Type;
 export const CoordinatorBoard = Schema.Struct({
   items: Schema.Array(CoordinatorBoardItem),
+  playbook: Schema.optional(text),
+  autoRepair: Schema.optional(Schema.Boolean),
+  githubRelease: Schema.optional(Schema.Boolean),
   overlaps: Schema.Array(FileOverlap),
   questions: Schema.Array(
     Schema.Struct({
@@ -104,6 +123,24 @@ export const CoordinatorBoard = Schema.Struct({
 export type CoordinatorBoard = typeof CoordinatorBoard.Type;
 const selection = Schema.Struct({ id: MessageId, revision: TrimmedNonEmptyString });
 export const CoordinatorBoardAction = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("submitPull"),
+    projectId: ProjectId,
+    url: TrimmedNonEmptyString.check(Schema.isMaxLength(4096)),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("playbook"),
+    projectId: ProjectId,
+    instructions: text.check(Schema.isMaxLength(4000)),
+    autoRepair: Schema.Boolean,
+    githubRelease: Schema.optional(Schema.Boolean),
+  }),
+  Schema.Struct({ type: Schema.Literal("repair"), projectId: ProjectId, item: selection }),
+  Schema.Struct({
+    type: Schema.Literal("release"),
+    projectId: ProjectId,
+    items: Schema.Array(selection).check(Schema.isMinLength(1), Schema.isMaxLength(100)),
+  }),
   Schema.Struct({
     type: Schema.Literal("assets"),
     projectId: ProjectId,

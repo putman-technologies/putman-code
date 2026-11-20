@@ -436,6 +436,14 @@ export interface PullRequestProviderApi {
     }>;
   }) => Effect.Effect<ReadonlyArray<ProviderChangeRequestStat>, PullRequestProviderError>;
 
+  readonly dispatchCoordinatorRelease?: (
+    input: ProviderRepositoryRef & {
+      branch: string;
+      revision: string;
+      requestId: string;
+      pullNumbers: string;
+    },
+  ) => Effect.Effect<void, PullRequestProviderError>;
   readonly coordinatorIncludes?: (input: {
     cwd: string;
     host: string;

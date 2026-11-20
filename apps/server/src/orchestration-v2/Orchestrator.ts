@@ -13,6 +13,9 @@ import {
   runRanAfter,
   usageLimitBlockedRun,
 } from "@t3tools/shared/orchestrationV2ThreadError";
+import { answerBoardQuestion, boardQuestion } from "./CoordinatorBoard.ts";
+import { PullRequestService as BoardPulls } from "../pullRequest/PullRequestService.ts";
+import * as BoardSql from "effect/sql/SqlClient";
 import { coordinatorQuickModel, isRoutineCoordinatorMessage } from "./coordinatorRouting.ts";
 import { canHandOffRun, unfinishedHandoffRunStatuses } from "./projectCoordinatorState.ts";
 import { threadIssueKeysEqual } from "@t3tools/contracts";
@@ -1548,6 +1551,8 @@ const hasRunningDelegatedTasks = (subagents: ReadonlyArray<OrchestrationV2Subage
   );
 
 const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(function* () {
+  const boardDb = Option.getOrUndefined(yield* Effect.serviceOption(BoardSql.SqlClient));
+  const boardPulls = Option.getOrUndefined(yield* Effect.serviceOption(BoardPulls));
   const checkpointService = yield* CheckpointServiceV2;
   const commandPolicy = yield* CommandPolicyV2;
   const contextHandoffService = yield* ContextHandoffServiceV2;
@@ -7764,6 +7769,108 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       !isBufferedProviderNotification(incomingMessage)
     ) {
       modelSelection = queueTailModelSelection(projection);
+    }
+    const directQuestion = boardQuestion(command.text);
+    if (
+      directQuestion &&
+      boardDb &&
+      boardPulls &&
+      isRoutineCoordinatorMessage(projection.thread.projectId, command) &&
+      projection.thread.interactionMode === "default" &&
+      !shouldQueue &&
+      !activeRun &&
+      dispatchMode.type === "start_immediately" &&
+      !pendingMergeBackTransfers.length &&
+      !projection.runtimeRequests.some((r) => r.status === "pending") &&
+      !projection.providerThreads.some((t) => t.goal?.status === "active")
+    ) {
+      const answer = yield* answerBoardQuestion(
+        directQuestion,
+        projection.thread.projectId,
+        boardDb,
+        boardPulls,
+      ).pipe(
+        Effect.orElseSucceed(
+          () => "Coordinator status is unavailable. Refresh the release board to try again.",
+        ),
+      );
+      const now = yield* DateTime.now;
+      const ordinal = yield* nextTurnItemOrdinal(projection);
+      const common = {
+        threadId: command.threadId,
+        runId: null,
+        nodeId: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const turn = {
+        threadId: command.threadId,
+        runId: null,
+        nodeId: null,
+        providerThreadId: null,
+        providerTurnId: null,
+        nativeItemRef: null,
+        parentItemId: null,
+        title: null,
+        startedAt: now,
+        completedAt: now,
+        updatedAt: now,
+        status: "completed" as const,
+      };
+      for (const role of ["user", "assistant"] as const) {
+        const user = role === "user";
+        const id = user ? command.messageId : MessageId.make("board-answer:" + command.messageId);
+        const text = user
+          ? command.text
+          : answer + "\n\nSource: project release board · No model used.";
+        const createdBy = user ? ("user" as const) : ("system" as const);
+        yield* emit(
+          events,
+          command,
+        )({
+          type: "message.updated",
+          threadId: command.threadId,
+          occurredAt: now,
+          payload: {
+            ...common,
+            id,
+            role,
+            text,
+            attachments: [],
+            streaming: false,
+            createdBy,
+            creationSource: user ? command.creationSource : "server",
+          },
+        });
+        const base = {
+          ...turn,
+          id: user
+            ? idAllocator.derive.userTurnItem({ messageId: id })
+            : TurnItemId.make("board-answer:" + id),
+          messageId: id,
+          text,
+          ordinal: ordinal + (user ? 0 : 1),
+          attachments: [],
+        };
+        yield* emit(
+          events,
+          command,
+        )({
+          type: "turn-item.updated",
+          threadId: command.threadId,
+          occurredAt: now,
+          payload: user
+            ? {
+                ...base,
+                type: "user_message",
+                inputIntent: "turn_start",
+                createdBy: "user",
+                creationSource: command.creationSource,
+              }
+            : { ...base, type: "assistant_message", streaming: false },
+        });
+      }
+      return;
     }
     const workModel = modelSelection;
     if (

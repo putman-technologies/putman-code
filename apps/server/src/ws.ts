@@ -121,6 +121,7 @@ import {
   readCoordinatorBoard,
   readCoordinatorOverlaps,
   actOnCoordinatorBoard,
+  reconcileCoordinatorQueues,
   saveBoardHandoff,
   retryCoordinatorChecks,
 } from "./orchestration-v2/CoordinatorBoard.ts";
@@ -263,6 +264,7 @@ import * as IssueTrackerConnections from "./issue/IssueTrackerConnections.ts";
 import * as PullRequestReviewGuideService from "./pullRequest/PullRequestReviewGuideService.ts";
 import { listLinkedPullRequestThreads } from "./pullRequest/linkedThreads.ts";
 import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
+import * as CoordinatorSchedule from "effect/Schedule";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
@@ -2064,7 +2066,7 @@ export const layerWsRpc = (
                     instance?.enabled ? instance.snapshot.getSnapshot : Effect.undefined,
                   ),
                 ),
-            saveBoardHandoff(sql),
+            saveBoardHandoff(sql, usage.estimateCoordinatorTurn),
           ),
         [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: (input) => threadManagement.stopWorkflow(input),
         [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: (input) =>
@@ -3637,6 +3639,18 @@ export const layer = Layer.unwrap(
     const peerLinks = yield* PeerLinks.PeerLinks;
     const peerLinkRequests = yield* PeerLinkRequests.PeerLinkRequests;
     const sql = yield* SqlClient.SqlClient;
+    const coordinatorProjects = yield* ProjectService.ProjectService;
+    const coordinatorThreads = yield* ThreadManagementService.ThreadManagementService;
+    yield* reconcileCoordinatorQueues(
+      sql,
+      coordinatorProjects,
+      coordinatorThreads,
+      pullRequests,
+    ).pipe(
+      Effect.ignore,
+      Effect.repeat({ schedule: CoordinatorSchedule.spaced("90 seconds") }),
+      Effect.forkScoped,
+    );
     return HttpRouter.add(
       "GET",
       "/ws",
