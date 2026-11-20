@@ -4,6 +4,7 @@ on:
   push:
     branches: [feature/project-coordinator]
     paths:
+      - ".gitmodules"
       - ".github/workflows/putmancode-coordinator-checks.yml"
       - "apps/web/src/components/chat/CoordinatorBoard*"
       - "apps/server/src/orchestration-v2/**"
