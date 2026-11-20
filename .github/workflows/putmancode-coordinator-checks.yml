@@ -1,0 +1,50 @@
+name: PutmanCode coordinator checks
+
+on:
+  push:
+    branches: [feature/project-coordinator]
+    paths:
+      - ".github/workflows/putmancode-coordinator-checks.yml"
+      - "apps/web/src/components/chat/CoordinatorBoard*"
+      - "apps/server/src/orchestration-v2/**"
+      - "apps/server/src/device/**"
+      - "apps/server/src/project/AgentSessionScanner*"
+      - "apps/server/src/pullRequest/**"
+      - "packages/source-control-github/**"
+      - "packages/contracts/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: putmancode-coordinator-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coordinator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
+          sparse-checkout-cone-mode: false
+      - uses: ./.github/actions/setup-ci-deps
+      - name: Install Chromium
+        run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
+      - name: Test the release board in Chromium
+        working-directory: apps/web
+        run: vp test run --project browser src/components/chat/CoordinatorBoard.browser.test.tsx
+      - name: Test coordinator handoffs and local storage isolation
+        working-directory: apps/server
+        run: >-
+          vp test run
+          src/orchestration-v2/ThreadStop.test.ts
+          src/orchestration-v2/coordinatorBoardState.test.ts
+          src/device/sshDeviceScript.test.ts
+          src/project/AgentSessionScanner.test.ts

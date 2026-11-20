@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { act, render } from "../../../test/render";
-import { AsyncResult } from "effect/reactivity";
+import { AtomRegistry, AsyncResult } from "effect/reactivity";
+import { RegistryContext } from "@effect/atom-react";
+import { coordinatorBoardQuery } from "../../state/projects";
 import {
   EnvironmentId,
   MessageId,
@@ -15,10 +17,12 @@ const action = vi.fn();
 const boards = new Map<ProjectId, CoordinatorBoard>();
 vi.mock("../../state/projects", async () => {
   const { Atom } = await import("effect/reactivity");
+  const byProject = Atom.family((id: ProjectId) =>
+    Atom.make(() => AsyncResult.success(boards.get(id)!)),
+  );
   return {
-    coordinatorBoardQuery: Atom.family(({ input }: { input: { projectId: ProjectId } }) =>
-      Atom.make(() => AsyncResult.success(boards.get(input.projectId)!)),
-    ),
+    coordinatorBoardQuery: ({ input }: { input: { projectId: ProjectId } }) =>
+      byProject(input.projectId),
     coordinatorOverlapsQuery: vi.fn(),
   };
 });
@@ -93,18 +97,21 @@ describe("release board", () => {
     });
     action.mockResolvedValue(AsyncResult.success({ threadId: coord }));
     const onOpen = vi.fn();
+    const registry = AtomRegistry.make();
 
     const button = (name: string) =>
       Array.from(document.querySelectorAll("button")).find((el) => el.textContent?.trim() === name);
     try {
       await using _screen = await render(
-        <ReleaseBoardButton
-          projects={[
-            { environmentId: env, projectId: one, title: "Accounts" },
-            { environmentId: env, projectId: two, title: "Purchasing" },
-          ]}
-          onOpen={onOpen}
-        />,
+        <RegistryContext.Provider value={registry}>
+          <ReleaseBoardButton
+            projects={[
+              { environmentId: env, projectId: one, title: "Accounts" },
+              { environmentId: env, projectId: two, title: "Purchasing" },
+            ]}
+            onOpen={onOpen}
+          />
+        </RegistryContext.Provider>,
         { router: false },
       );
       await act(async () => button("Release board")!.click());
@@ -116,6 +123,31 @@ describe("release board", () => {
         select.dispatchEvent(new Event("change", { bubbles: true }));
       });
       expect(document.body.textContent).toContain("Invoice detail");
+      const oldPreview = "https://preview.example/old";
+      const newPreview = "https://preview.example/new";
+      const replaceRevision = (revision: string, preview: string) => {
+        const board = boards.get(one)!;
+        boards.set(one, {
+          ...board,
+          items: board.items.map((item) =>
+            item.id === row.id ? { ...item, revision, assets: { ...item.assets, preview } } : item,
+          ),
+        });
+        registry.refresh(coordinatorBoardQuery({ environmentId: env, input: { projectId: one } }));
+      };
+      await act(async () => replaceRevision("editing", oldPreview));
+      await act(async () => button("Invoice detail")!.click());
+      await act(async () => button("Edit preview links")!.click());
+      expect(
+        document.querySelector<HTMLInputElement>('input[value="' + oldPreview + '"]'),
+      ).toBeTruthy();
+      await act(async () => replaceRevision("reviewed", newPreview));
+      expect(button("Save links")).toBeUndefined();
+      await act(async () => button("Invoice detail")!.click());
+      await act(async () => button("Edit preview links")!.click());
+      expect(
+        document.querySelector<HTMLInputElement>('input[value="' + newPreview + '"]'),
+      ).toBeTruthy();
       const history = Array.from(document.querySelectorAll("details")).find((el) =>
         el.querySelector("summary")?.textContent?.includes("Deployment history"),
       );
@@ -134,10 +166,11 @@ describe("release board", () => {
       await act(async () => prepare!.click());
       expect(action).toHaveBeenCalledWith({
         environmentId: env,
-        input: { type: "prepare", projectId: one, items: [{ id: row.id, revision: "revision-a" }] },
+        input: { type: "prepare", projectId: one, items: [{ id: row.id, revision: "reviewed" }] },
       });
       expect(onOpen).toHaveBeenCalledWith(coord, env);
     } finally {
+      registry.dispose();
       boards.clear();
     }
   });

@@ -343,7 +343,7 @@ function ProjectReview({
         )}
         {pending.map((item) => (
           <Handoff
-            key={item.id}
+            key={JSON.stringify([item.id, item.revision])}
             item={item}
             project={project}
             disabled={!allowed || busy}
@@ -380,7 +380,7 @@ function ProjectReview({
             .filter((i) => i.phase === "deployed" || i.phase === "closed")
             .map((item) => (
               <Handoff
-                key={item.id}
+                key={JSON.stringify([item.id, item.revision])}
                 item={item}
                 project={project}
                 disabled
