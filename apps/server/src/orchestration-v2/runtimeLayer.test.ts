@@ -157,7 +157,17 @@ const providerInstance = {
   },
   displayName: "Codex test",
   enabled: true,
-  snapshot: { getSnapshot: Effect.succeed({}) } as unknown as ProviderInstance["snapshot"],
+  snapshot: {
+    getSnapshot: Effect.succeed({
+      instanceId: modelSelection.instanceId,
+      driver,
+      enabled: true,
+      installed: true,
+      status: "ready",
+      auth: { status: "authenticated" },
+      models: [{ slug: "gpt-6-luna", isCustom: false }],
+    }),
+  } as unknown as ProviderInstance["snapshot"],
   orchestrationAdapter,
   textGeneration: {} as ProviderInstance["textGeneration"],
 } satisfies ProviderInstance;
@@ -1874,6 +1884,89 @@ it.layer(layerTest)("OrchestrationV2LayerLive", (it) => {
           );
           assert.deepEqual(yield* outbox.listByCommandId(commandId), []);
         }
+      }
+    }).pipe(Effect.provide(Layer.fresh(layerTest))),
+  );
+
+  it.effect("routes coordinator turns independently across queued requests and steers", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const projectId = ProjectId.make("routing/project");
+      const threadId = ThreadId.make("coordinator-routing%2Fproject-0");
+      const now = yield* DateTime.now;
+      yield* seedProject({
+        projectId,
+        title: "Routing",
+        workspaceRoot: process.cwd(),
+        defaultModelSelection: modelSelection,
+        createdAt: DateTime.formatIso(now),
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("route:create"),
+        threadId,
+        projectId,
+        title: "Coordinator",
+        modelSelection,
+        runtimeMode: "approval-required",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+      });
+      const send = (id: string, text: string, steer?: RunId) =>
+        orchestrator.dispatch({
+          type: "message.dispatch",
+          createdBy: "user",
+          creationSource: "web",
+          threadId,
+          commandId: CommandId.make(id),
+          messageId: MessageId.make(id),
+          text,
+          attachments: [],
+          dispatchMode: steer
+            ? { type: "steer_active", targetRunId: steer }
+            : { type: "queue_after_active" },
+        });
+      yield* send("route:status", "What's the status?");
+      const initial = yield* orchestrator.getThreadProjection(threadId);
+      assert.deepEqual(initial.thread.modelSelection, modelSelection);
+      assert.equal(initial.runs[0]!.modelSelection.model, "gpt-6-luna");
+      assert.deepEqual(initial.runs[0]!.coordinatorWorkModel, modelSelection);
+      yield* send("route:recap", "Recap this thread");
+      yield* send("route:work", "Fix the failing tests", initial.runs[0]!.id);
+      yield* send("route:handoff", "Feature handoff from Payroll. Review the changes and run CI.");
+      const queued = yield* orchestrator.getThreadProjection(threadId);
+      assert.deepEqual(
+        queued.runs.map((r) => r.modelSelection.model),
+        ["gpt-6-luna", "gpt-6-luna", modelSelection.model, modelSelection.model],
+      );
+      assert.deepEqual(queued.thread.modelSelection, modelSelection);
+      assert.equal(queued.runs[2]!.status, "queued");
+      yield* send("route:work", "Fix the failing tests", initial.runs[0]!.id);
+      assert.lengthOf((yield* orchestrator.getThreadProjection(threadId)).runs, 4);
+      const sink = yield* EventSink.EventSinkV2;
+      for (const [i, expected] of ["gpt-6-luna", modelSelection.model].entries()) {
+        const run = (yield* orchestrator.getThreadProjection(threadId)).runs[i]!;
+        yield* sink.write({
+          commandId: CommandId.make("route:complete:" + i),
+          events: [
+            {
+              id: EventId.make("route:completed:" + i),
+              type: "run.updated",
+              threadId,
+              runId: run.id,
+              occurredAt: now,
+              payload: { ...run, status: "completed", startedAt: now, completedAt: now },
+            },
+          ],
+        });
+        yield* orchestrator.resumeQueuedRuns;
+        const next = yield* orchestrator.getThreadProjection(threadId);
+        assert.equal(next.runs[i + 1]!.status, "starting");
+        assert.equal(next.runs[i + 1]!.modelSelection.model, expected);
+        assert.deepEqual(next.thread.modelSelection, modelSelection);
       }
     }).pipe(Effect.provide(Layer.fresh(layerTest))),
   );

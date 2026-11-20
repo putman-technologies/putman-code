@@ -254,6 +254,7 @@ export const make = Effect.gen(function* () {
       threadForceStop: true,
       guardedSettledDeletion: true,
       projectCoordinator: true,
+      coordinatorModelRouting: true,
       coordinatorStatus: true,
       environmentThemes: true,
       usageLimitSources: true,

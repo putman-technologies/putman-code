@@ -2816,7 +2816,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (!isDesktopPreviewVersion(version)) {
     const publishConfig = yield* resolveGitHubPublishConfig(
       updateChannel,
-      signed && !mockUpdates ? "austin-putmantech/putman-code" : "",
+      signed && !mockUpdates ? "putman-technologies/putman-code" : "",
     );
     if (publishConfig) {
       buildConfig.publish = [publishConfig];

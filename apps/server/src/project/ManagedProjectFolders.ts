@@ -199,7 +199,7 @@ function namedProjectReadme(name: string): string {
     "",
     `# ${name}`,
     "",
-    "Created in [PutmanCode](https://github.com/austin-putmantech/putman-code).",
+    "Created in [PutmanCode](https://github.com/putman-technologies/putman-code).",
     "",
   ].join("\n");
 }

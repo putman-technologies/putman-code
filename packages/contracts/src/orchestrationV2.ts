@@ -735,6 +735,8 @@ export const OrchestrationV2Run = Schema.Struct({
   ordinal: PositiveInt,
   providerInstanceId: ProviderInstanceId,
   modelSelection: ModelSelection,
+  /** A routine coordinator run may use a lighter model while the thread keeps its work model. */
+  coordinatorWorkModel: Schema.optional(ModelSelection),
   providerThreadId: Schema.NullOr(ProviderThreadId),
   userMessageId: MessageId,
   rootNodeId: Schema.NullOr(NodeId),
@@ -4228,6 +4230,11 @@ export const OrchestrationV2ThreadStreamItem = withRecordIdTable(
   (item) => (item.kind === "snapshot" ? "projection" : undefined),
 );
 export type OrchestrationV2ThreadStreamItem = typeof OrchestrationV2ThreadStreamItem.Type;
+
+export function isProjectCoordinatorThread(projectId: ProjectId, threadId: ThreadId): boolean {
+  const prefix = `coordinator-${encodeURIComponent(projectId)}-`;
+  return threadId.startsWith(prefix) && /^\d+$/u.test(threadId.slice(prefix.length));
+}
 
 export const CoordinatorStatus = Schema.Literals([
   "idle",

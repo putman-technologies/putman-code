@@ -13,6 +13,7 @@ import {
   runRanAfter,
   usageLimitBlockedRun,
 } from "@t3tools/shared/orchestrationV2ThreadError";
+import { coordinatorQuickModel, isRoutineCoordinatorMessage } from "./coordinatorRouting.ts";
 import { canHandOffRun, unfinishedHandoffRunStatuses } from "./projectCoordinatorState.ts";
 import { threadIssueKeysEqual } from "@t3tools/contracts";
 import { canonicalizeGitCafePullRequestUrl } from "@t3tools/source-control-definitions/registry";
@@ -1052,14 +1053,13 @@ function queuedRunModelSelection(
 function queueTailModelSelection(
   projection: Pick<OrchestrationV2ThreadProjection, "thread" | "runs" | "messages">,
 ): ModelSelection {
-  return (
-    queuedRunsInDeliveryOrder(projection).findLast(
-      (run) =>
-        !followsCurrentConversation(
-          projection.messages.find((message) => message.id === run.userMessageId),
-        ),
-    )?.modelSelection ?? projection.thread.modelSelection
+  const last = queuedRunsInDeliveryOrder(projection).findLast(
+    (run) =>
+      !followsCurrentConversation(
+        projection.messages.find((message) => message.id === run.userMessageId),
+      ),
   );
+  return last?.coordinatorWorkModel ?? last?.modelSelection ?? projection.thread.modelSelection;
 }
 
 /**
@@ -2460,9 +2460,20 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const queuedMessage = projection.messages.find(
         (candidate) => candidate.id === storedQueuedRun.userMessageId,
       );
-      const modelSelection = queuedRunModelSelection(projection, storedQueuedRun);
+      const workModel = storedQueuedRun.coordinatorWorkModel;
+      const quickModel =
+        workModel && providerAdapters.getModelCatalog
+          ? coordinatorQuickModel(
+              yield* providerAdapters.getModelCatalog(workModel.instanceId),
+              workModel,
+              projection.thread.worktreePath,
+            )
+          : undefined;
+      const modelSelection =
+        quickModel ?? workModel ?? queuedRunModelSelection(projection, storedQueuedRun);
       const queuedRun = {
         ...storedQueuedRun,
+        ...(workModel && !quickModel ? { coordinatorWorkModel: undefined } : {}),
         modelSelection,
         providerInstanceId: modelSelection.instanceId,
       };
@@ -3117,7 +3128,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         : "Provider or model selection changed.";
       yield* writeSystemEvents(
         [
-          ...(selectionChanged
+          ...(!modelSelectionsEqual(
+            projection.thread.modelSelection,
+            queuedRun.coordinatorWorkModel ?? queuedRun.modelSelection,
+          )
             ? [
                 {
                   type:
@@ -3130,7 +3144,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                   payload: {
                     ...projection.thread,
                     providerInstanceId: queuedRun.providerInstanceId,
-                    modelSelection: queuedRun.modelSelection,
+                    modelSelection: queuedRun.coordinatorWorkModel ?? queuedRun.modelSelection,
                     updatedAt: now,
                   },
                 },
@@ -7469,6 +7483,18 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         taskIds: delivery.taskIds,
       };
     }
+    // A follow-up to a lightweight response gets its own routing decision and cannot steer work into the smaller model.
+    if (
+      (dispatchMode.type === "steer_active" || dispatchMode.type === "restart_active") &&
+      command.createdBy === "user" &&
+      !command.notification &&
+      !command.delegatedCompletion
+    ) {
+      const targetId = dispatchMode.targetRunId;
+      if (projection.runs.find((run) => run.id === targetId)?.coordinatorWorkModel) {
+        dispatchMode = { type: "queue_after_active" };
+      }
+    }
     // A steer that switches provider needs a new turn. A provider that cannot restart its
     // turn for new input takes it after the turn, like a provider that cannot steer at all.
     // An explicit steer that Stop reached still fails below.
@@ -7739,6 +7765,22 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     ) {
       modelSelection = queueTailModelSelection(projection);
     }
+    const workModel = modelSelection;
+    if (
+      isRoutineCoordinatorMessage(projection.thread.projectId, command) &&
+      projection.thread.interactionMode === "default" &&
+      !projection.runtimeRequests.some((request) => request.status === "pending") &&
+      !projection.providerThreads.some((thread) => thread.goal?.status === "active") &&
+      !pendingMergeBackTransfers.length &&
+      !steerWhenReadyRunId &&
+      providerAdapters.getModelCatalog
+    ) {
+      const catalog = yield* providerAdapters.getModelCatalog(workModel.instanceId);
+      modelSelection =
+        coordinatorQuickModel(catalog, workModel, projection.thread.worktreePath) ?? workModel;
+    }
+    const coordinatorRoute =
+      modelSelection === workModel ? {} : { coordinatorWorkModel: workModel };
     yield* ensureGoalCommandSupported(command, command, modelSelection.instanceId);
     // Client messages resume held queues; server continuations and scheduled tasks do not.
     // Provider failure or usage limits re-hold the queue.
@@ -7911,6 +7953,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ordinal,
         providerInstanceId: modelSelection.instanceId,
         modelSelection,
+        ...coordinatorRoute,
         providerThreadId: queuedProviderThread.id,
         userMessageId: command.messageId,
         rootNodeId,
@@ -8145,7 +8188,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     );
     const now = yield* DateTime.now;
     if (
-      !modelSelectionsEqual(projection.thread.modelSelection, modelSelection) ||
+      !modelSelectionsEqual(projection.thread.modelSelection, workModel) ||
       projection.thread.providerInstanceId !== modelSelection.instanceId
     ) {
       yield* emit(
@@ -8162,7 +8205,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         payload: {
           ...projection.thread,
           providerInstanceId: modelSelection.instanceId,
-          modelSelection,
+          modelSelection: workModel,
           updatedAt: now,
         },
       });
@@ -8350,6 +8393,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ordinal,
         providerInstanceId: modelSelection.instanceId,
         modelSelection,
+        ...coordinatorRoute,
         providerThreadId,
         userMessageId: command.messageId,
         rootNodeId,

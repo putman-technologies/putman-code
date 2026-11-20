@@ -2,7 +2,11 @@ import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { msg, T, useGT, useMessages } from "gt-react";
 import { m } from "../i18n/messages";
 import { attachSidebarTree } from "../lib/sidebarTree";
-import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
+import {
+  isProjectCoordinatorThread,
+  type EnvironmentId,
+  type ScopedProjectRef,
+} from "@t3tools/contracts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
 import {
   dropThreadContext,
@@ -664,10 +668,8 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
   for (const thread of visible) {
     const configLoaded = serverConfigs.has(thread.environmentId);
     const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
-    const coordinatorPrefix = `coordinator-${encodeURIComponent(thread.projectId)}-`;
     if (
-      thread.id.startsWith(coordinatorPrefix) &&
-      /^\d+$/.test(thread.id.slice(coordinatorPrefix.length)) &&
+      isProjectCoordinatorThread(thread.projectId, thread.id) &&
       thread.settledOverride !== "settled" &&
       !effectiveSnoozed(thread, { now: preciseNow })
     ) {
@@ -1987,8 +1989,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     if (!targets.length || !checkThreadOperations(targets)) return;
     deletingSettled.current = true;
     setSettledDeleteBusy(true);
-    let kept = 0;
-    try {
+    const deleteConfirmed = async () => {
+      let kept = 0;
       const confirmed = await api.dialogs.confirm(
         [
           gt("{count, plural, one {Delete {count} thread?} other {Delete {count} threads?}}", {
@@ -2013,18 +2015,21 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             description: String(kept),
           }),
         );
-    } catch (error) {
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title: gt("Failed to delete threads"),
-          description: error instanceof Error ? error.message : undefined,
-        }),
-      );
-    } finally {
-      deletingSettled.current = false;
-      setSettledDeleteBusy(false);
-    }
+    };
+    await deleteConfirmed()
+      .catch((error) => {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: gt("Failed to delete threads"),
+            description: error instanceof Error ? error.message : undefined,
+          }),
+        );
+      })
+      .finally(() => {
+        deletingSettled.current = false;
+        setSettledDeleteBusy(false);
+      });
   };
   const hasProjectFolders = projectFolders !== null && projectFolders.length > 0;
   const sidebarListItemsFresh = ((): readonly SidebarListItem[] => {

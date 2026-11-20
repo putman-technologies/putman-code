@@ -5,7 +5,9 @@ import {
   ThreadId,
   isListedThreadLineage,
   isOrchestrationV2WorkActive,
+  isProjectCoordinatorThread,
   type ModelSelection,
+  type ServerProvider,
   type OrchestrationV2RpcSchemas,
   type Project,
   type RunId,
@@ -18,9 +20,11 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import type * as Projects from "../project/ProjectService.ts";
 import type { ThreadManagementServiceShape } from "./ThreadManagementService.ts";
+import { initialCoordinatorModel } from "./coordinatorRouting.ts";
 import { canHandOffRun, unfinishedHandoffRunStatuses } from "./projectCoordinatorState.ts";
 
 type Input = typeof OrchestrationV2RpcSchemas.projectCoordinator.input.Type;
+type ReadCatalog = (id: ModelSelection["instanceId"]) => Effect.Effect<ServerProvider | undefined>;
 type ReadCheckout = (
   cwd: string,
 ) => Effect.Effect<Pick<
@@ -35,6 +39,7 @@ const ensureCoordinator = Effect.fn("ProjectCoordinator.ensure")(function* (
   threads: ThreadManagementServiceShape,
   project: Project,
   model: ModelSelection,
+  readCatalog: ReadCatalog,
 ) {
   // A deleted coordinator keeps its identity and history. Its successor gets the next slot.
   for (let slot = 0; ; slot++) {
@@ -50,7 +55,13 @@ const ensureCoordinator = Effect.fn("ProjectCoordinator.ensure")(function* (
         commandId: createId,
         createdBy: "user",
         creationSource: "web",
-        modelSelection: project.defaultModelSelection ?? model,
+        modelSelection:
+          project.defaultModelSelection ??
+          initialCoordinatorModel(
+            yield* readCatalog(model.instanceId),
+            model,
+            project.workspaceRoot,
+          ),
         runtimeMode: "approval-required",
         interactionMode: "default",
         branch: null,
@@ -88,20 +99,21 @@ const handoff = Effect.fn("ProjectCoordinator.handoff")(function* (
   threads: ThreadManagementServiceShape,
   project: Project,
   readCheckout: ReadCheckout,
+  readCatalog: ReadCatalog,
 ) {
   const source = yield* threads.getThreadShell(input.threadId);
   if (
     !source ||
     source.projectId !== project.id ||
     !isListedThreadLineage(source.lineage) ||
-    source.id.startsWith(`coordinator-${encodeURIComponent(project.id)}-`)
+    isProjectCoordinatorThread(project.id, source.id)
   ) {
     return yield* fail("Choose a feature chat in this project.");
   }
   if (!canHandOffRun(source, input.runId) && source.archivedAt === null) {
     return yield* fail("Finish the current feature turn before sending it to the coordinator.");
   }
-  const targetId = yield* ensureCoordinator(threads, project, source.modelSelection);
+  const targetId = yield* ensureCoordinator(threads, project, source.modelSelection, readCatalog);
   const key = encodeHandoffKey([targetId, source.id, input.runId]);
   const messageId = MessageId.make(`handoff:${key}`);
   const archive = threads.dispatch({
@@ -220,13 +232,14 @@ export const runProjectCoordinator = Effect.fn("ProjectCoordinator.run")(
     projects: Pick<Projects.ProjectService["Service"], "getById">,
     threads: ThreadManagementServiceShape,
     readCheckout: ReadCheckout,
+    readCatalog: ReadCatalog = () => Effect.undefined,
   ) {
     const project = Option.getOrNull(yield* projects.getById(input.projectId));
     if (!project || project.archivedAt) return yield* fail("Choose an active project.");
     const threadId =
       input.action === "open"
-        ? yield* ensureCoordinator(threads, project, input.modelSelection)
-        : yield* handoff(input, threads, project, readCheckout);
+        ? yield* ensureCoordinator(threads, project, input.modelSelection, readCatalog)
+        : yield* handoff(input, threads, project, readCheckout, readCatalog);
     return { threadId };
   },
   Effect.mapError((error) =>

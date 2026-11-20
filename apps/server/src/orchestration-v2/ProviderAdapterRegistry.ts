@@ -2,6 +2,7 @@ import {
   ProviderInstanceId,
   ProviderSetupError,
   type OrchestrationV2ProviderCapabilities,
+  type ServerProvider,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -42,6 +43,9 @@ export interface ProviderAdapterRegistryV2Shape {
   readonly get: (
     instanceId: ProviderInstanceId,
   ) => Effect.Effect<ProviderAdapter.ProviderAdapterV2["Service"], ProviderAdapterRegistryV2Error>;
+  readonly getModelCatalog?: (
+    instanceId: ProviderInstanceId,
+  ) => Effect.Effect<ServerProvider | undefined>;
   readonly list: () => Effect.Effect<ReadonlyArray<ProviderInstanceId>>;
   readonly getMetadata?: (instanceId: ProviderInstanceId) => Effect.Effect<
     {
@@ -130,6 +134,10 @@ export const layerFromProviderInstanceRegistry: Layer.Layer<
         return instances.listInstances.pipe(
           Effect.map((available) => available.map((instance) => instance.instanceId)),
         );
+      }),
+      getModelCatalog: Effect.fn("ProviderAdapterRegistry.getModelCatalog")(function* (instanceId) {
+        const instance = yield* instances.getInstance(instanceId);
+        return instance?.enabled ? yield* instance.snapshot.getSnapshot : undefined;
       }),
       getMetadata: Effect.fn("ProviderAdapterRegistry.getMetadata")(function* (instanceId) {
         const instance = yield* instances.getInstance(instanceId);

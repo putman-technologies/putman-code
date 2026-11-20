@@ -2020,10 +2020,22 @@ export const layerWsRpc = (
         [ORCHESTRATION_V2_WS_METHODS.coordinatorStatus]: ({ projectId }) =>
           readCoordinatorStatus(projectId, sql, threadManagement, pullRequests.coordinatorStatus),
         [ORCHESTRATION_V2_WS_METHODS.projectCoordinator]: (input) =>
-          runProjectCoordinator(input, projectService, threadManagement, (cwd) =>
-            vcsStatusBroadcaster
-              .refreshLocalStatus(cwd)
-              .pipe(Effect.timeout("3 seconds"), Effect.option, Effect.map(Option.getOrNull)),
+          runProjectCoordinator(
+            input,
+            projectService,
+            threadManagement,
+            (cwd) =>
+              vcsStatusBroadcaster
+                .refreshLocalStatus(cwd)
+                .pipe(Effect.timeout("3 seconds"), Effect.option, Effect.map(Option.getOrNull)),
+            (id) =>
+              providerInstances
+                .getInstance(id)
+                .pipe(
+                  Effect.flatMap((instance) =>
+                    instance?.enabled ? instance.snapshot.getSnapshot : Effect.undefined,
+                  ),
+                ),
           ),
         [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: (input) => threadManagement.stopWorkflow(input),
         [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: (input) =>

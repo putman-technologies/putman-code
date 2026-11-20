@@ -68,6 +68,7 @@ import {
   type AssistantCitation,
   type ResponseContextRecord,
   type ChatFileAttachment,
+  isProjectCoordinatorThread,
   isProviderNativeSubagentThread,
   type EnvironmentId,
   type MessageId,
@@ -1271,6 +1272,12 @@ export default function ChatView(props: ChatViewProps) {
   const serverConfig = activeThread
     ? (activeEnvironment?.serverConfig ?? null)
     : (primaryEnvironment?.serverConfig ?? null);
+  const coordinatorRun =
+    activeThread &&
+    serverConfig?.environment.capabilities.coordinatorModelRouting &&
+    isProjectCoordinatorThread(activeThread.projectId, activeThread.id)
+      ? serverProjection?.runs.find((run) => run.id === serverLatestRun?.runId)
+      : undefined;
   const providerEnvironmentId = (activeThread ? activeEnvironment : primaryEnvironment)
     ?.environmentId;
   const gitCwd = activeProject
@@ -3413,14 +3420,18 @@ export default function ChatView(props: ChatViewProps) {
             {inlineRightPanelOwnsTitleBar ? threadPanelHeaderControl : null}
             <ChatHeader
               coordinatorAction={
-                activeProject &&
-                !activeProject.isScratch &&
-                serverConfig?.environment.capabilities.projectCoordinator === true &&
-                !activeThread.id.startsWith(
-                  `coordinator-${encodeURIComponent(activeProject.id)}-`,
-                ) &&
-                activeThread.lineage.relationshipToParent !== "subagent" &&
-                activeThread.lineage.sideChat !== true ? (
+                coordinatorRun ? (
+                  <span className="truncate px-2 text-xs text-muted-foreground">
+                    {coordinatorRun.coordinatorWorkModel
+                      ? gt("Quick · {model}", { model: coordinatorRun.modelSelection.model })
+                      : gt("Work · {model}", { model: coordinatorRun.modelSelection.model })}
+                  </span>
+                ) : activeProject &&
+                  !activeProject.isScratch &&
+                  serverConfig?.environment.capabilities.projectCoordinator === true &&
+                  !isProjectCoordinatorThread(activeProject.id, activeThread.id) &&
+                  activeThread.lineage.relationshipToParent !== "subagent" &&
+                  activeThread.lineage.sideChat !== true ? (
                   <ProjectCoordinatorButton
                     key={activeThreadKey}
                     environmentId={activeThread.environmentId}
