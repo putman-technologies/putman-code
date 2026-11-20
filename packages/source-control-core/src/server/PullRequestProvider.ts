@@ -6,6 +6,8 @@ import type {
   PullRequestAction,
   PullRequestStackHead,
   CoordinatorStatus,
+  CoordinatorChange,
+  ProductionDeployment,
   PullRequestActor,
   PullRequestReferenceCandidate,
   PullRequestReferenceSigil,
@@ -434,6 +436,19 @@ export interface PullRequestProviderApi {
     }>;
   }) => Effect.Effect<ReadonlyArray<ProviderChangeRequestStat>, PullRequestProviderError>;
 
+  readonly coordinatorIncludes?: (input: {
+    cwd: string;
+    host: string;
+    repository: string;
+    base: string;
+    head: string;
+  }) => Effect.Effect<boolean | null, PullRequestProviderError>;
+  readonly coordinatorChange?: (
+    input: ProviderRepositoryRef & { readonly number: number },
+  ) => Effect.Effect<CoordinatorChange | null, PullRequestProviderError>;
+  readonly coordinatorProduction?: (
+    input: ProviderRepositoryRef,
+  ) => Effect.Effect<readonly ProductionDeployment[] | null, PullRequestProviderError>;
   readonly coordinatorStatus?: (
     input: ProviderRepositoryRef & { readonly number: number },
   ) => Effect.Effect<CoordinatorStatus, PullRequestProviderError>;

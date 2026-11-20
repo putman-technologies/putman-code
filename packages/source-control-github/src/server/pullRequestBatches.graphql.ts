@@ -430,34 +430,34 @@ export declare namespace PullRequestWatchFingerprint {
 }
 
 /** Describes the status of a given deployment attempt. */
-export const DeploymentStatus = Schema.Struct({
+export const CoordinatorReleaseRepositoryPullRequestMergeCommitDeploymentsNodesLatestStatusDeploymentStatus = Schema.Struct({
   /** Identifies the current state of the deployment. */
   state: GraphQL.enumLiterals(Shared.DeploymentStatusState.literals)
 })
-export interface DeploymentStatus extends Schema.Struct.Type<typeof DeploymentStatus.fields> {}
+export interface CoordinatorReleaseRepositoryPullRequestMergeCommitDeploymentsNodesLatestStatusDeploymentStatus extends Schema.Struct.Type<typeof CoordinatorReleaseRepositoryPullRequestMergeCommitDeploymentsNodesLatestStatusDeploymentStatus.fields> {}
 
 /** Represents triggered deployment instance. */
-export const Deployment = Schema.Struct({
+export const CoordinatorReleaseRepositoryPullRequestMergeCommitDeploymentsNodesDeployment = Schema.Struct({
   /** The latest status of this deployment. */
-  latestStatus: Schema.NullOr(DeploymentStatus)
+  latestStatus: Schema.NullOr(CoordinatorReleaseRepositoryPullRequestMergeCommitDeploymentsNodesLatestStatusDeploymentStatus)
 })
-export interface Deployment extends Schema.Struct.Type<typeof Deployment.fields> {}
+export interface CoordinatorReleaseRepositoryPullRequestMergeCommitDeploymentsNodesDeployment extends Schema.Struct.Type<typeof CoordinatorReleaseRepositoryPullRequestMergeCommitDeploymentsNodesDeployment.fields> {}
 
 /** The connection type for Deployment. */
-export const DeploymentConnection = Schema.Struct({
+export const CoordinatorReleaseRepositoryPullRequestMergeCommitDeploymentsDeploymentConnection = Schema.Struct({
   /** A list of nodes. */
-  nodes: Schema.NullOr(Schema.Array(Schema.NullOr(Deployment)))
+  nodes: Schema.NullOr(Schema.Array(Schema.NullOr(CoordinatorReleaseRepositoryPullRequestMergeCommitDeploymentsNodesDeployment)))
 })
-export interface DeploymentConnection extends Schema.Struct.Type<typeof DeploymentConnection.fields> {}
+export interface CoordinatorReleaseRepositoryPullRequestMergeCommitDeploymentsDeploymentConnection extends Schema.Struct.Type<typeof CoordinatorReleaseRepositoryPullRequestMergeCommitDeploymentsDeploymentConnection.fields> {}
 
 /** Represents a Git commit. */
-export const MergeCommitCommit = Schema.Struct({
+export const CoordinatorReleaseRepositoryPullRequestMergeCommitCommit = Schema.Struct({
   /** Check and Status rollup information for this commit. */
   statusCheckRollup: Schema.NullOr(PullRequestSummaryRepositoryPullRequestCommitsNodesCommitStatusCheckRollupStatusCheckRollup),
   /** The deployments associated with a commit. */
-  deployments: Schema.NullOr(DeploymentConnection)
+  deployments: Schema.NullOr(CoordinatorReleaseRepositoryPullRequestMergeCommitDeploymentsDeploymentConnection)
 })
-export interface MergeCommitCommit extends Schema.Struct.Type<typeof MergeCommitCommit.fields> {}
+export interface CoordinatorReleaseRepositoryPullRequestMergeCommitCommit extends Schema.Struct.Type<typeof CoordinatorReleaseRepositoryPullRequestMergeCommitCommit.fields> {}
 
 /** A repository pull request. */
 export const CoordinatorReleaseRepositoryPullRequestPullRequest = Schema.Struct({
@@ -468,7 +468,7 @@ export const CoordinatorReleaseRepositoryPullRequestPullRequest = Schema.Struct(
   /** A list of commits present in this pull request's head branch not present in the base branch. */
   commits: PullRequestSummaryRepositoryPullRequestCommitsPullRequestCommitConnection,
   /** The commit that was created when this pull request was merged. */
-  mergeCommit: Schema.NullOr(MergeCommitCommit)
+  mergeCommit: Schema.NullOr(CoordinatorReleaseRepositoryPullRequestMergeCommitCommit)
 })
 export interface CoordinatorReleaseRepositoryPullRequestPullRequest extends Schema.Struct.Type<typeof CoordinatorReleaseRepositoryPullRequestPullRequest.fields> {}
 
@@ -507,5 +507,205 @@ export declare namespace CoordinatorRelease {
   export type Result = typeof CoordinatorRelease.result.Type
 }
 
+/** Describes the status of a given deployment attempt. */
+export const CommitDeploymentsNodesLatestStatusDeploymentStatus = Schema.Struct({
+  /** Identifies the current state of the deployment. */
+  state: GraphQL.enumLiterals(Shared.DeploymentStatusState.literals),
+  /** Identifies the environment URL of the deployment. */
+  environmentUrl: Schema.NullOr(Shared.URI)
+})
+export interface CommitDeploymentsNodesLatestStatusDeploymentStatus extends Schema.Struct.Type<typeof CommitDeploymentsNodesLatestStatusDeploymentStatus.fields> {}
+
+/** Represents triggered deployment instance. */
+export const CommitDeploymentsNodesDeployment = Schema.Struct({
+  /** The latest environment to which this deployment was made. */
+  environment: Schema.NullOr(Schema.String),
+  /** The latest status of this deployment. */
+  latestStatus: Schema.NullOr(CommitDeploymentsNodesLatestStatusDeploymentStatus)
+})
+export interface CommitDeploymentsNodesDeployment extends Schema.Struct.Type<typeof CommitDeploymentsNodesDeployment.fields> {}
+
+/** The connection type for Deployment. */
+export const CommitDeploymentsDeploymentConnection = Schema.Struct({
+  /** A list of nodes. */
+  nodes: Schema.NullOr(Schema.Array(Schema.NullOr(CommitDeploymentsNodesDeployment)))
+})
+export interface CommitDeploymentsDeploymentConnection extends Schema.Struct.Type<typeof CommitDeploymentsDeploymentConnection.fields> {}
+
+/** Represents a Git commit. */
+export const CoordinatorChangeRepositoryPullRequestCommitsNodesCommitCommit = Schema.Struct({
+  /** Check and Status rollup information for this commit. */
+  statusCheckRollup: Schema.NullOr(PullRequestSummaryRepositoryPullRequestCommitsNodesCommitStatusCheckRollupStatusCheckRollup),
+  /** The deployments associated with a commit. */
+  deployments: Schema.NullOr(CommitDeploymentsDeploymentConnection)
+})
+export interface CoordinatorChangeRepositoryPullRequestCommitsNodesCommitCommit extends Schema.Struct.Type<typeof CoordinatorChangeRepositoryPullRequestCommitsNodesCommitCommit.fields> {}
+
+/** Represents a Git commit part of a pull request. */
+export const CoordinatorChangeRepositoryPullRequestCommitsNodesPullRequestCommit = Schema.Struct({
+  /** The Git commit object */
+  commit: CoordinatorChangeRepositoryPullRequestCommitsNodesCommitCommit
+})
+export interface CoordinatorChangeRepositoryPullRequestCommitsNodesPullRequestCommit extends Schema.Struct.Type<typeof CoordinatorChangeRepositoryPullRequestCommitsNodesPullRequestCommit.fields> {}
+
+/** The connection type for PullRequestCommit. */
+export const CoordinatorChangeRepositoryPullRequestCommitsPullRequestCommitConnection = Schema.Struct({
+  /** A list of nodes. */
+  nodes: Schema.NullOr(Schema.Array(Schema.NullOr(CoordinatorChangeRepositoryPullRequestCommitsNodesPullRequestCommit)))
+})
+export interface CoordinatorChangeRepositoryPullRequestCommitsPullRequestCommitConnection extends Schema.Struct.Type<typeof CoordinatorChangeRepositoryPullRequestCommitsPullRequestCommitConnection.fields> {}
+
+/** Describes the status of a given deployment attempt. */
+export const CoordinatorChangeRepositoryPullRequestMergeCommitDeploymentsNodesLatestStatusDeploymentStatus = Schema.Struct({
+  /** Identifies the current state of the deployment. */
+  state: GraphQL.enumLiterals(Shared.DeploymentStatusState.literals),
+  /** Identifies the date and time when the object was created. */
+  createdAt: Shared.DateTime
+})
+export interface CoordinatorChangeRepositoryPullRequestMergeCommitDeploymentsNodesLatestStatusDeploymentStatus extends Schema.Struct.Type<typeof CoordinatorChangeRepositoryPullRequestMergeCommitDeploymentsNodesLatestStatusDeploymentStatus.fields> {}
+
+/** Represents triggered deployment instance. */
+export const CoordinatorChangeRepositoryPullRequestMergeCommitDeploymentsNodesDeployment = Schema.Struct({
+  /** The latest status of this deployment. */
+  latestStatus: Schema.NullOr(CoordinatorChangeRepositoryPullRequestMergeCommitDeploymentsNodesLatestStatusDeploymentStatus)
+})
+export interface CoordinatorChangeRepositoryPullRequestMergeCommitDeploymentsNodesDeployment extends Schema.Struct.Type<typeof CoordinatorChangeRepositoryPullRequestMergeCommitDeploymentsNodesDeployment.fields> {}
+
+/** The connection type for Deployment. */
+export const CoordinatorChangeRepositoryPullRequestMergeCommitDeploymentsDeploymentConnection = Schema.Struct({
+  /** A list of nodes. */
+  nodes: Schema.NullOr(Schema.Array(Schema.NullOr(CoordinatorChangeRepositoryPullRequestMergeCommitDeploymentsNodesDeployment)))
+})
+export interface CoordinatorChangeRepositoryPullRequestMergeCommitDeploymentsDeploymentConnection extends Schema.Struct.Type<typeof CoordinatorChangeRepositoryPullRequestMergeCommitDeploymentsDeploymentConnection.fields> {}
+
+/** Represents a Git commit. */
+export const CoordinatorChangeRepositoryPullRequestMergeCommitCommit = Schema.Struct({
+  /** The Git object ID */
+  oid: Shared.GitObjectID,
+  /** The deployments associated with a commit. */
+  deployments: Schema.NullOr(CoordinatorChangeRepositoryPullRequestMergeCommitDeploymentsDeploymentConnection)
+})
+export interface CoordinatorChangeRepositoryPullRequestMergeCommitCommit extends Schema.Struct.Type<typeof CoordinatorChangeRepositoryPullRequestMergeCommitCommit.fields> {}
+
+/** A repository pull request. */
+export const CoordinatorChangeRepositoryPullRequestPullRequest = Schema.Struct({
+  /** The body as Markdown. */
+  body: Schema.String,
+  /** Identifies the state of the pull request. */
+  state: GraphQL.enumLiterals(Shared.PullRequestState.literals),
+  /** Identifies if the pull request is a draft. */
+  isDraft: Schema.Boolean,
+  /** Identifies the oid of the head ref associated with the pull request, even if the ref has been deleted. */
+  headRefOid: Shared.GitObjectID,
+  /** The current status of this pull request with respect to code review. */
+  reviewDecision: Schema.NullOr(GraphQL.enumLiterals(Shared.PullRequestReviewDecision.literals)),
+  /** Whether or not the pull request can be merged based on the existence of merge conflicts. */
+  mergeable: GraphQL.enumLiterals(Shared.MergeableState.literals),
+  /** A list of commits present in this pull request's head branch not present in the base branch. */
+  commits: CoordinatorChangeRepositoryPullRequestCommitsPullRequestCommitConnection,
+  /** The commit that was created when this pull request was merged. */
+  mergeCommit: Schema.NullOr(CoordinatorChangeRepositoryPullRequestMergeCommitCommit)
+})
+export interface CoordinatorChangeRepositoryPullRequestPullRequest extends Schema.Struct.Type<typeof CoordinatorChangeRepositoryPullRequestPullRequest.fields> {}
+
+/** A repository contains the content for a project. */
+export const CoordinatorChangeRepositoryRepository = Schema.Struct({
+  /** Returns a single pull request from the current repository by number. */
+  pullRequest: Schema.NullOr(CoordinatorChangeRepositoryPullRequestPullRequest)
+})
+export interface CoordinatorChangeRepositoryRepository extends Schema.Struct.Type<typeof CoordinatorChangeRepositoryRepository.fields> {}
+
+/** `query CoordinatorChange` */
+export const CoordinatorChange = GraphQL.query("CoordinatorChange", {
+  document: {
+    variables: [
+      { name: "owner", body: "String!" },
+      { name: "name", body: "String!" },
+      { name: "number", body: "Int!" }
+    ],
+    selections: [
+      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){pullRequest(number:$", "number", "){body state isDraft headRefOid reviewDecision mergeable commits(last:1){nodes{commit{statusCheckRollup{state}deployments(first:20 orderBy:{field:CREATED_AT direction:DESC}){nodes{environment latestStatus{state environmentUrl}}}}}}mergeCommit{oid deployments(first:1 environments:[\"Production\" \"production\" \"Prod\" \"prod\" \"PRODUCTION\" \"PROD\"]orderBy:{field:CREATED_AT direction:DESC}){nodes{latestStatus{state createdAt}}}}}}"] }
+    ],
+    fragments: []
+  },
+  variables: {
+    owner: Schema.String,
+    name: Schema.String,
+    number: Shared.Int
+  },
+  result: Schema.Struct({
+    /** Lookup a given repository by the owner and repository name. */
+    repository: Schema.NullOr(CoordinatorChangeRepositoryRepository)
+  })
+})
+export declare namespace CoordinatorChange {
+  export type Variables = typeof CoordinatorChange.variables.Type
+  export type Result = typeof CoordinatorChange.result.Type
+}
+
+/** Describes the status of a given deployment attempt. */
+export const RepositoryDeploymentsNodesLatestStatusDeploymentStatus = Schema.Struct({
+  /** Identifies the current state of the deployment. */
+  state: GraphQL.enumLiterals(Shared.DeploymentStatusState.literals),
+  /** Identifies the date and time when the object was created. */
+  createdAt: Shared.DateTime,
+  /** Identifies the environment URL of the deployment. */
+  environmentUrl: Schema.NullOr(Shared.URI)
+})
+export interface RepositoryDeploymentsNodesLatestStatusDeploymentStatus extends Schema.Struct.Type<typeof RepositoryDeploymentsNodesLatestStatusDeploymentStatus.fields> {}
+
+/** Represents triggered deployment instance. */
+export const RepositoryDeploymentsNodesDeployment = Schema.Struct({
+  /** Identifies the oid of the deployment commit, even if the commit has been deleted. */
+  commitOid: Schema.String,
+  /** The latest environment to which this deployment was made. */
+  environment: Schema.NullOr(Schema.String),
+  /** Identifies the date and time when the object was created. */
+  createdAt: Shared.DateTime,
+  /** The latest status of this deployment. */
+  latestStatus: Schema.NullOr(RepositoryDeploymentsNodesLatestStatusDeploymentStatus)
+})
+export interface RepositoryDeploymentsNodesDeployment extends Schema.Struct.Type<typeof RepositoryDeploymentsNodesDeployment.fields> {}
+
+/** The connection type for Deployment. */
+export const RepositoryDeploymentsDeploymentConnection = Schema.Struct({
+  /** A list of nodes. */
+  nodes: Schema.NullOr(Schema.Array(Schema.NullOr(RepositoryDeploymentsNodesDeployment)))
+})
+export interface RepositoryDeploymentsDeploymentConnection extends Schema.Struct.Type<typeof RepositoryDeploymentsDeploymentConnection.fields> {}
+
+/** A repository contains the content for a project. */
+export const CoordinatorProductionRepositoryRepository = Schema.Struct({
+  /** Deployments associated with the repository */
+  deployments: RepositoryDeploymentsDeploymentConnection
+})
+export interface CoordinatorProductionRepositoryRepository extends Schema.Struct.Type<typeof CoordinatorProductionRepositoryRepository.fields> {}
+
+/** `query CoordinatorProduction` */
+export const CoordinatorProduction = GraphQL.query("CoordinatorProduction", {
+  document: {
+    variables: [
+      { name: "owner", body: "String!" },
+      { name: "name", body: "String!" }
+    ],
+    selections: [
+      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){deployments(first:30 environments:[\"Production\" \"production\" \"Prod\" \"prod\" \"PRODUCTION\" \"PROD\"]orderBy:{field:CREATED_AT direction:DESC}){nodes{commitOid environment createdAt latestStatus{state createdAt environmentUrl}}}}"] }
+    ],
+    fragments: []
+  },
+  variables: {
+    owner: Schema.String,
+    name: Schema.String
+  },
+  result: Schema.Struct({
+    /** Lookup a given repository by the owner and repository name. */
+    repository: Schema.NullOr(CoordinatorProductionRepositoryRepository)
+  })
+})
+export declare namespace CoordinatorProduction {
+  export type Variables = typeof CoordinatorProduction.variables.Type
+  export type Result = typeof CoordinatorProduction.result.Type
+}
+
 /** Every operation in pullRequestBatches.graphql. */
-export const PullRequestBatchesGraphQLGroup = GraphQLGroup.make(PullRequestSummary, PullRequestStats, PullRequestStackMembership, PullRequestWatchFingerprint, CoordinatorRelease)
+export const PullRequestBatchesGraphQLGroup = GraphQLGroup.make(PullRequestSummary, PullRequestStats, PullRequestStackMembership, PullRequestWatchFingerprint, CoordinatorRelease, CoordinatorChange, CoordinatorProduction)

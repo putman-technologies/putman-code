@@ -2,6 +2,7 @@ import { OrchestrationMessageContext } from "./composerContext.ts";
 import { withRecordIdTable } from "./orchestrationV2IdTable.ts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import { CoordinatorBoard, CoordinatorBoardAction, FileOverlap } from "./coordinatorBoard.ts";
 import * as Schema from "effect/Schema";
 import * as SchemaAST from "effect/SchemaAST";
 import * as SchemaGetter from "effect/SchemaGetter";
@@ -3872,6 +3873,10 @@ export const ORCHESTRATION_V2_WS_METHODS = {
   getWorkflowScript: "orchestration.getWorkflowScript",
   getNativeChildWork: "orchestration.getNativeChildWork",
   stopWorkflow: "orchestration.stopWorkflow",
+  coordinatorRetry: "orchestration.coordinatorRetry",
+  coordinatorBoard: "orchestration.coordinatorBoard",
+  coordinatorOverlaps: "orchestration.coordinatorOverlaps",
+  coordinatorBoardAction: "orchestration.coordinatorBoardAction",
   coordinatorStatus: "orchestration.coordinatorStatus",
   projectCoordinator: "orchestration.projectCoordinator",
   forceStopThread: "orchestration.forceStopThread",
@@ -4603,6 +4608,25 @@ export const OrchestrationV2RpcSchemas = {
   stopWorkflow: {
     input: OrchestrationV2StopWorkflowInput,
     output: Schema.Void,
+  },
+  coordinatorRetry: {
+    input: Schema.Struct({
+      projectId: ProjectId,
+      host: TrimmedNonEmptyString,
+      repository: TrimmedNonEmptyString,
+      number: PositiveInt,
+      head: TrimmedNonEmptyString,
+    }),
+    output: Schema.Struct({ count: NonNegativeInt }),
+  },
+  coordinatorBoard: { input: Schema.Struct({ projectId: ProjectId }), output: CoordinatorBoard },
+  coordinatorOverlaps: {
+    input: Schema.Struct({ projectId: ProjectId }),
+    output: Schema.Array(FileOverlap),
+  },
+  coordinatorBoardAction: {
+    input: CoordinatorBoardAction,
+    output: Schema.Struct({ threadId: ThreadId }),
   },
   coordinatorStatus: { input: Schema.Struct({ projectId: ProjectId }), output: CoordinatorStatus },
   projectCoordinator: {

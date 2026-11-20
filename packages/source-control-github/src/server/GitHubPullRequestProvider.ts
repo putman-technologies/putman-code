@@ -476,6 +476,12 @@ export const make = Effect.gen(function* () {
         })
         .pipe(Effect.mapError(fail("listChangeRequestStats"))),
 
+    coordinatorIncludes: (input) =>
+      cli.coordinatorIncludes(input).pipe(Effect.mapError(fail("coordinatorIncludes"))),
+    coordinatorChange: (input) =>
+      cli.coordinatorChange(input).pipe(Effect.mapError(fail("coordinatorChange"))),
+    coordinatorProduction: (input) =>
+      cli.coordinatorProduction(input).pipe(Effect.mapError(fail("coordinatorProduction"))),
     coordinatorStatus: (input) =>
       cli.coordinatorStatus(input).pipe(Effect.mapError(fail("coordinatorStatus"))),
     getChangeRequestSummary: (input) =>

@@ -60,3 +60,17 @@ export const coordinatorStatusQuery = createEnvironmentRpcQueryAtomFamily(connec
   refreshIntervalMs: 60_000,
   idleTtlMs: 0,
 });
+
+export const coordinatorBoardQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
+  label: "environment-data:coordinator-board",
+  tag: ORCHESTRATION_V2_WS_METHODS.coordinatorBoard,
+  refreshIntervalMs: 60_000,
+  idleTtlMs: 0,
+});
+
+export const coordinatorOverlapsQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
+  label: "environment-data:coordinator-overlaps",
+  tag: ORCHESTRATION_V2_WS_METHODS.coordinatorOverlaps,
+  refreshIntervalMs: 15_000,
+  idleTtlMs: 0,
+});

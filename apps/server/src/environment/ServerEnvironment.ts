@@ -255,6 +255,7 @@ export const make = Effect.gen(function* () {
       guardedSettledDeletion: true,
       projectCoordinator: true,
       coordinatorModelRouting: true,
+      coordinatorBoard: true,
       coordinatorStatus: true,
       environmentThemes: true,
       usageLimitSources: true,

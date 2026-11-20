@@ -59,7 +59,7 @@ import { EnvironmentToolkit } from "./toolkits/environment/tools.ts";
 import * as EnvironmentHandlers from "./toolkits/environment/handlers.ts";
 import { ThemeToolkit } from "./toolkits/theme/tools.ts";
 import * as ThemeHandlers from "./toolkits/theme/handlers.ts";
-import { ProjectToolkit } from "./toolkits/project/tools.ts";
+import { ProjectToolkit, ProjectReleaseToolkit } from "./toolkits/project/tools.ts";
 import * as ProjectHandlers from "./toolkits/project/handlers.ts";
 import { AttachmentToolkit } from "./toolkits/attachment/tools.ts";
 import * as AttachmentHandlers from "./toolkits/attachment/handlers.ts";
@@ -1407,6 +1407,7 @@ export const layerTools = Layer.mergeAll(
   layerThreadToolkit,
   layerAttachmentToolkit,
   layerProjectRegistration,
+  toolkitRegistration(ProjectReleaseToolkit, ProjectHandlers.releaseBoardLayer),
   layerEnvironmentToolkit,
   layerThemeToolkit,
   layerPreviewControlsRegistration,

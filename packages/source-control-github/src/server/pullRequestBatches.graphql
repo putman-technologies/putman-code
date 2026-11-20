@@ -173,3 +173,70 @@ query CoordinatorRelease($owner: String!, $name: String!, $number: Int!) {
     }
   }
 }
+
+query CoordinatorChange($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      body
+      state
+      isDraft
+      headRefOid
+      reviewDecision
+      mergeable
+      commits(last: 1) {
+        nodes {
+          commit {
+            statusCheckRollup {
+              state
+            }
+            deployments(first: 20, orderBy: { field: CREATED_AT, direction: DESC }) {
+              nodes {
+                environment
+                latestStatus {
+                  state
+                  environmentUrl
+                }
+              }
+            }
+          }
+        }
+      }
+      mergeCommit {
+        oid
+        deployments(
+          first: 1
+          environments: ["Production", "production", "Prod", "prod", "PRODUCTION", "PROD"]
+          orderBy: { field: CREATED_AT, direction: DESC }
+        ) {
+          nodes {
+            latestStatus {
+              state
+              createdAt
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+query CoordinatorProduction($owner: String!, $name: String!) {
+  repository(owner: $owner, name: $name) {
+    deployments(
+      first: 30
+      environments: ["Production", "production", "Prod", "prod", "PRODUCTION", "PROD"]
+      orderBy: { field: CREATED_AT, direction: DESC }
+    ) {
+      nodes {
+        commitOid
+        environment
+        createdAt
+        latestStatus {
+          state
+          createdAt
+          environmentUrl
+        }
+      }
+    }
+  }
+}

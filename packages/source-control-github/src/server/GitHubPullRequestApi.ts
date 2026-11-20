@@ -1,3 +1,4 @@
+import { reviewScreenshots } from "./reviewScreenshots.ts";
 import { isCommitSha, normalizeHost } from "@t3tools/source-control-core/server/pullRequestUtils";
 import {
   diffFileSection,
@@ -26,6 +27,9 @@ import {
   PositiveInt,
   TrimmedNonEmptyString,
   type CoordinatorStatus,
+  type CoordinatorChange,
+  type ProductionDeployment,
+  coordinatorWebUrl,
   type PullRequestAction,
   type PullRequestStackHead,
   type PullRequestActor,
@@ -561,6 +565,24 @@ export class GitHubPullRequestApi extends Context.Service<
       }>;
     }) => Effect.Effect<ReadonlyArray<GitHubPullRequestStat>, GitHubPullRequestApiError>;
 
+    readonly coordinatorChange: (input: {
+      cwd: string;
+      host: string;
+      repository: string;
+      number: number;
+    }) => Effect.Effect<CoordinatorChange | null, GitHubPullRequestApiError>;
+    readonly coordinatorIncludes: (input: {
+      cwd: string;
+      host: string;
+      repository: string;
+      base: string;
+      head: string;
+    }) => Effect.Effect<boolean | null, GitHubPullRequestApiError>;
+    readonly coordinatorProduction: (input: {
+      cwd: string;
+      host: string;
+      repository: string;
+    }) => Effect.Effect<readonly ProductionDeployment[] | null, GitHubPullRequestApiError>;
     readonly coordinatorStatus: (input: {
       readonly cwd: string;
       readonly repository: string;
@@ -1016,6 +1038,9 @@ function searchQuery(input: {
   ].join(" ");
 }
 
+const decodeCompareStatus = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.Struct({ status: Schema.String })),
+);
 const decodeRevisionRefs = Schema.decodeUnknownOption(
   Schema.fromJsonString(
     Schema.Struct({
@@ -1919,6 +1944,78 @@ export const make = Effect.gen(function* () {
   }).pipe(RequestResolver.batchN(FILES_VIEWED_PER_REQUEST));
 
   return GitHubPullRequestApi.of({
+    coordinatorChange: Effect.fn("GitHubPullRequestApi.coordinatorChange")((input) => {
+      const { owner, name } = parseRepositorySelector(input.repository);
+      return client.CoordinatorChange({ owner, name, number: input.number }).pipe(
+        graphql({ ...input, operation: "coordinatorChange" }),
+        Effect.map((result) => {
+          const pull = result.repository?.pullRequest;
+          if (!pull) return null;
+          const head = pull.commits.nodes?.[0]?.commit;
+          const deployment = pull.mergeCommit?.deployments?.nodes?.[0]?.latestStatus;
+          const preview = head?.deployments?.nodes?.find(
+            (d) => d && /(?:^|[ _/-])(?:preview|pr[- ]?\d+)(?:$|[ _/-])/i.test(d.environment ?? ""),
+          );
+          return {
+            ...reviewScreenshots(pull.body),
+            state: pull.state,
+            head: pull.headRefOid,
+            merge: pull.mergeCommit?.oid ?? null,
+            checks: head?.statusCheckRollup?.state ?? null,
+            draft: pull.isDraft,
+            changesRequested:
+              pull.reviewDecision === "CHANGES_REQUESTED" ||
+              pull.reviewDecision === "REVIEW_REQUIRED",
+            conflict: pull.mergeable === "CONFLICTING",
+            preview:
+              preview?.latestStatus?.state === "SUCCESS"
+                ? coordinatorWebUrl(preview.latestStatus.environmentUrl)
+                : null,
+            deployedAt: deployment?.state === "SUCCESS" ? deployment.createdAt : null,
+            deploymentFailed: deployment?.state === "FAILURE" || deployment?.state === "ERROR",
+          };
+        }),
+      );
+    }),
+    coordinatorIncludes: Effect.fn("GitHubPullRequestApi.coordinatorIncludes")(function* (input) {
+      if (!isCommitSha(input.base) || !isCommitSha(input.head)) return null;
+      if (input.base === input.head) return true;
+      const { owner, name } = parseRepositorySelector(input.repository);
+      const response = yield* api.rest({
+        host: input.host,
+        operation: "coordinatorIncludes",
+        path: `repos/${owner}/${name}/compare/${input.base}...${input.head}?per_page=1`,
+      });
+      const decoded = decodeCompareStatus(response.body);
+      return Option.isSome(decoded) ? ["identical", "ahead"].includes(decoded.value.status) : null;
+    }),
+    coordinatorProduction: Effect.fn("GitHubPullRequestApi.coordinatorProduction")((input) => {
+      const { owner, name } = parseRepositorySelector(input.repository);
+      return client.CoordinatorProduction({ owner, name }).pipe(
+        graphql({ ...input, operation: "coordinatorProduction" }),
+        Effect.map((result) =>
+          result.repository
+            ? (result.repository.deployments.nodes ?? [])
+                .flatMap((d) =>
+                  d
+                    ? [
+                        {
+                          repository: input.repository,
+                          host: input.host,
+                          revision: d.commitOid,
+                          environment: d.environment ?? "Production",
+                          state: d.latestStatus?.state ?? "PENDING",
+                          at: d.latestStatus?.createdAt ?? d.createdAt,
+                          url: coordinatorWebUrl(d.latestStatus?.environmentUrl),
+                        },
+                      ]
+                    : [],
+                )
+                .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+            : null,
+        ),
+      );
+    }),
     coordinatorStatus: Effect.fn("GitHubPullRequestApi.coordinatorStatus")((input) => {
       const { owner, name } = parseRepositorySelector(input.repository);
       return client.CoordinatorRelease({ owner, name, number: input.number }).pipe(

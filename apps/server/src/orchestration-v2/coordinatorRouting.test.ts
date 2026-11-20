@@ -54,6 +54,7 @@ describe("coordinator routing", () => {
       "What's the status of PR #15?",
       "did CI pass?",
       "Recap this thread",
+      "What’s ready to ship?",
       "List open PRs",
       "Thanks!",
     ])

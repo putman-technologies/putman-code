@@ -117,6 +117,13 @@ import * as ServerConfig from "./config.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
+import {
+  readCoordinatorBoard,
+  readCoordinatorOverlaps,
+  actOnCoordinatorBoard,
+  saveBoardHandoff,
+  retryCoordinatorChecks,
+} from "./orchestration-v2/CoordinatorBoard.ts";
 import { readCoordinatorStatus } from "./orchestration-v2/CoordinatorStatus.ts";
 import { runProjectCoordinator } from "./orchestration-v2/ProjectCoordinator.ts";
 import * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
@@ -2017,6 +2024,27 @@ export const layerWsRpc = (
                 ),
             ),
           ),
+        [ORCHESTRATION_V2_WS_METHODS.coordinatorBoard]: ({ projectId }) =>
+          readCoordinatorBoard(
+            projectId,
+            sql,
+            projectService,
+            threadManagement,
+            pullRequests,
+            vcsStatusBroadcaster.refreshLocalStatus,
+          ),
+        [ORCHESTRATION_V2_WS_METHODS.coordinatorOverlaps]: ({ projectId }) =>
+          readCoordinatorOverlaps(
+            projectId,
+            sql,
+            projectService,
+            threadManagement,
+            vcsStatusBroadcaster.refreshLocalStatus,
+          ),
+        [ORCHESTRATION_V2_WS_METHODS.coordinatorBoardAction]: (input) =>
+          actOnCoordinatorBoard(input, sql, projectService, threadManagement, pullRequests),
+        [ORCHESTRATION_V2_WS_METHODS.coordinatorRetry]: (input) =>
+          retryCoordinatorChecks(input, pullRequests),
         [ORCHESTRATION_V2_WS_METHODS.coordinatorStatus]: ({ projectId }) =>
           readCoordinatorStatus(projectId, sql, threadManagement, pullRequests.coordinatorStatus),
         [ORCHESTRATION_V2_WS_METHODS.projectCoordinator]: (input) =>
@@ -2036,6 +2064,7 @@ export const layerWsRpc = (
                     instance?.enabled ? instance.snapshot.getSnapshot : Effect.undefined,
                   ),
                 ),
+            saveBoardHandoff(sql),
           ),
         [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: (input) => threadManagement.stopWorkflow(input),
         [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: (input) =>

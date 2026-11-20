@@ -1,3 +1,9 @@
+import {
+  readCoordinatorBoard,
+  readCoordinatorOverlaps,
+  actOnCoordinatorBoard,
+  saveBoardHandoff,
+} from "./CoordinatorBoard.ts";
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
@@ -344,7 +350,123 @@ it.effect("hands off a completed feature once and preserves the source when deli
       projects,
       threads,
       readCheckout,
+      undefined,
+      saveBoardHandoff(sql),
     );
+    const receipt = {
+      coordinatorChange: () =>
+        Effect.succeed({
+          state: "OPEN",
+          head: "abc123",
+          merge: null,
+          checks: "SUCCESS",
+          draft: false,
+          changesRequested: false,
+          conflict: false,
+          preview: null,
+          before: null,
+          after: null,
+          deployedAt: null,
+          deploymentFailed: false,
+        }),
+      coordinatorProduction: () => Effect.succeed([]),
+      coordinatorIncludes: () => Effect.succeed(false),
+      checks: () => Effect.succeed(null),
+    };
+    const board = () => readCoordinatorBoard(projectId, sql, projects, threads, receipt);
+    const firstBoard = yield* board();
+    assert.lengthOf(firstBoard.items, 2);
+    const legacy = firstBoard.items.find((i) => i.threadId === source)!;
+    assert.equal(legacy.phase, "ready");
+    assert.deepEqual(legacy.scripts, [{ name: "Unit tests", status: "exit 0" }]);
+    const fresh = firstBoard.items.find((i) => i.threadId === nextSource)!;
+    assert.equal(fresh.phase, "review");
+    const item = { id: fresh.id, revision: fresh.revision };
+    const act = (mutation: Parameters<typeof actOnCoordinatorBoard>[0]) =>
+      actOnCoordinatorBoard(mutation, sql, projects, threads, receipt);
+    const assets = {
+      preview: "https://demo.example/preview",
+      before: "https://demo.example/before.png",
+      after: "https://demo.example/after.png",
+    };
+    yield* act({ type: "assets", projectId, item, assets });
+    assert.isTrue(Exit.isFailure(yield* Effect.exit(act({ type: "approve", projectId, item }))));
+    const edited = (yield* board()).items.find((i) => i.id === item.id)!;
+    assert.deepEqual(edited.assets, assets);
+    const version = { id: item.id, revision: edited.revision };
+    yield* act({ type: "approve", projectId, item: version });
+    const selection = { type: "prepare" as const, projectId, items: [version] };
+    yield* act(selection);
+    yield* act(selection);
+    assert.isTrue((yield* board()).items.find((i) => i.id === item.id)!.prepared);
+    const plan = (yield* orchestrator.getThreadProjection(target.threadId)).messages.filter((m) =>
+      m.id.startsWith("prepare:"),
+    );
+    assert.lengthOf(plan, 1);
+    assert.include(plan[0]!.text, fresh.title);
+    assert.notInclude(plan[0]!.text, legacy.id);
+    const deployed = yield* readCoordinatorBoard(projectId, sql, projects, threads, {
+      ...receipt,
+      coordinatorChange: () =>
+        Effect.succeed({
+          state: "MERGED",
+          merge: "mergedsha",
+          checks: "SUCCESS",
+          head: "abc123",
+          draft: false,
+          conflict: false,
+          changesRequested: false,
+          preview: null,
+          before: null,
+          after: null,
+          deployedAt: null,
+          deploymentFailed: false,
+        }),
+      coordinatorProduction: () =>
+        Effect.succeed([
+          {
+            repository: legacy.pulls[0]!.repository,
+            host: new URL(legacy.pulls[0]!.url!).host,
+            state: "SUCCESS",
+            environment: "Production",
+            revision: "latersha",
+            at: "2026-01-01T00:00:00Z",
+            url: null,
+          },
+        ]),
+      coordinatorIncludes: () => Effect.succeed(true),
+    });
+    assert.isTrue(deployed.items.find((i) => i.id === legacy.id)!.live);
+    const prior = yield* threads.getThreadShell(source);
+    const other = yield* threads.getThreadShell(nextSource);
+    const pair = yield* threads.getShellSnapshot({ projectId });
+    const pairThreads = {
+      ...threads,
+      getShellSnapshot: () =>
+        Effect.succeed({
+          ...pair,
+          threads: [
+            { ...prior!, archivedAt: null, worktreePath: "/tmp/features/one" },
+            { ...other!, archivedAt: null, worktreePath: "/tmp/features/two" },
+          ],
+        }),
+    };
+    const overlapping = yield* readCoordinatorOverlaps(projectId, sql, projects, pairThreads, () =>
+      Effect.succeed({
+        isRepo: true,
+        refName: "feature",
+        hasPrimaryRemote: true,
+        isDefaultRef: false,
+        hasWorkingTreeChanges: true,
+        workingTree: {
+          files: [{ path: "migrations/100.sql", insertions: 1, deletions: 0 }],
+          insertions: 1,
+          deletions: 0,
+        },
+      }),
+    );
+    assert.equal(overlapping.find((o) => o.path === "migrations/100.sql")?.threads.length, 2);
+
     assert.equal(yield* status("deployed"), "review");
     assert.equal(
       yield* readCoordinatorStatus(ProjectId.make("unrelated-project"), sql, threads, () =>

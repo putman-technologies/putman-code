@@ -10,6 +10,10 @@ import {
 type Send = Extract<OrchestrationV2Command, { type: "message.dispatch" }>;
 
 const simpleQuestions = new Set([
+  "what is ready to ship",
+  "what is ready for release",
+  "what is live",
+  "what needs my attention",
   "hi",
   "hey",
   "hello",

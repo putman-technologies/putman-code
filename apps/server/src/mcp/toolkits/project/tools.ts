@@ -1,3 +1,5 @@
+import * as SqlClient from "effect/sql/SqlClient";
+import { PullRequestService } from "../../../pullRequest/PullRequestService.ts";
 import { McpAttachmentInput } from "../attachment/input.ts";
 import {
   clampedPositiveInt,
@@ -12,6 +14,7 @@ import {
   RuntimeMode,
   ProviderInteractionMode,
   Project,
+  CoordinatorBoard,
   ProjectCreatePayload,
   ProjectUpdatePayload,
   ProjectId,
@@ -73,6 +76,19 @@ const ProjectReadTool = Tool.make("t3_project_read", {
     environmentId: OrchestratorMcpEnvironmentTarget,
     projectId: ProjectId,
   }),
+})
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false);
+const ProjectBoardTool = Tool.make("t3_project_release_board", {
+  ...shared,
+  description:
+    "Read release handoffs, individual CI checks, preview approvals, overlapping files, unanswered questions and production deployments for one project.",
+  parameters: Schema.Struct({
+    environmentId: OrchestratorMcpEnvironmentTarget,
+    projectId: ProjectId,
+  }),
+  success: CoordinatorBoard,
+  dependencies: [...shared.dependencies, SqlClient.SqlClient, PullRequestService],
 })
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
@@ -193,3 +209,5 @@ export const ProjectToolkit = Toolkit.make(
   ProjectDeleteTool,
   ProjectCloneTool,
 );
+
+export const ProjectReleaseToolkit = Toolkit.make(ProjectBoardTool);

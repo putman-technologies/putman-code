@@ -23,6 +23,9 @@ import type { ThreadManagementServiceShape } from "./ThreadManagementService.ts"
 import { initialCoordinatorModel } from "./coordinatorRouting.ts";
 import { canHandOffRun, unfinishedHandoffRunStatuses } from "./projectCoordinatorState.ts";
 
+import type { SaveHandoff } from "./CoordinatorBoard.ts";
+import { handoffPulls } from "./coordinatorBoardState.ts";
+
 type Input = typeof OrchestrationV2RpcSchemas.projectCoordinator.input.Type;
 type ReadCatalog = (id: ModelSelection["instanceId"]) => Effect.Effect<ServerProvider | undefined>;
 type ReadCheckout = (
@@ -35,7 +38,7 @@ const isProjectCoordinatorError = Schema.is(ProjectCoordinatorError);
 const encodeHandoffKey = Schema.encodeSync(Schema.fromJsonString(Schema.Array(Schema.String)));
 const fail = (message: string) => new ProjectCoordinatorError({ message });
 
-const ensureCoordinator = Effect.fn("ProjectCoordinator.ensure")(function* (
+export const ensureCoordinator = Effect.fn("ProjectCoordinator.ensure")(function* (
   threads: ThreadManagementServiceShape,
   project: Project,
   model: ModelSelection,
@@ -100,6 +103,7 @@ const handoff = Effect.fn("ProjectCoordinator.handoff")(function* (
   project: Project,
   readCheckout: ReadCheckout,
   readCatalog: ReadCatalog,
+  saveHandoff: SaveHandoff,
 ) {
   const source = yield* threads.getThreadShell(input.threadId);
   if (
@@ -209,8 +213,15 @@ const handoff = Effect.fn("ProjectCoordinator.handoff")(function* (
     ...(request ? ["", "Feature request:", request.slice(0, 2000)] : []),
     ...(result ? ["", "Feature chat result:", result.slice(0, 6000)] : []),
     "",
-    "Coordinator next steps: inspect the feature checkout and the linked conversation, verify the intended changes and run the repository’s checks. Refresh CI for the exact PR head before merging. Follow this project’s release workflow and approvals, and report the deployed revision and site verification when available.",
+    "Coordinator next steps: inspect the feature checkout and the linked conversation, verify the intended changes and run the repository’s checks. Use t3_project_release_board for handoffs, overlaps, outstanding decisions and production evidence. For visual changes, include a preview URL and Before and After screenshots in the PR. Queue this handoff for review. A handoff alone does not authorize merging, publishing or deploying.",
   ].join("\n");
+  yield* saveHandoff(project.id, messageId, {
+    title: source.title,
+    summary: (result ?? request ?? "").slice(0, 6000),
+    scripts: Array.from(scriptResults, ([name, status]) => ({ name, status })),
+    files: checkpoint?.files.map((f) => f.path) ?? [],
+    pulls: handoffPulls(source),
+  });
   yield* threads.sendToThread({
     projectId: project.id,
     threadId: targetId,
@@ -233,13 +244,14 @@ export const runProjectCoordinator = Effect.fn("ProjectCoordinator.run")(
     threads: ThreadManagementServiceShape,
     readCheckout: ReadCheckout,
     readCatalog: ReadCatalog = () => Effect.undefined,
+    saveHandoff: SaveHandoff = () => Effect.void,
   ) {
     const project = Option.getOrNull(yield* projects.getById(input.projectId));
     if (!project || project.archivedAt) return yield* fail("Choose an active project.");
     const threadId =
       input.action === "open"
         ? yield* ensureCoordinator(threads, project, input.modelSelection, readCatalog)
-        : yield* handoff(input, threads, project, readCheckout, readCatalog);
+        : yield* handoff(input, threads, project, readCheckout, readCatalog, saveHandoff);
     return { threadId };
   },
   Effect.mapError((error) =>

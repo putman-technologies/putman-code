@@ -304,6 +304,7 @@ import { NativeChildWorkDialog } from "./chat/NativeChildWorkDialog";
 import { ProviderSubagentBar } from "./chat/ProviderSubagentBar";
 import { getTriggerDisplayModelName } from "./chat/providerIconUtils";
 import { resolveScrollToEndClearance } from "./composerFooterLayout";
+import { ChatOverlapNotice, ReleaseBoardButton } from "./chat/CoordinatorBoard";
 import { ProjectCoordinatorButton } from "./chat/ProjectCoordinatorButton";
 import { ChatHeader } from "./chat/ChatHeader";
 import { useSideChat } from "./chat/useSideChat";
@@ -3420,12 +3421,29 @@ export default function ChatView(props: ChatViewProps) {
             {inlineRightPanelOwnsTitleBar ? threadPanelHeaderControl : null}
             <ChatHeader
               coordinatorAction={
-                coordinatorRun ? (
-                  <span className="truncate px-2 text-xs text-muted-foreground">
-                    {coordinatorRun.coordinatorWorkModel
-                      ? gt("Quick · {model}", { model: coordinatorRun.modelSelection.model })
-                      : gt("Work · {model}", { model: coordinatorRun.modelSelection.model })}
-                  </span>
+                activeProject &&
+                serverConfig?.environment.capabilities.coordinatorBoard &&
+                isProjectCoordinatorThread(activeProject.id, activeThread.id) ? (
+                  <div className="flex items-center gap-2">
+                    <ReleaseBoardButton
+                      projects={[
+                        {
+                          projectId: activeProject.id,
+                          environmentId: activeThread.environmentId,
+                          title: activeProject.title,
+                        },
+                      ]}
+                      startInProject
+                      onOpen={onOpenRelatedThreadStable}
+                    />
+                    {coordinatorRun && (
+                      <span className="truncate text-xs text-muted-foreground">
+                        {coordinatorRun.coordinatorWorkModel
+                          ? gt("Quick · {model}", { model: coordinatorRun.modelSelection.model })
+                          : gt("Work · {model}", { model: coordinatorRun.modelSelection.model })}
+                      </span>
+                    )}
+                  </div>
                 ) : activeProject &&
                   !activeProject.isScratch &&
                   serverConfig?.environment.capabilities.projectCoordinator === true &&
@@ -3484,6 +3502,16 @@ export default function ChatView(props: ChatViewProps) {
             onDragLeave={workspaceFileDropHandlers.onDragLeave}
             onDrop={workspaceFileDropHandlers.onDrop}
           >
+            {activeProject &&
+              serverConfig?.environment.capabilities.coordinatorBoard &&
+              !isProjectCoordinatorThread(activeProject.id, activeThread.id) && (
+                <ChatOverlapNotice
+                  projectId={activeProject.id}
+                  environmentId={activeThread.environmentId}
+                  threadId={activeThread.id}
+                  onOpen={onOpenRelatedThreadStable}
+                />
+              )}
             <ThreadFind onClose={focusComposerStable} />
             {isWorkspaceFileDragActive ? <WorkspaceFileDropOverlay /> : null}
             <ChatBannerLane

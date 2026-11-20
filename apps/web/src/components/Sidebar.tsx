@@ -49,6 +49,7 @@ import {
   type ShownOrder,
 } from "@t3tools/client-runtime/state/thread-search";
 import { foldSearchQuery, rankMessageMatches } from "@t3tools/shared/paletteSearch";
+import { ReleaseBoardButton } from "./chat/CoordinatorBoard";
 import { findForMessageMatch, openThreadFindOnQuery } from "./chat/threadFindStore";
 import {
   threadRuntimeCanArchive,
@@ -3305,6 +3306,27 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               searchResultCount={threadSearchResults.length}
               activeSearchResultIndex={activeSearchResultIndex}
               onClearSearch={clearThreadSearch}
+            />
+            <ReleaseBoardButton
+              projects={scopeGroups.flatMap((group) =>
+                group.memberProjects
+                  .filter(
+                    (p) =>
+                      !p.archivedAt &&
+                      serverConfigs.get(p.environmentId)?.environment.capabilities.coordinatorBoard,
+                  )
+                  .map((p) => ({
+                    projectId: p.id,
+                    environmentId: p.environmentId,
+                    title:
+                      group.groupedProjectCount > 1
+                        ? group.displayName + " · " + (p.environmentLabel ?? p.environmentId)
+                        : group.displayName,
+                  })),
+              )}
+              onOpen={(threadId, environmentId) =>
+                void navigateToThread(scopeThreadRef(environmentId, threadId))
+              }
             />
             <SidebarProjectList
               projects={scopeGroups}

@@ -128,6 +128,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   guardedSettledDeletion: Schema.optionalKey(Schema.Boolean),
   projectCoordinator: Schema.optionalKey(Schema.Boolean),
   coordinatorModelRouting: Schema.optionalKey(Schema.Boolean),
+  coordinatorBoard: Schema.optionalKey(Schema.Boolean),
   coordinatorStatus: Schema.optionalKey(Schema.Boolean),
   /** Every protocol-2 server sends this; older mobile builds still read it. */
   environmentThemes: Schema.optionalKey(Schema.Boolean),
