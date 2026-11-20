@@ -431,6 +431,27 @@ function LiveStatus({ board }: { board: Board }) {
           {date(latest.at)}
         </div>
       )}
+      {deployments && deployments.length > 1 && (
+        <details className="mt-2">
+          <summary className="cursor-pointer font-medium">{gt("Deployment history")}</summary>
+          <ol className="mt-2 max-h-56 space-y-2 overflow-y-auto">
+            {deployments.map((d) => (
+              <li
+                key={JSON.stringify([d.environment, d.at, d.revision, d.state])}
+                className="flex flex-wrap items-baseline gap-x-2"
+              >
+                <code>{d.revision.slice(0, 10)}</code>
+                <span>
+                  {d.environment} · {d.state}
+                </span>
+                <time className="text-xs text-muted-foreground" dateTime={d.at}>
+                  {date(d.at)}
+                </time>
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
     </div>
   );
 }
@@ -474,15 +495,17 @@ function Handoff({
     item.phase === "review"
       ? item.pulls.some((p) => p.evidence?.conflict)
         ? gt("Resolve merge conflicts")
-        : item.pulls.some((p) => p.evidence?.draft)
-          ? gt("Pull request is a draft")
-          : item.pulls.some((p) => p.evidence?.changesRequested)
-            ? gt("GitHub review required")
-            : !item.approved && previews
-              ? gt("Preview needs approval")
-              : !item.pulls.length
-                ? gt("No linked pull request")
-                : gt("Passing CI has not been reported")
+        : item.pulls.some((p) => p.evidence?.state === "CLOSED")
+          ? gt("A linked pull request was closed")
+          : item.pulls.some((p) => p.evidence?.draft)
+            ? gt("Pull request is a draft")
+            : item.pulls.some((p) => p.evidence?.changesRequested)
+              ? gt("GitHub review required")
+              : !item.approved && previews
+                ? gt("Preview needs approval")
+                : !item.pulls.length
+                  ? gt("No linked pull request")
+                  : gt("Passing CI has not been reported")
       : null;
   return (
     <article className="rounded-md border px-3 py-2 text-sm">

@@ -204,7 +204,10 @@ export class PullRequestService extends Context.Service<
     readonly coordinatorIncludes: (
       input: PullRequestRef & { base: string; head: string },
     ) => Effect.Effect<boolean | null>;
-    readonly coordinatorChange: (input: PullRequestRef) => Effect.Effect<CoordinatorChange | null>;
+    readonly coordinatorChange: (
+      input: PullRequestRef,
+      options?: { readonly bypassCache?: boolean },
+    ) => Effect.Effect<CoordinatorChange | null>;
     readonly coordinatorProduction: (
       projectId: ProjectId,
     ) => Effect.Effect<readonly ProductionDeployment[] | null>;
@@ -4213,10 +4216,12 @@ export const make = Effect.gen(function* () {
         Cache.get(containsCache, encodeCompareKey([refCacheKey(ref), input.base, input.head])),
       )(input).pipe(Effect.orElseSucceed(() => null)),
     ),
-    coordinatorChange: Effect.fn("PullRequestService.coordinatorChange")((input) =>
-      credentialCached((ref) => Cache.get(boardChangeCache, refCacheKey(ref)))(input).pipe(
-        Effect.orElseSucceed(() => null),
-      ),
+    coordinatorChange: Effect.fn("PullRequestService.coordinatorChange")((input, options) =>
+      credentialCached((ref) =>
+        options?.bypassCache
+          ? Cache.refresh(boardChangeCache, refCacheKey(ref))
+          : Cache.get(boardChangeCache, refCacheKey(ref)),
+      )(input).pipe(Effect.orElseSucceed(() => null)),
     ),
     coordinatorProduction: Effect.fn("PullRequestService.coordinatorProduction")((projectId) =>
       listWorkspaceProjects({ projectId }).pipe(

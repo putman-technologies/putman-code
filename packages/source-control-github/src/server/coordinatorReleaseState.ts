@@ -3,12 +3,16 @@ import type { CoordinatorRelease } from "./pullRequestBatches.graphql.ts";
 
 type Pull = NonNullable<CoordinatorRelease.Result["repository"]>["pullRequest"];
 
-export function coordinatorReleaseState(pull: Pull | undefined): CoordinatorStatus {
+export function coordinatorReleaseState(
+  pull: Pull | undefined,
+  live: boolean | null = null,
+): CoordinatorStatus {
   if (!pull) return "unavailable";
   if (pull.state === "MERGED") {
     const commit = pull.mergeCommit;
     const deployment = commit?.deployments?.nodes?.[0]?.latestStatus?.state;
-    if (deployment === "SUCCESS") return "deployed";
+    if (live === true) return "deployed";
+    if (deployment === "SUCCESS" && live === null) return "unavailable";
     if (deployment === "ERROR" || deployment === "FAILURE") return "review";
     const checks = commit?.statusCheckRollup?.state;
     if (checks === "FAILURE" || checks === "ERROR") return "review";

@@ -155,6 +155,7 @@ query CoordinatorRelease($owner: String!, $name: String!, $number: Int!) {
         }
       }
       mergeCommit {
+        oid
         statusCheckRollup {
           state
         }

@@ -12,6 +12,7 @@ const merged = {
   ...open,
   state: "MERGED",
   mergeCommit: {
+    oid: "a".repeat(40),
     statusCheckRollup: { state: "SUCCESS" },
     deployments: { nodes: [] },
   },
@@ -28,8 +29,9 @@ describe("coordinator release evidence", () => {
   });
   it("requires the latest production deployment on the merge commit to succeed", () => {
     expect(coordinatorReleaseState(merged)).toBe("awaiting");
+    expect(coordinatorReleaseState(merged, true)).toBe("deployed");
     for (const [state, expected] of [
-      ["SUCCESS", "deployed"],
+      ["SUCCESS", "unavailable"],
       ["FAILURE", "review"],
       ["QUEUED", "awaiting"],
       ["INACTIVE", "awaiting"],

@@ -1943,6 +1943,50 @@ export const make = Effect.gen(function* () {
     batchKey: GitHubGraphQlClient.batchKey,
   }).pipe(RequestResolver.batchN(FILES_VIEWED_PER_REQUEST));
 
+  const coordinatorIncludes: GitHubPullRequestApi["Service"]["coordinatorIncludes"] = Effect.fn(
+    "GitHubPullRequestApi.coordinatorIncludes",
+  )(function* (input) {
+    if (!isCommitSha(input.base) || !isCommitSha(input.head)) return null;
+    if (input.base === input.head) return true;
+    const { owner, name } = parseRepositorySelector(input.repository);
+    const response = yield* api.rest({
+      host: input.host,
+      operation: "coordinatorIncludes",
+      path: `repos/${owner}/${name}/compare/${input.base}...${input.head}?per_page=1`,
+    });
+    const decoded = decodeCompareStatus(response.body);
+    return Option.isSome(decoded) ? ["identical", "ahead"].includes(decoded.value.status) : null;
+  });
+  const coordinatorProduction: GitHubPullRequestApi["Service"]["coordinatorProduction"] = Effect.fn(
+    "GitHubPullRequestApi.coordinatorProduction",
+  )((input) => {
+    const { owner, name } = parseRepositorySelector(input.repository);
+    return client.CoordinatorProduction({ owner, name }).pipe(
+      graphql({ ...input, operation: "coordinatorProduction" }),
+      Effect.map((result) =>
+        result.repository
+          ? (result.repository.deployments.nodes ?? [])
+              .flatMap((d) =>
+                d
+                  ? [
+                      {
+                        repository: input.repository,
+                        host: input.host,
+                        revision: d.commitOid,
+                        environment: d.environment ?? "Production",
+                        state: d.latestStatus?.state ?? "PENDING",
+                        at: d.latestStatus?.createdAt ?? d.createdAt,
+                        url: coordinatorWebUrl(d.latestStatus?.environmentUrl),
+                      },
+                    ]
+                  : [],
+              )
+              .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+          : null,
+      ),
+    );
+  });
+
   return GitHubPullRequestApi.of({
     coordinatorChange: Effect.fn("GitHubPullRequestApi.coordinatorChange")((input) => {
       const { owner, name } = parseRepositorySelector(input.repository);
@@ -1977,51 +2021,25 @@ export const make = Effect.gen(function* () {
         }),
       );
     }),
-    coordinatorIncludes: Effect.fn("GitHubPullRequestApi.coordinatorIncludes")(function* (input) {
-      if (!isCommitSha(input.base) || !isCommitSha(input.head)) return null;
-      if (input.base === input.head) return true;
+    coordinatorIncludes,
+    coordinatorProduction,
+    coordinatorStatus: Effect.fn("GitHubPullRequestApi.coordinatorStatus")(function* (input) {
       const { owner, name } = parseRepositorySelector(input.repository);
-      const response = yield* api.rest({
-        host: input.host,
-        operation: "coordinatorIncludes",
-        path: `repos/${owner}/${name}/compare/${input.base}...${input.head}?per_page=1`,
-      });
-      const decoded = decodeCompareStatus(response.body);
-      return Option.isSome(decoded) ? ["identical", "ahead"].includes(decoded.value.status) : null;
-    }),
-    coordinatorProduction: Effect.fn("GitHubPullRequestApi.coordinatorProduction")((input) => {
-      const { owner, name } = parseRepositorySelector(input.repository);
-      return client.CoordinatorProduction({ owner, name }).pipe(
-        graphql({ ...input, operation: "coordinatorProduction" }),
-        Effect.map((result) =>
-          result.repository
-            ? (result.repository.deployments.nodes ?? [])
-                .flatMap((d) =>
-                  d
-                    ? [
-                        {
-                          repository: input.repository,
-                          host: input.host,
-                          revision: d.commitOid,
-                          environment: d.environment ?? "Production",
-                          state: d.latestStatus?.state ?? "PENDING",
-                          at: d.latestStatus?.createdAt ?? d.createdAt,
-                          url: coordinatorWebUrl(d.latestStatus?.environmentUrl),
-                        },
-                      ]
-                    : [],
-                )
-                .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-            : null,
-        ),
-      );
-    }),
-    coordinatorStatus: Effect.fn("GitHubPullRequestApi.coordinatorStatus")((input) => {
-      const { owner, name } = parseRepositorySelector(input.repository);
-      return client.CoordinatorRelease({ owner, name, number: input.number }).pipe(
-        graphql({ ...input, operation: "coordinatorStatus" }),
-        Effect.map((result) => coordinatorReleaseState(result.repository?.pullRequest)),
-      );
+      const result = yield* client
+        .CoordinatorRelease({ owner, name, number: input.number })
+        .pipe(graphql({ ...input, operation: "coordinatorStatus" }));
+      const pull = result.repository?.pullRequest;
+      if (pull?.state !== "MERGED" || !pull.mergeCommit) return coordinatorReleaseState(pull);
+      const production = yield* coordinatorProduction(input);
+      const lastSuccessful = production?.find((deployment) => deployment.state === "SUCCESS");
+      const included = lastSuccessful
+        ? yield* coordinatorIncludes({
+            ...input,
+            base: pull.mergeCommit.oid,
+            head: lastSuccessful.revision,
+          })
+        : null;
+      return coordinatorReleaseState(pull, included);
     }),
     withVerifiedCredential,
     revalidateChecks,

@@ -62,6 +62,26 @@ describe("release board", () => {
     const empty = { items: [], questions: [], overlaps: [], production: [] };
     boards.set(one, {
       ...empty,
+      production: [
+        {
+          repository: "acme/web",
+          host: "github.com",
+          environment: "production",
+          revision: "bbbbbbbbbb",
+          state: "SUCCESS",
+          at: "2026-01-02T00:00:00Z",
+          url: null,
+        },
+        {
+          repository: "acme/web",
+          host: "github.com",
+          environment: "production",
+          revision: "aaaaaaaaaa",
+          state: "FAILURE",
+          at: "2026-01-01T00:00:00Z",
+          url: null,
+        },
+      ],
       items: [
         row,
         { ...row, id: MessageId.make("other"), title: "Payroll fix", revision: "revision-b" },
@@ -96,6 +116,14 @@ describe("release board", () => {
         select.dispatchEvent(new Event("change", { bubbles: true }));
       });
       expect(document.body.textContent).toContain("Invoice detail");
+      const history = Array.from(document.querySelectorAll("details")).find((el) =>
+        el.querySelector("summary")?.textContent?.includes("Deployment history"),
+      );
+      expect(history).toBeDefined();
+      await act(async () => history!.querySelector("summary")!.click());
+      expect(history!.open).toBe(true);
+      expect(history!.textContent).toContain("aaaaaaaaaa");
+      expect(history!.textContent).toContain("FAILURE");
       expect(button("Prepare release")!.disabled).toBe(true);
       await act(async () =>
         document.querySelector<HTMLInputElement>('input[aria-label="Invoice detail"]')!.click(),

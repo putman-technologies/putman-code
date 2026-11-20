@@ -18,6 +18,8 @@ const green: CoordinatorChange = {
 };
 describe("release review", () => {
   it("keeps missing evidence, failed checks and an unapproved preview out of the ready list", () => {
+    expect(releasePhase([{ ...green, state: "CLOSED" }, green], emptyAssets, true)).toBe("review");
+    expect(releasePhase([{ ...green, state: "CLOSED" }], emptyAssets, true)).toBe("closed");
     expect(releasePhase([null], emptyAssets, true)).toBe("unavailable");
     expect(releasePhase([{ ...green, checks: "PENDING" }], emptyAssets, true)).toBe("ci");
     expect(releasePhase([green, { ...green, checks: "FAILURE" }], emptyAssets, true)).toBe(

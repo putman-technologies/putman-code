@@ -10,6 +10,7 @@ import {
   type CoordinatorBoard,
   type OrchestrationV2RpcSchemas,
   type CoordinatorBoardAction,
+  type ProductionDeployment,
   type CoordinatorBoardItem,
   type OrchestrationV2ThreadShell,
   ReviewAssets,
@@ -246,7 +247,7 @@ const loadItems = Effect.fn("CoordinatorBoard.handoffs")(function* (
             repository: link.repository,
             number: link.number,
           };
-          const evidence = yield* pulls.coordinatorChange(ref);
+          const evidence = yield* pulls.coordinatorChange(ref, { bypassCache: ids !== undefined });
           const checks =
             evidence?.state === "OPEN"
               ? yield* pulls.checks(ref).pipe(
@@ -304,6 +305,38 @@ const loadItems = Effect.fn("CoordinatorBoard.handoffs")(function* (
   );
 });
 
+const currentProduction = Effect.fn("CoordinatorBoard.currentProduction")(function* (
+  projectId: ProjectId,
+  item: CoordinatorBoardItem,
+  deployed: ProductionDeployment | undefined,
+  pulls: Pulls,
+) {
+  if (!deployed || !item.pulls.length || !item.pulls.every((p) => p.evidence?.state === "MERGED"))
+    return null;
+  const included = yield* Effect.forEach(item.pulls, (p) => {
+    const sha = p.evidence?.merge;
+    const host = p.url ? new URL(p.url).host : null;
+    if (
+      !sha ||
+      !host ||
+      host.toLowerCase() !== deployed.host.toLowerCase() ||
+      p.repository.toLowerCase() !== deployed.repository.toLowerCase()
+    )
+      return Effect.succeed(null);
+    return sha === deployed.revision
+      ? Effect.succeed(true)
+      : pulls.coordinatorIncludes({
+          projectId,
+          host,
+          repository: p.repository,
+          number: p.number,
+          base: sha,
+          head: deployed.revision,
+        });
+  });
+  return included.every((v) => v === true) ? true : included.includes(false) ? false : null;
+});
+
 export const readCoordinatorBoard = Effect.fn("CoordinatorBoard.read")(function* (
   projectId: ProjectId,
   sql: Sql,
@@ -327,38 +360,7 @@ export const readCoordinatorBoard = Effect.fn("CoordinatorBoard.read")(function*
         additional: _additional,
         ...visible
       } = item;
-      if (
-        !deployed ||
-        !item.pulls.length ||
-        !item.pulls.every((p) => p.evidence?.state === "MERGED")
-      )
-        return visible;
-      const included = yield* Effect.forEach(item.pulls, (p) => {
-        const sha = p.evidence?.merge;
-        const host = p.url ? new URL(p.url).host : null;
-        if (
-          !sha ||
-          !host ||
-          host.toLowerCase() !== deployed.host.toLowerCase() ||
-          p.repository.toLowerCase() !== deployed.repository.toLowerCase()
-        )
-          return Effect.succeed(null);
-        return sha === deployed.revision
-          ? Effect.succeed(true)
-          : pulls.coordinatorIncludes({
-              projectId,
-              host,
-              repository: p.repository,
-              number: p.number,
-              base: sha,
-              head: deployed.revision,
-            });
-      });
-      const live = included.every((v) => v === true)
-        ? true
-        : included.includes(false)
-          ? false
-          : null;
+      const live = yield* currentProduction(projectId, visible, deployed, pulls);
       return { ...visible, live, phase: live ? ("deployed" as const) : visible.phase };
     }),
     { concurrency: 3 },
@@ -414,6 +416,17 @@ export const actOnCoordinatorBoard = Effect.fn("CoordinatorBoard.act")(function*
   if (input.type === "prepare") {
     if (items.some((i) => i.phase !== "ready" && i.phase !== "merged"))
       return yield* error("Only ready or merged changes can be prepared.");
+    if (items.some((i) => i.phase === "merged")) {
+      const production = yield* pulls.coordinatorProduction(input.projectId);
+      const deployed = production?.find((d) => d.state === "SUCCESS");
+      const live = yield* Effect.forEach(
+        items,
+        (i) => currentProduction(input.projectId, i, deployed, pulls),
+        { concurrency: 3 },
+      );
+      if (live.includes(true))
+        return yield* error("A selected change is already live. Refresh the release board.");
+    }
     const key = revision([input.projectId, items.map((i) => [i.id, i.revision]).sort()]);
     const previous = yield* threads.getThreadShell(first.coordinatorId);
     if (!previous || previous.projectId !== input.projectId)

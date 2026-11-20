@@ -452,6 +452,8 @@ export interface CoordinatorReleaseRepositoryPullRequestMergeCommitDeploymentsDe
 
 /** Represents a Git commit. */
 export const CoordinatorReleaseRepositoryPullRequestMergeCommitCommit = Schema.Struct({
+  /** The Git object ID */
+  oid: Shared.GitObjectID,
   /** Check and Status rollup information for this commit. */
   statusCheckRollup: Schema.NullOr(PullRequestSummaryRepositoryPullRequestCommitsNodesCommitStatusCheckRollupStatusCheckRollup),
   /** The deployments associated with a commit. */
@@ -488,7 +490,7 @@ export const CoordinatorRelease = GraphQL.query("CoordinatorRelease", {
       { name: "number", body: "Int!" }
     ],
     selections: [
-      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){pullRequest(number:$", "number", "){state reviewDecision commits(last:1){nodes{commit{statusCheckRollup{state}}}}mergeCommit{statusCheckRollup{state}deployments(first:1 environments:[\"Production\" \"production\" \"Prod\" \"prod\" \"PRODUCTION\" \"PROD\"]orderBy:{field:CREATED_AT direction:DESC}){nodes{latestStatus{state}}}}}}"] }
+      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){pullRequest(number:$", "number", "){state reviewDecision commits(last:1){nodes{commit{statusCheckRollup{state}}}}mergeCommit{oid statusCheckRollup{state}deployments(first:1 environments:[\"Production\" \"production\" \"Prod\" \"prod\" \"PRODUCTION\" \"PROD\"]orderBy:{field:CREATED_AT direction:DESC}){nodes{latestStatus{state}}}}}}"] }
     ],
     fragments: []
   },

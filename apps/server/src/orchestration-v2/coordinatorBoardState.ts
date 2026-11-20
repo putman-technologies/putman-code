@@ -52,9 +52,9 @@ export function releasePhase(
     )
   )
     return "failed";
-  if (pulls.length && pulls.every((c) => c.state === "MERGED"))
-    return pulls.every((c) => c.deployedAt) ? "deployed" : "merged";
-  if (pulls.some((c) => c.state === "CLOSED")) return "closed";
+  if (pulls.length && pulls.every((c) => c.state === "MERGED")) return "merged";
+  if (pulls.some((c) => c.state === "CLOSED"))
+    return pulls.every((c) => c.state === "CLOSED") ? "closed" : "review";
   if (pulls.some((c) => c.state === "OPEN" && (c.draft || c.changesRequested || c.conflict)))
     return "review";
   if (pulls.some((c) => c.state === "OPEN" && ["PENDING", "EXPECTED"].includes(c.checks ?? "")))

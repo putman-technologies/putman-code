@@ -803,18 +803,6 @@ function normalizeForWorktreeMatch(value: string, caseFold: boolean): string {
   return caseFold ? normalized.toLowerCase() : normalized;
 }
 
-function isT3ManagedWorktree(
-  candidatePath: string,
-  worktreesDir: string,
-  caseFold: boolean,
-): boolean {
-  const normalized = normalizeForWorktreeMatch(candidatePath, caseFold);
-  return (
-    normalized.startsWith(normalizeForWorktreeMatch(worktreesDir, caseFold)) ||
-    normalized.includes("/.t3/worktrees/")
-  );
-}
-
 // false stops metadata scanning for an excluded rollout, even if later records contain a cwd.
 function extractCwd(line: string, source: AgentSessionSource): string | null | false {
   let parsed: unknown;
@@ -913,22 +901,28 @@ export const make = Effect.gen(function* () {
       normalizeProjectPathForComparison(path.resolve(directory)),
     ),
   );
-  const excludedProjectAncestors = [
+  const excludes = [
     path.join(homeDir, "Downloads"),
     path.join(homeDir, "Documents", "Codex"),
+    baseDir,
+    worktreesDir,
   ];
+  const realExcludes = yield* Effect.forEach(excludes, (dir) =>
+    fileSystem.realPath(dir).pipe(Effect.orElseSucceed(() => dir)),
+  );
+  const excludedPrefixes = Array.from(new Set([...excludes, ...realExcludes]), (dir) =>
+    normalizeForWorktreeMatch(dir, foldWorktreeCase),
+  );
 
-  const isExcludedProjectPath = (candidatePath: string) =>
-    excludedProjectRoots.has(normalizeProjectPathForComparison(candidatePath)) ||
-    excludedProjectAncestors.some((ancestor) =>
-      normalizeForWorktreeMatch(candidatePath, foldWorktreeCase).startsWith(
-        normalizeForWorktreeMatch(ancestor, foldWorktreeCase),
-      ),
-    ) ||
-    normalizeForWorktreeMatch(candidatePath, foldWorktreeCase).startsWith(
-      normalizeForWorktreeMatch(baseDir, foldWorktreeCase),
-    ) ||
-    isT3ManagedWorktree(candidatePath, worktreesDir, foldWorktreeCase);
+  const isExcludedProjectPath = (candidatePath: string) => {
+    const normalized = normalizeForWorktreeMatch(candidatePath, foldWorktreeCase);
+    return (
+      excludedProjectRoots.has(normalizeProjectPathForComparison(candidatePath)) ||
+      excludedPrefixes.some((prefix) => normalized.startsWith(prefix)) ||
+      normalized.includes("/.putman-code/worktrees/") ||
+      normalized.includes("/.t3/worktrees/")
+    );
+  };
 
   const listDirectory = (directory: string) =>
     fileSystem.readDirectory(directory).pipe(Effect.orElseSucceed((): ReadonlyArray<string> => []));

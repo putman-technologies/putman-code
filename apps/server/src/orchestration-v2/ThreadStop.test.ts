@@ -405,7 +405,7 @@ it.effect("hands off a completed feature once and preserves the source when deli
     assert.lengthOf(plan, 1);
     assert.include(plan[0]!.text, fresh.title);
     assert.notInclude(plan[0]!.text, legacy.id);
-    const deployed = yield* readCoordinatorBoard(projectId, sql, projects, threads, {
+    const productionReceipt = (included: boolean) => ({
       ...receipt,
       coordinatorChange: () =>
         Effect.succeed({
@@ -419,7 +419,7 @@ it.effect("hands off a completed feature once and preserves the source when deli
           preview: null,
           before: null,
           after: null,
-          deployedAt: null,
+          deployedAt: "2026-01-01T00:00:00Z",
           deploymentFailed: false,
         }),
       coordinatorProduction: () =>
@@ -434,9 +434,70 @@ it.effect("hands off a completed feature once and preserves the source when deli
             url: null,
           },
         ]),
-      coordinatorIncludes: () => Effect.succeed(true),
+      coordinatorIncludes: () => Effect.succeed(included),
     });
+    const changedInGitHub = {
+      ...receipt,
+      coordinatorChange: (_ref: unknown, options?: { bypassCache?: boolean }) =>
+        receipt
+          .coordinatorChange()
+          .pipe(
+            Effect.map((change) =>
+              options?.bypassCache ? { ...change, head: "new-head" } : change,
+            ),
+          ),
+    };
+    assert.isTrue(
+      Exit.isFailure(
+        yield* Effect.exit(
+          actOnCoordinatorBoard(
+            { type: "approve", projectId, item: { id: legacy.id, revision: legacy.revision } },
+            sql,
+            projects,
+            threads,
+            changedInGitHub,
+          ),
+        ),
+      ),
+    );
+    const deployed = yield* readCoordinatorBoard(
+      projectId,
+      sql,
+      projects,
+      threads,
+      productionReceipt(true),
+    );
     assert.isTrue(deployed.items.find((i) => i.id === legacy.id)!.live);
+    const rolledBack = yield* readCoordinatorBoard(
+      projectId,
+      sql,
+      projects,
+      threads,
+      productionReceipt(false),
+    );
+    const reverted = rolledBack.items.find((i) => i.id === legacy.id)!;
+    assert.isFalse(reverted.live);
+    assert.equal(reverted.phase, "merged");
+    const queued = {
+      type: "prepare" as const,
+      projectId,
+      items: [{ id: reverted.id, revision: reverted.revision }],
+    };
+    yield* actOnCoordinatorBoard(queued, sql, projects, threads, productionReceipt(false));
+    const includedInLaterRelease = {
+      ...productionReceipt(true),
+      coordinatorChange: () =>
+        productionReceipt(true)
+          .coordinatorChange()
+          .pipe(Effect.map((change) => ({ ...change, deployedAt: null }))),
+    };
+    assert.isTrue(
+      Exit.isFailure(
+        yield* Effect.exit(
+          actOnCoordinatorBoard(queued, sql, projects, threads, includedInLaterRelease),
+        ),
+      ),
+    );
     const prior = yield* threads.getThreadShell(source);
     const other = yield* threads.getThreadShell(nextSource);
     const pair = yield* threads.getShellSnapshot({ projectId });
