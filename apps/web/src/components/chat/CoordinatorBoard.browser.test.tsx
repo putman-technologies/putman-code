@@ -229,6 +229,12 @@ describe("release board", () => {
         ],
       };
       action.mockResolvedValue(AsyncResult.success({ threadId: coord, manifest: range }));
+      await act(async () => button("Release board")!.click());
+      const projectPicker = document.querySelector("select")!;
+      await act(async () => {
+        projectPicker.value = Array.from(projectPicker.options).find((o) => o.text === "Accounts")!.value;
+        projectPicker.dispatchEvent(new Event("change", { bubbles: true }));
+      });
       await act(async () =>
         registry.refresh(coordinatorBoardQuery({ environmentId: env, input: { projectId: one } })),
       );

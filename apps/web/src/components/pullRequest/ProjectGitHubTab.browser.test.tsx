@@ -46,6 +46,8 @@ const data = Atom.make(
     ],
   }),
 );
+vi.mock("../chat/CoordinatorBoard", () => ({ ReleaseBoardButton: () => null }));
+vi.mock("../../rpc/atomRegistry", () => ({ appAtomRegistry: { refresh: vi.fn() } }));
 vi.mock("../../state/projects", () => ({ coordinatorBoardQuery: () => data }));
 vi.mock("../../state/pullRequests", () => ({ pullRequestEnvironment: { detail: () => null } }));
 vi.mock("../../state/query", () => ({
