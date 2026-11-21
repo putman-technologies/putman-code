@@ -412,8 +412,28 @@ export function AddEnvironmentDialog({
     );
   };
 
+  const submitLabel = routeTarget ? gt("Add route") : gt("Add environment");
   const renderRemoteFields = () => (
     <div className="space-y-3">
+      <ol className="list-decimal space-y-1 rounded-md bg-muted/40 py-3 pr-3 pl-8 text-xs leading-relaxed text-muted-foreground marker:font-medium">
+        <li>
+          {gt(
+            "On the computer hosting your projects, open Settings → Sharing & access and choose Create link. On a command-line server, run {command}.",
+            { command: "t3 pair" },
+          )}
+        </li>
+        <li>
+          {gt(
+            "Choose an address this device can reach, such as the host’s LAN or Tailscale address. Enable network access on the host if needed.",
+          )}
+        </li>
+        <li>
+          {gt(
+            "On this device, paste the full pairing link into Host to fill both fields, then choose {action}.",
+            { action: submitLabel },
+          )}
+        </li>
+      </ol>
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
         <label className="block">
           <span className="mb-1.5 block text-xs font-medium text-foreground">
@@ -439,11 +459,6 @@ export function AddEnvironmentDialog({
             spellCheck={false}
           />
         </label>
-      </div>
-      <div>
-        <span className="mt-1 block text-2xs text-muted-foreground">
-          <T>Paste a full pairing URL here to fill both fields automatically.</T>
-        </span>
       </div>
     </div>
   );
@@ -512,16 +527,31 @@ export function AddEnvironmentDialog({
         onClick={() => void handleAddSavedBackend()}
       >
         <PlusIcon className="size-3.5" />
-        {isAddingSavedBackend
-          ? gt("Adding…")
-          : routeTarget
-            ? gt("Add route")
-            : gt("Add environment")}
+        {isAddingSavedBackend ? gt("Adding…") : submitLabel}
       </Button>
     </div>
   );
   const renderSshFields = () => (
     <div className="space-y-4">
+      <ol className="list-decimal space-y-1 rounded-md bg-muted/40 py-3 pr-3 pl-8 text-xs leading-relaxed text-muted-foreground marker:font-medium">
+        <li>
+          {gt("Test your SSH login in this computer’s terminal, for example {command}.", {
+            command: "ssh alex@devbox",
+          })}
+        </li>
+        <li>
+          {gt(
+            "Select a saved SSH alias to connect immediately, or type the host address below. You can include the username, as in {example}.",
+            { example: "alex@devbox" },
+          )}
+        </li>
+        <li>
+          {gt(
+            "For a typed host, leave Username and Port blank to use your SSH defaults, then choose {action}.",
+            { action: submitLabel },
+          )}
+        </li>
+      </ol>
       <div className="space-y-3">
         <div className="block">
           <label
@@ -615,7 +645,7 @@ export function AddEnvironmentDialog({
               value={savedBackendSshUsername}
               onChange={(event) => setSavedBackendSshUsername(event.target.value)}
               onKeyDown={handleSavedBackendSshFieldKeyDown}
-              placeholder="root"
+              placeholder={gt("Optional")}
               disabled={isAddingSavedBackend}
               spellCheck={false}
             />
@@ -647,11 +677,7 @@ export function AddEnvironmentDialog({
           onClick={() => void handleAddSavedBackend()}
         >
           <PlusIcon className="size-3.5" />
-          {isAddingSavedBackend
-            ? gt("Adding…")
-            : routeTarget
-              ? gt("Add route")
-              : gt("Add environment")}
+          {isAddingSavedBackend ? gt("Adding…") : submitLabel}
         </Button>
       </div>
     </div>

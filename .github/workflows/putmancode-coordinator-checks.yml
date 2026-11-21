@@ -61,7 +61,7 @@ jobs:
       - name: Test settings navigation and search
         working-directory: apps/web
         run: |
-          vp test run --project browser src/components/settings/SettingsSidebarNav.composition.browser.test.tsx
+          vp test run --project browser src/components/settings/SettingsSidebarNav.composition.browser.test.tsx src/components/settings/AddEnvironmentDialog.browser.test.tsx
           vp test run --project unit src/components/settings/settingsSearch.test.ts src/components/pullRequest/pullRequestsRouteSearch.test.ts
       - name: Test coordinator handoffs and local storage isolation
         working-directory: apps/server

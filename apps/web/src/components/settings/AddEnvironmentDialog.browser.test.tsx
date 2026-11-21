@@ -110,9 +110,13 @@ describe("AddEnvironmentDialog", () => {
       page.getByRole("dialog").getByRole("button", { name: "Add environment" }),
     );
     await expect.element(page.getByText(/connection refused/)).toBeInTheDocument();
+    await expect.element(page.getByText(/ssh alex@devbox/)).toBeVisible();
+    await expect.element(page.getByText(/t3 pair/)).not.toBeInTheDocument();
 
     await userEvent.click(remoteCard());
     await expect.element(page.getByText(/connection refused/)).not.toBeInTheDocument();
+    await expect.element(page.getByText(/t3 pair/)).toBeVisible();
+    await expect.element(page.getByText(/ssh alex@devbox/)).not.toBeInTheDocument();
   });
 
   it("clears the form after dismissing it on SSH", async () => {
@@ -125,7 +129,7 @@ describe("AddEnvironmentDialog", () => {
     await userEvent.fill(page.getByPlaceholder("PAIRCODE"), "PAIRCODE");
     await userEvent.click(sshCard());
     await userEvent.fill(page.getByPlaceholder("Search hosts or type devbox"), "devbox");
-    await userEvent.fill(page.getByPlaceholder("root"), "maria");
+    await userEvent.fill(page.getByRole("textbox", { name: "Username" }), "maria");
     await userEvent.fill(page.getByPlaceholder("22"), "2222");
     await userEvent.keyboard("{Escape}");
 
@@ -134,7 +138,7 @@ describe("AddEnvironmentDialog", () => {
     await expect.element(page.getByPlaceholder("PAIRCODE")).toHaveValue("");
     await userEvent.click(sshCard());
     await expect.element(page.getByPlaceholder("Search hosts or type devbox")).toHaveValue("");
-    await expect.element(page.getByPlaceholder("root")).toHaveValue("");
+    await expect.element(page.getByRole("textbox", { name: "Username" })).toHaveValue("");
     await expect.element(page.getByPlaceholder("22")).toHaveValue("");
 
     let finishConnection!: (result: AtomCommandResult<void, Error>) => void;
