@@ -1427,6 +1427,7 @@ html:not([data-theme-id]) [data-app-sidebar] {
   --icon-muted: var(--sidebar-muted-foreground);
   --accent: var(--sidebar-row-hover);
   --accent-foreground: var(--sidebar-foreground);
+  --info-foreground: #b5dcff;
   --ring: #8abaff;
   background-color: var(--sidebar);
   color: var(--sidebar-foreground);
