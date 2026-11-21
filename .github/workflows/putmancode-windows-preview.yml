@@ -1,0 +1,137 @@
+name: PutmanCode Windows x64 preview
+
+on:
+  push:
+    branches: [preview/windows-x64-20261120-3]
+    paths: [.github/workflows/putmancode-windows-preview.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PREVIEW_VERSION: 0.0.4-preview.20261120.3
+  SOURCE_COMMIT: 5a55b28e1f6f2ee9c67e76bb81830925e44038c4
+
+jobs:
+  monitor:
+    name: Compile Windows resource monitor
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+          persist-credentials: false
+          sparse-checkout: native/resource-monitor
+      - run: cargo build --locked --release --target x86_64-pc-windows-msvc --manifest-path native/resource-monitor/Cargo.toml
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: preview-resource-monitor
+          path: native/resource-monitor/target/x86_64-pc-windows-msvc/release/t3-resource-monitor.exe
+          if-no-files-found: error
+          retention-days: 1
+
+  package:
+    name: Build Windows installer
+    needs: monitor
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+          persist-credentials: false
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
+          sparse-checkout-cone-mode: false
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: preview-resource-monitor
+          path: native/resource-monitor/target/x86_64-pc-windows-msvc/release
+      - name: Package the preview
+        env:
+          T3CODE_DESKTOP_REUSE_RESOURCE_MONITOR: "true"
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: |
+          vp run dist:desktop:artifact --platform win --target nsis --arch x64 --build-version "$PREVIEW_VERSION" --output-dir "$RUNNER_TEMP/installer"
+      - name: Bundle the existing Windows runtime checks
+        run: |
+          mkdir -p "$RUNNER_TEMP/verify/fixtures/desktop-launch"
+          scripts/node_modules/.bin/esbuild scripts/verify-windows-desktop-artifact.ts \
+            --bundle --platform=node --format=esm --target=node24 --define:import.meta.main=false \
+            --banner:js="import{createRequire as __cr}from'node:module';const require=__cr(import.meta.url);" \
+            --outfile="$RUNNER_TEMP/verify/verify.mjs"
+          cp scripts/smoke-desktop-app.ts "$RUNNER_TEMP/verify/"
+          cp scripts/fixtures/desktop-launch/statev2.sqlite "$RUNNER_TEMP/verify/fixtures/desktop-launch/"
+          node -p 'require("./apps/desktop/package.json").dependencies["playwright-core"]' > "$RUNNER_TEMP/verify/playwright-version.txt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: candidate-installer
+          path: ${{ runner.temp }}/installer/*.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: preview-checks
+          path: ${{ runner.temp }}/verify/
+          if-no-files-found: error
+          retention-days: 1
+
+  verify:
+    name: Install and launch on Windows
+    needs: package
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: candidate-installer
+          path: installer
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: preview-checks
+          path: verify
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "26.13.1"
+          package-manager-cache: false
+      - name: Install the downloaded EXE for the current user
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'PutmanCodePreview'
+          $setup = Get-Item "installer/Putman-Code-$env:PREVIEW_VERSION-x64.exe"
+          $process = Start-Process -FilePath $setup.FullName -ArgumentList '/S',"/D=$target" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installer exit code $($process.ExitCode)" }
+          if (!(Test-Path "$target/PutmanCode.exe")) { throw "Installed executable missing" }
+          "PREVIEW_APP=$target" >> $env:GITHUB_ENV
+          Get-FileHash -Algorithm SHA256 $setup.FullName | Format-List
+      - name: Check installed native modules
+        run: node verify/verify.mjs --app-dir "$env:PREVIEW_APP" --arch x64 --build-version "$env:PREVIEW_VERSION" --verbose
+      - name: Launch the installed app and open a thread
+        working-directory: verify
+        run: |
+          $version = (Get-Content playwright-version.txt -Raw).Trim()
+          npm install --no-audit --no-fund --ignore-scripts "playwright-core@$version"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node smoke-desktop-app.ts --executable "$env:PREVIEW_APP/PutmanCode.exe" --artifacts-dir "$env:RUNNER_TEMP/preview-launch"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: failure()
+        with:
+          name: preview-launch-diagnostics
+          path: ${{ runner.temp }}/preview-launch/
+          if-no-files-found: ignore
+          retention-days: 1
+      - name: Upload verified Windows installer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: PutmanCode-${{ env.PREVIEW_VERSION }}-Windows-x64
+          path: installer/*.exe
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
