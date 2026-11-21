@@ -59,7 +59,9 @@ jobs:
           T3CODE_DESKTOP_REUSE_RESOURCE_MONITOR: "true"
           NODE_OPTIONS: --max-old-space-size=6144
         run: |
-          vp run dist:desktop:artifact --platform win --target nsis --arch x64 --build-version "$PREVIEW_VERSION" --output-dir "$RUNNER_TEMP/installer"
+          node scripts/update-release-package-versions.ts "$PREVIEW_VERSION"
+          APP_VERSION="$PREVIEW_VERSION" vp run build:desktop:bundle
+          vp run dist:desktop:artifact --skip-build --platform win --target nsis --arch x64 --build-version "$PREVIEW_VERSION" --output-dir "$RUNNER_TEMP/installer"
       - name: Bundle the existing Windows runtime checks
         run: |
           mkdir -p "$RUNNER_TEMP/verify"
