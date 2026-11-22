@@ -68,6 +68,10 @@ try {
     await thread.click();
     await page.getByText(THREAD_MESSAGE).waitFor({ timeout: STEP_TIMEOUT_MS });
     if (values["check-sidebar"]) {
+      step = "opening the personal assistant from the desktop title bar";
+      await page.getByRole("button", { name: "Personal assistant", exact: true }).click();
+      await page.getByRole("button", { name: "Connect and install worker" }).waitFor();
+      await page.keyboard.press("Escape");
       step = "checking the usage meters and sidebar controls";
       const footer = page.locator('[data-sidebar="footer"]:visible');
       for (const provider of ["Codex", "Claude"]) {

@@ -1,7 +1,7 @@
-import { ArrowLeftIcon, ArrowRightIcon, SettingsIcon } from "lucide-react";
+import { ArrowLeftIcon, ArrowRightIcon, MessageCircleIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { T, useGT } from "gt-react";
-import { memo } from "react";
+import { lazy, memo, Suspense, useState } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { useAtomValue } from "@effect/atom-react";
@@ -39,11 +39,14 @@ import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { observeResize } from "~/lib/observeResize";
 
+const AssistantDialog = lazy(() => import("../assistant/AssistantDialog"));
+
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
 }: {
   isElectron: boolean;
 }) {
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const stageLabel = useEnvironmentStageLabel();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const gt = useGT();
@@ -63,6 +66,11 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         isElectron && "drag-region",
       )}
     >
+      {assistantOpen && (
+        <Suspense fallback={null}>
+          <AssistantDialog onClose={() => setAssistantOpen(false)} />
+        </Suspense>
+      )}
       {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
       <div className="relative top-[calc(var(--workspace-controls-top)-env(safe-area-inset-top))] z-10 ml-[calc(var(--workspace-controls-left)+1px-env(safe-area-inset-left))] flex shrink-0 items-center md:hidden">
         <SidebarTrigger
@@ -75,9 +83,30 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         <div className="flex shrink-0 items-center gap-1">
           <SidebarBrand onBackdrop={backdropVariant !== null} />
           {isElectron ? (
-            <div className="hidden items-center md:flex">
-              <HistoryNavigationButton direction="back" onBackdrop={backdropVariant !== null} />
-              <HistoryNavigationButton direction="forward" onBackdrop={backdropVariant !== null} />
+            <div className="flex items-center">
+              <div className="hidden items-center md:flex">
+                <HistoryNavigationButton direction="back" onBackdrop={backdropVariant !== null} />
+                <HistoryNavigationButton
+                  direction="forward"
+                  onBackdrop={backdropVariant !== null}
+                />
+              </div>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      aria-label={gt("Personal assistant")}
+                      className="[-webkit-app-region:no-drag]"
+                      size="icon-sm"
+                      variant={backdropVariant ? "media-navigation" : "ghost"}
+                      onClick={() => setAssistantOpen(true)}
+                    />
+                  }
+                >
+                  <MessageCircleIcon className="size-3.5" />
+                </TooltipTrigger>
+                <TooltipPopup side="bottom">{gt("Personal assistant")}</TooltipPopup>
+              </Tooltip>
             </div>
           ) : null}
         </div>
@@ -114,7 +143,7 @@ export function SidebarBrandWidthProbe({
     >
       <div className="ml-[var(--workspace-titlebar-content-left)] flex gap-1">
         <SidebarBrandMark onBackdrop={false} />
-        {isElectron ? <div className="w-[calc(2*var(--workspace-titlebar-control-size))]" /> : null}
+        {isElectron ? <div className="w-[calc(3*var(--workspace-titlebar-control-size))]" /> : null}
       </div>
     </div>
   );

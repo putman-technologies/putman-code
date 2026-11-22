@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  RELEASE_VERSION: 1.0.0-beta.2
+  RELEASE_VERSION: 1.0.0-beta.3
 
 jobs:
   monitor:
@@ -206,6 +206,7 @@ jobs:
       - uses: ./.github/actions/setup-ci-deps
         with:
           install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
+      - run: python3 -B scripts/tests/test_personal_assistant.py
       - run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
       - run: vp test run src/server/repoWorkflowButton.test.ts
         working-directory: packages/source-control-github
@@ -215,5 +216,5 @@ jobs:
         working-directory: packages/client-runtime
       - run: vp test run --project unit src/components/chat/MessagesTimeline.logic.test.ts src/components/sidebar/sidebarUsage.test.ts src/components/Sidebar.logic.test.ts src/components/Sidebar.drag.test.ts
         working-directory: apps/web
-      - run: vp test run --project browser src/components/chat/ComposerPrimaryActions.browser.test.tsx src/components/chat/QueuedRunsControl.browser.test.tsx src/components/chat/ChatHeader.browser.test.tsx src/components/pullRequest/RepoWorkflowAction.browser.test.tsx src/components/settings/RenameEnvironmentDialog.browser.test.tsx
+      - run: vp test run --project browser src/components/chat/ComposerPrimaryActions.browser.test.tsx src/components/chat/QueuedRunsControl.browser.test.tsx src/components/chat/ChatHeader.browser.test.tsx src/components/pullRequest/RepoWorkflowAction.browser.test.tsx src/components/settings/RenameEnvironmentDialog.browser.test.tsx src/components/assistant/AssistantDialog.browser.test.tsx
         working-directory: apps/web
