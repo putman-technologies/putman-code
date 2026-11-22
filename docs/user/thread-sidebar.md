@@ -162,8 +162,11 @@ section is off. Each device keeps its own choice.
 
 ## Settle finished work
 
-Choose **Settle thread** from its menu to move finished work out of the active list
-without deleting the conversation. **Un-settle thread** restores it to active work
+Choose **Settle thread** from its menu to hide a finished chat from the sidebar. On Mac, Windows,
+and web, even the chat you have open disappears from the list. To find it again, open the project
+filter at the top of the sidebar and choose **Show settled chats**, or search for its title.
+**Hide settled chats** closes the list. The sidebar starts with settled chats hidden each time
+you open the app. **Un-settle thread** restores a chat to active work
 and prevents automatic settlement until new activity resumes the usual rules.
 Manually settling an idle thread dismisses unanswered async questions without
 sending an answer or restarting the agent. Settling also closes the thread's

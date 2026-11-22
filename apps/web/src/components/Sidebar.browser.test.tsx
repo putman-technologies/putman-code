@@ -13,7 +13,7 @@ import {
 } from "@t3tools/contracts";
 import { isMacPlatform } from "@t3tools/shared/keybindings";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { userEvent } from "vite-plus/test/browser";
+import { page, userEvent } from "vite-plus/test/browser";
 
 import { act, fakeTimers, render } from "../../test/render";
 import { openCommandPalette } from "../commandPaletteBus";
@@ -336,6 +336,41 @@ describe("sidebar thread menu", () => {
 });
 
 describe("sidebar settled pagination", () => {
+  it("hides the open chat after it settles, including during reconnect", async () => {
+    const activeProject = project("active");
+    const open = threadShell(activeProject.id, 7);
+    const other = threadShell(activeProject.id, 8);
+    const routeThreadRef = { environmentId: open.environmentId, threadId: open.id };
+    vi.mocked(useProjects).mockReturnValue([activeProject]);
+    vi.mocked(useThreadRouteTarget).mockReturnValue({ kind: "server", threadRef: routeThreadRef });
+    vi.mocked(useQuietThreadShells).mockReturnValue([open, other]);
+    vi.mocked(useServerConfigs).mockReturnValue(new Map());
+    const sidebar = () => (
+      <SidebarProvider>
+        <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+      </SidebarProvider>
+    );
+    await using screen = await render(sidebar());
+    const row = screen.getByText(open.title, { exact: true });
+    await expect.element(row).toBeInTheDocument();
+
+    vi.mocked(useQuietThreadShells).mockReturnValue([
+      { ...open, settledOverride: "settled", settledAt: open.updatedAt },
+      other,
+    ]);
+    await screen.rerender(sidebar());
+    await expect.element(row).not.toBeInTheDocument();
+    await expect.element(screen.getByText(other.title, { exact: true })).toBeInTheDocument();
+
+    const filter = screen.getByLabelText("Filter threads by project", { exact: true });
+    await filter.click();
+    await page.getByRole("option", { name: /Show settled chats/ }).click();
+    await expect.element(row).toBeInTheDocument();
+    await filter.click();
+    await page.getByRole("option", { name: /Hide settled chats/ }).click();
+    await expect.element(row).not.toBeInTheDocument();
+  });
+
   it("keeps the viewport in place when showing more settled threads", async () => {
     using stack = new DisposableStack();
     const style = document.createElement("style");
@@ -402,10 +437,8 @@ describe("sidebar settled pagination", () => {
         <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
       </SidebarProvider>,
     );
-    const shelf = screen.container.querySelector<HTMLElement>(
-      '[data-sidebar-row="shelf:settled"]',
-    )!;
-    if (shelf.getAttribute("aria-expanded") === "false") await act(() => shelf.click());
+    await screen.getByLabelText("Filter threads by project", { exact: true }).click();
+    await page.getByRole("option", { name: /Show settled chats/ }).click();
     const more = screen.getByRole("button", { name: "Show 25 more", exact: true });
     await expect.element(more).toBeInTheDocument();
     const moreButton = more.element() as HTMLButtonElement;
