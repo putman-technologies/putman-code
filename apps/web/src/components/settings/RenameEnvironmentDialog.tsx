@@ -1,6 +1,6 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 import { T, useGT } from "gt-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { persistClientSettingsUpdate } from "~/hooks/useSettings";
 import { Button } from "../ui/button";
 import {
@@ -26,6 +26,7 @@ export function RenameEnvironmentDialog({
   readonly onClose: () => void;
 }) {
   const gt = useGT();
+  const formId = useId();
   const [draft, setDraft] = useState(displayName ?? hostLabel);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
@@ -55,23 +56,24 @@ export function RenameEnvironmentDialog({
       }}
     >
       <DialogPopup className="max-w-sm">
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            save();
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>
-              <T>Rename environment</T>
-            </DialogTitle>
-            <DialogDescription>
-              {gt("Choose a name for this device. Leave it blank to use {name}.", {
-                name: hostLabel,
-              })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogPanel>
+        <DialogHeader>
+          <DialogTitle>
+            <T>Rename environment</T>
+          </DialogTitle>
+          <DialogDescription>
+            {gt("Choose a name for this device. Leave it blank to use {name}.", {
+              name: hostLabel,
+            })}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogPanel>
+          <form
+            id={formId}
+            onSubmit={(event) => {
+              event.preventDefault();
+              save();
+            }}
+          >
             <Input
               aria-label={gt("Display name")}
               placeholder={hostLabel}
@@ -85,16 +87,16 @@ export function RenameEnvironmentDialog({
                 <T>Could not save the environment name. Try again.</T>
               </p>
             )}
-          </DialogPanel>
-          <DialogFooter>
-            <Button type="button" variant="outline" disabled={saving} onClick={onClose}>
-              <T>Cancel</T>
-            </Button>
-            <Button type="submit" disabled={saving || override === displayName}>
-              <T>Save</T>
-            </Button>
-          </DialogFooter>
-        </form>
+          </form>
+        </DialogPanel>
+        <DialogFooter>
+          <Button type="button" variant="outline" disabled={saving} onClick={onClose}>
+            <T>Cancel</T>
+          </Button>
+          <Button type="submit" form={formId} disabled={saving || override === displayName}>
+            <T>Save</T>
+          </Button>
+        </DialogFooter>
       </DialogPopup>
     </Dialog>
   );

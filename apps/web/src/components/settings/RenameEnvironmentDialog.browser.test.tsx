@@ -34,6 +34,7 @@ function Row() {
 }
 
 it("saves a device name across restart, leaves cancelled edits alone and restores the host name", async () => {
+  await page.viewport(1100, 760);
   const other = EnvironmentId.make("other");
   const original = readBrowserClientSettings() ?? DEFAULT_CLIENT_SETTINGS;
   using _restore = {
@@ -59,6 +60,7 @@ it("saves a device name across restart, leaves cancelled edits alone and restore
   await ensureClientSettingsHydrated();
   await using screen = await render(<Row />);
   const renamed = screen.getByRole("button", { name: "Sapphire VPS" });
+  await page.viewport(412, 820);
   await renamed.click();
   const name = page.getByRole("textbox", { name: "Display name" });
   await name.fill("Cancel this");
