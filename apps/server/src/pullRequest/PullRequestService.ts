@@ -314,6 +314,9 @@ export class PullRequestService extends Context.Service<
       input: PullRequestRef & { readonly check?: string; readonly tailLines: number },
     ) => Effect.Effect<ReadonlyArray<ProviderCheckLog>, PullRequestError>;
     /** Re-runs the failing checks, or only the named check. */
+    readonly workflowButton: (
+      input: import("@t3tools/contracts").RepoWorkflowButtonInput,
+    ) => Effect.Effect<import("@t3tools/contracts").RepoWorkflowButtonResult, PullRequestError>;
     readonly rerunChecks: (
       input: PullRequestRef & { readonly check?: string },
     ) => Effect.Effect<ReadonlyArray<ProviderCheckRerun>, PullRequestError>;
@@ -694,6 +697,9 @@ function withRateLimitBackoff(
     ...(api.getCheckLogs === undefined
       ? {}
       : { getCheckLogs: interactive("getCheckLogs", api.getCheckLogs) }),
+    ...(api.workflowButton === undefined
+      ? {}
+      : { workflowButton: interactive("workflowButton", api.workflowButton) }),
     ...(api.rerunChecks === undefined
       ? {}
       : { rerunChecks: interactive("rerunChecks", api.rerunChecks) }),
@@ -4031,6 +4037,25 @@ export const make = Effect.gen(function* () {
     ];
   });
 
+  const workflowButton: PullRequestService["Service"]["workflowButton"] = Effect.fn(
+    "PullRequestService.workflowButton",
+  )(function* (input) {
+    const project = yield* requireProject(input);
+    if (!project.api.workflowButton)
+      return yield* new PullRequestOperationError({
+        operation: "workflowButton",
+        detail: "This host does not support GitHub Actions.",
+      });
+    return yield* project.api
+      .workflowButton({
+        cwd: project.project.workspaceRoot,
+        host: project.host,
+        repository: project.repository,
+        number: input.number,
+        request: input.request,
+      })
+      .pipe(Effect.mapError(toPullRequestError("workflowButton")));
+  });
   const rerunChecks: PullRequestService["Service"]["rerunChecks"] = Effect.fn(
     "PullRequestService.rerunChecks",
   )(function* (input) {
@@ -4357,6 +4382,7 @@ export const make = Effect.gen(function* () {
     ),
     runAction: runActionAndInvalidate,
     checkLogs,
+    workflowButton,
     rerunChecks,
     update: invalidatedByMutation(update),
     comment: invalidatedByMutation(comment),

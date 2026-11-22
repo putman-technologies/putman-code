@@ -76,6 +76,11 @@ try {
       if (await footer.getByRole("button", { name: /^(Issues|Pull requests|Usage)$/ }).count()) {
         throw new Error("The old sidebar shortcuts are still present");
       }
+      const projects = page.getByRole("navigation", { name: "Projects" });
+      await projects.waitFor();
+      if (await projects.getByRole("link", { name: /GitHub/ }).count()) {
+        throw new Error("The project row still shows a GitHub badge");
+      }
       step = "opening and hiding settled chats through the filter";
       const filter = page.getByLabel("Filter threads by project", { exact: true });
       await filter.click();

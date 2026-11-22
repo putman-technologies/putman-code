@@ -57,6 +57,7 @@ import {
 } from "@t3tools/contracts";
 
 import * as GitHubAppAccess from "./GitHubAppAccess.ts";
+import { repoWorkflowButton, RepoWorkflowError } from "./repoWorkflowButton.ts";
 import * as GitHubRest from "./GitHubRest.ts";
 import * as GitHubPullRequestEvents from "./gitHubPullRequestEvents.ts";
 import * as GitHubRequestPolicy from "./GitHubRequestPolicy.ts";
@@ -323,6 +324,7 @@ export class GitHubBranchDeletionRefusedError extends Schema.TaggedError<GitHubB
 }
 
 export type GitHubPullRequestApiError =
+  | RepoWorkflowError
   | GitHubBranchDeletionRefusedError
   | GitHubStackActionError
   | GitHubRequestPolicy.GitHubApiError
@@ -824,6 +826,12 @@ export class GitHubPullRequestApi extends Context.Service<
       readonly checks: ReadonlyArray<ProviderCheckReference>;
       readonly tailLines: number;
     }) => Effect.Effect<ReadonlyArray<ProviderCheckLog>, GitHubPullRequestApiError>;
+    readonly workflowButton: (
+      input: import("@t3tools/source-control-core/server/PullRequestProvider").WorkflowButtonHostInput,
+    ) => Effect.Effect<
+      import("@t3tools/contracts").RepoWorkflowButtonResult,
+      GitHubPullRequestApiError
+    >;
     readonly rerunChecks: (input: {
       readonly host: string;
       readonly repository: string;
@@ -3326,6 +3334,9 @@ export const make = Effect.gen(function* () {
       );
     }),
 
+    workflowButton: Effect.fn("GitHubPullRequestApi.workflowButton")((input) =>
+      repoWorkflowButton(api, input),
+    ),
     rerunChecks: Effect.fn("GitHubPullRequestApi.rerunChecks")(function* (input) {
       const { owner, name } = parseRepositorySelector(input.repository);
       const root = `repos/${owner}/${name}/actions`;

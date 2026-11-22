@@ -207,11 +207,13 @@ jobs:
         with:
           install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
       - run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
+      - run: vp test run src/server/repoWorkflowButton.test.ts
+        working-directory: packages/source-control-github
       - run: vp test run src/settings.test.ts
         working-directory: packages/contracts
       - run: vp test run src/state/composerDispatch.test.ts
         working-directory: packages/client-runtime
       - run: vp test run --project unit src/components/chat/MessagesTimeline.logic.test.ts src/components/sidebar/sidebarUsage.test.ts src/components/Sidebar.logic.test.ts src/components/Sidebar.drag.test.ts
         working-directory: apps/web
-      - run: vp test run --project browser src/components/chat/ComposerPrimaryActions.browser.test.tsx src/components/chat/QueuedRunsControl.browser.test.tsx src/components/chat/ChatHeader.browser.test.tsx
+      - run: vp test run --project browser src/components/chat/ComposerPrimaryActions.browser.test.tsx src/components/chat/QueuedRunsControl.browser.test.tsx src/components/chat/ChatHeader.browser.test.tsx src/components/pullRequest/RepoWorkflowAction.browser.test.tsx
         working-directory: apps/web

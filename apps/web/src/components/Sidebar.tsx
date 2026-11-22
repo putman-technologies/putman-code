@@ -1298,6 +1298,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             [
               { id: "new-thread", label: gt("New thread") },
               { id: "copy-path", label: gt("Copy path") },
+              { id: "project-github", label: gt("Open project GitHub") },
               ...(canPinProject(group)
                 ? [
                     group.pinned
@@ -1315,6 +1316,19 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         switch (clicked.value) {
           case "new-thread":
             startThreadInProjectFolder(group);
+            return;
+          case "project-github":
+            if (isMobile) setOpenMobile(false);
+            void router.navigate({
+              to: "/pull-requests",
+              search: {
+                projectTab: "github",
+                environmentId: group.environmentId,
+                projectId: group.id,
+                involvement: "all",
+                state: "open",
+              },
+            });
             return;
           case "copy-path":
             copyPathToClipboard(group.workspaceRoot, { path: group.workspaceRoot });
@@ -3351,6 +3365,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             />
             <SidebarProjectList
               projects={scopeGroups}
+              onContextMenu={handleProjectFolderContextMenu}
               selectedKeys={projectScopeKeys}
               onSelect={setProjectScopeKeys}
               onToggle={toggleProjectScopeKey}

@@ -108,6 +108,7 @@ export function PullRequestActionsMenu({
   openOnHostText,
   copyReference,
   submitToCoordinator,
+  configureWorkflow,
 }: {
   environmentId: EnvironmentId;
   reference: PullRequestRef;
@@ -159,6 +160,7 @@ export function PullRequestActionsMenu({
   pendingAction: PullRequestAction | null;
   perform: PerformPullRequestAction;
   openOnHostText: string;
+  configureWorkflow?: (() => void) | undefined;
   submitToCoordinator?: (() => void) | undefined;
   copyReference: (value: string, failureTitle: string) => void;
 }) {
@@ -438,6 +440,9 @@ export function PullRequestActionsMenu({
         ) : null}
         {submitToCoordinator && (
           <MenuItem onClick={submitToCoordinator}>{gt("Send PR to Coordinator")}</MenuItem>
+        )}
+        {configureWorkflow && (
+          <MenuItem onClick={configureWorkflow}>{gt("Configure workflow button")}</MenuItem>
         )}
         <MenuItem onClick={() => void readLocalApi()?.shell.openExternal(detail.url)}>
           <ArrowUpRightIcon className="size-3.5" />

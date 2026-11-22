@@ -1343,6 +1343,11 @@ export function createPullRequestEnvironmentAtoms<R, E>(
      * One write in flight per change request: the host applies these in order, and a reader
      * ticking down a file list faster than the round trip would otherwise race their own presses.
      */
+    workflowButton: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:pull-requests:workflow-button",
+      tag: WS_METHODS.pullRequestsWorkflowButton,
+      execute: (input) => routedRequest(WS_METHODS.pullRequestsWorkflowButton, input),
+    }),
     setFilesViewed: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:pull-requests:set-files-viewed",
       tag: WS_METHODS.pullRequestsSetFilesViewed,

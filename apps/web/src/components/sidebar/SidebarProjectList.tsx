@@ -1,9 +1,9 @@
-import type { EnvironmentId, EnvironmentMachineKind } from "@t3tools/contracts";
+import type { ContextMenuSource, EnvironmentId, EnvironmentMachineKind } from "@t3tools/contracts";
 import { useGT } from "gt-react";
 import { SquarePenIcon } from "lucide-react";
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import { ProjectEnvironmentBadge } from "../ProjectEnvironmentBadge";
-import { CoordinatorStatusBadge } from "./CoordinatorStatusBadge";
+import { contextMenuSourceOf } from "../../contextMenuSource";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { SidebarHeaderIconButton } from "./SidebarThreadHeader";
 
@@ -12,6 +12,11 @@ interface SidebarProjectListProps {
   selectedKeys: readonly string[];
   onSelect: (keys: readonly string[]) => void;
   onToggle: (key: string) => void;
+  onContextMenu: (
+    group: SidebarProjectSnapshot,
+    position: { x: number; y: number },
+    source: ContextMenuSource,
+  ) => void;
   onNewThread: (group: SidebarProjectSnapshot) => void;
   showEnvironments: boolean;
   primaryEnvironmentId: EnvironmentId | null;
@@ -42,6 +47,14 @@ export function SidebarProjectList(props: SidebarProjectListProps) {
               type="button"
               aria-pressed={props.selectedKeys.includes(project.projectKey)}
               className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-sidebar-foreground hover:bg-sidebar-row-hover aria-pressed:bg-sidebar-row-hover aria-pressed:font-semibold focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              onContextMenu={(event) => {
+                event.preventDefault();
+                props.onContextMenu(
+                  project,
+                  { x: event.clientX, y: event.clientY },
+                  contextMenuSourceOf(event),
+                );
+              }}
               onClick={(event) => {
                 if (event.shiftKey) props.onToggle(project.projectKey);
                 else props.onSelect([project.projectKey]);
@@ -57,7 +70,6 @@ export function SidebarProjectList(props: SidebarProjectListProps) {
                 />
               )}
             </button>
-            <CoordinatorStatusBadge members={project.memberProjectRefs} />
             <span className="opacity-0 group-hover/project:opacity-100 group-focus-within/project:opacity-100 pointer-coarse:opacity-100">
               <SidebarHeaderIconButton
                 label={gt("New thread in {project}", { project: project.displayName })}

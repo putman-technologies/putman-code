@@ -2864,6 +2864,8 @@ export const layerWsRpc = (
           withPullRequestViewer(input, pullRequests.changeBreakdown(input)),
         [WS_METHODS.pullRequestsSetFilesViewed]: (input) =>
           withPullRequestViewer(input, pullRequests.setFilesViewed(input)),
+        [WS_METHODS.pullRequestsWorkflowButton]: (input) =>
+          withPullRequestViewer(input, pullRequests.workflowButton(input)),
         [WS_METHODS.pullRequestsRunAction]: (input) =>
           withPullRequestViewer(input, pullRequests.runAction(input)).pipe(
             Effect.tap(() =>

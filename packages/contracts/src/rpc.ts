@@ -202,6 +202,8 @@ import {
 } from "./guestShare.ts";
 import { PullRequestReviewGuideResult } from "./pullRequestReviewGuide.ts";
 import {
+  RepoWorkflowButtonInput,
+  RepoWorkflowButtonResult,
   PullRequestActionInput,
   PullRequestActivity,
   PullRequestChangeBreakdown,
@@ -612,6 +614,7 @@ export const WS_METHODS = {
   pullRequestsFilesViewed: "pullRequests.filesViewed",
   pullRequestsChangeBreakdown: "pullRequests.changeBreakdown",
   pullRequestsSetFilesViewed: "pullRequests.setFilesViewed",
+  pullRequestsWorkflowButton: "pullRequests.workflowButton",
   pullRequestsRunAction: "pullRequests.runAction",
   pullRequestsUpdate: "pullRequests.update",
   pullRequestsComment: "pullRequests.comment",
@@ -1222,6 +1225,11 @@ const WsPullRequestsSetFilesViewedRpc = Rpc.make(WS_METHODS.pullRequestsSetFiles
   error: PullRequestRpcError,
 });
 
+const WsPullRequestsWorkflowButtonRpc = Rpc.make(WS_METHODS.pullRequestsWorkflowButton, {
+  payload: RepoWorkflowButtonInput,
+  success: RepoWorkflowButtonResult,
+  error: PullRequestRpcError,
+});
 const WsPullRequestsRunActionRpc = Rpc.make(WS_METHODS.pullRequestsRunAction, {
   payload: PullRequestActionInput,
   // Undefined unless asked for with replyWithSummary, or when the host's reply lacked it.
@@ -2398,6 +2406,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsPullRequestsFilesViewedRpc,
   WsPullRequestsChangeBreakdownRpc,
   WsPullRequestsSetFilesViewedRpc,
+  WsPullRequestsWorkflowButtonRpc,
   WsPullRequestsRunActionRpc,
   WsPullRequestsUpdateRpc,
   WsPullRequestsCommentRpc,

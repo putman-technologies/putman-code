@@ -760,6 +760,8 @@ export const make = Effect.gen(function* () {
         .pipe(Effect.mapError(fail("runAction"))),
 
     getCheckLogs: (input) => cli.readCheckLogs(input).pipe(Effect.mapError(fail("getCheckLogs"))),
+    workflowButton: (input) =>
+      cli.workflowButton(input).pipe(Effect.mapError(fail("workflowButton"))),
     rerunChecks: (input) => cli.rerunChecks(input).pipe(Effect.mapError(fail("rerunChecks"))),
 
     updateChangeRequest: (input) =>

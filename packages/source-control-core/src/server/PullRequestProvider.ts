@@ -352,6 +352,11 @@ export interface ProviderRepositoryRef {
   readonly host: string;
 }
 
+export type WorkflowButtonHostInput = ProviderRepositoryRef & {
+  readonly number: number;
+  readonly request: import("@t3tools/contracts").RepoWorkflowButtonRequest;
+};
+
 export interface PullRequestProviderApi {
   readonly withVerifiedCredential?: <A, E, R>(
     /** `repository` lets a host pick the credential that can reach it. */
@@ -611,6 +616,13 @@ export interface PullRequestProviderApi {
   ) => Effect.Effect<ReadonlyArray<ProviderCheckLog>, PullRequestProviderError>;
 
   /** Re-runs the named checks' jobs. A check the host cannot re-run gets a `detail`. */
+  readonly workflowButton?: (
+    input: WorkflowButtonHostInput,
+  ) => Effect.Effect<
+    import("@t3tools/contracts").RepoWorkflowButtonResult,
+    PullRequestProviderError
+  >;
+
   readonly rerunChecks?: (
     input: ProviderRepositoryRef & { readonly checks: ReadonlyArray<ProviderCheckReference> },
   ) => Effect.Effect<ReadonlyArray<ProviderCheckRerun>, PullRequestProviderError>;
