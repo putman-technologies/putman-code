@@ -212,6 +212,7 @@ export interface GitRenameBranchInput {
 
 export interface GitRenameBranchResult {
   branch: string;
+  configUnconfirmed?: true;
 }
 
 export interface GitFetchRefInput {
