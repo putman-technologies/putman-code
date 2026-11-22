@@ -1,0 +1,217 @@
+name: Build PutmanCode desktop release
+
+on:
+  push:
+    branches: [release/1.0.0]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_VERSION: 1.0.0
+
+jobs:
+  monitor:
+    name: Compile Windows resource monitor
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout: native/resource-monitor
+      - run: cargo build --locked --release --target x86_64-pc-windows-msvc --manifest-path native/resource-monitor/Cargo.toml
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-resource-monitor
+          path: native/resource-monitor/target/x86_64-pc-windows-msvc/release/t3-resource-monitor.exe
+          if-no-files-found: error
+          retention-days: 1
+
+  package:
+    name: Build Windows installer
+    needs: monitor
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
+          sparse-checkout-cone-mode: false
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: release-resource-monitor
+          path: native/resource-monitor/target/x86_64-pc-windows-msvc/release
+      - name: Package the release
+        env:
+          T3CODE_DESKTOP_REUSE_RESOURCE_MONITOR: "true"
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: |
+          test "$(node -p 'require("./apps/desktop/package.json").version')" = "$RELEASE_VERSION"
+          APP_VERSION="$RELEASE_VERSION" vp run build:desktop:bundle
+          vp run dist:desktop:artifact --skip-build --platform win --target nsis --arch x64 --build-version "$RELEASE_VERSION" --output-dir "$RUNNER_TEMP/installer"
+      - name: Bundle the existing Windows runtime checks
+        run: |
+          mkdir -p "$RUNNER_TEMP/verify"
+          scripts/node_modules/.bin/esbuild scripts/verify-windows-desktop-artifact.ts \
+            --bundle --platform=node --format=esm --target=node24 --define:import.meta.main=false \
+            --banner:js="import{createRequire as __cr}from'node:module';const require=__cr(import.meta.url);" \
+            --outfile="$RUNNER_TEMP/verify/verify.mjs"
+          node -p 'require("./apps/desktop/package.json").dependencies["playwright-core"]' > "$RUNNER_TEMP/verify/playwright-version.txt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: candidate-installer
+          path: ${{ runner.temp }}/installer/*.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-checks
+          path: ${{ runner.temp }}/verify/
+          if-no-files-found: error
+          retention-days: 1
+
+  verify:
+    name: Install and launch on Windows
+    needs: package
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            /scripts/smoke-desktop-app.ts
+            /scripts/fixtures/desktop-launch/statev2.sqlite
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: candidate-installer
+          path: installer
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: release-checks
+          path: scripts
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "26.13.1"
+          package-manager-cache: false
+      - name: Install the downloaded EXE for the current user
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'PutmanCodeRelease'
+          $setup = Get-Item "installer/Putman-Code-$env:RELEASE_VERSION-x64.exe"
+          $process = Start-Process -FilePath $setup.FullName -ArgumentList '/S',"/D=$target" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installer exit code $($process.ExitCode)" }
+          if (!(Test-Path "$target/PutmanCode.exe")) { throw "Installed executable missing" }
+          "INSTALLED_APP=$target" >> $env:GITHUB_ENV
+          Get-FileHash -Algorithm SHA256 $setup.FullName | Format-List
+      - name: Check installed native modules
+        run: node scripts/verify.mjs --app-dir "$env:INSTALLED_APP" --arch x64 --build-version "$env:RELEASE_VERSION" --verbose
+      - name: Launch the installed app and open a thread
+        working-directory: scripts
+        run: |
+          $version = (Get-Content playwright-version.txt -Raw).Trim()
+          npm install --no-audit --no-fund --ignore-scripts "playwright-core@$version"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node smoke-desktop-app.ts --executable "$env:INSTALLED_APP/PutmanCode.exe" --artifacts-dir "$env:RUNNER_TEMP/release-launch"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: failure()
+        with:
+          name: release-launch-diagnostics
+          path: ${{ runner.temp }}/release-launch/
+          if-no-files-found: ignore
+          retention-days: 1
+      - name: Upload verified Windows installer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: PutmanCode-${{ env.RELEASE_VERSION }}-Windows-x64
+          path: installer/*.exe
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
+
+  mac:
+    name: Package and launch on macOS
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
+          sparse-checkout-cone-mode: false
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
+      - name: Build Apple silicon app
+        run: |
+          set -euo pipefail
+          test "$(node -p 'require("./apps/desktop/package.json").version')" = "$RELEASE_VERSION"
+          APP_VERSION="$RELEASE_VERSION" vp run build:desktop:bundle
+          vp run dist:desktop:artifact --skip-build --platform mac --target zip --arch arm64 --build-version "$RELEASE_VERSION" --output-dir "$RUNNER_TEMP/package"
+      - name: Create manual-install disk image and launch its app
+        run: |
+          set -euo pipefail
+          folder="$RUNNER_TEMP/image"
+          mount="$RUNNER_TEMP/mounted"
+          mkdir -p "$folder" "$mount"
+          ditto -x -k "$RUNNER_TEMP/package/Putman-Code-$RELEASE_VERSION-arm64.zip" "$folder"
+          app="$folder/PutmanCode.app"
+          codesign --force --deep --sign - --timestamp=none "$app"
+          ln -s /Applications "$folder/Applications"
+          image="$RUNNER_TEMP/PutmanCode-$RELEASE_VERSION-macOS-arm64.dmg"
+          hdiutil create -quiet -volname "PutmanCode $RELEASE_VERSION" -srcfolder "$folder" -format UDZO "$image"
+          hdiutil verify "$image"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$image"
+          trap 'hdiutil detach "$mount" -force >/dev/null || true' EXIT
+          installed="$RUNNER_TEMP/Installed/PutmanCode.app"
+          mkdir -p "$RUNNER_TEMP/Installed"
+          ditto "$mount/PutmanCode.app" "$installed"
+          codesign --verify --deep --strict "$installed"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$installed/Contents/Info.plist")" = "$RELEASE_VERSION"
+          node scripts/smoke-desktop-app.ts --executable "$installed/Contents/MacOS/PutmanCode" --artifacts-dir "$RUNNER_TEMP/launch"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: PutmanCode-${{ env.RELEASE_VERSION }}-macOS-arm64
+          path: ${{ runner.temp }}/PutmanCode-*-macOS-arm64.dmg
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  follow-ups:
+    name: Check follow-up behavior
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
+          sparse-checkout-cone-mode: false
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
+      - run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
+      - run: vp test run src/settings.test.ts
+        working-directory: packages/contracts
+      - run: vp test run src/state/composerDispatch.test.ts
+        working-directory: packages/client-runtime
+      - run: vp test run --project unit src/components/chat/MessagesTimeline.logic.test.ts
+        working-directory: apps/web
+      - run: vp test run --project browser src/components/chat/ComposerPrimaryActions.browser.test.tsx src/components/chat/QueuedRunsControl.browser.test.tsx
+        working-directory: apps/web

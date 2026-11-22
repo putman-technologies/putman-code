@@ -4225,8 +4225,6 @@
   "0647cef26e3b1fa5": "La instantánea es demasiado grande para copiarla.",
   "c036ab3d20c54b5b": "Tú",
   "6b2294cfd43aee15": "{name} (invitado)",
-  "d1d1fed744318218": "Redirección · esperando a que se lea",
-  "75948010e112a8f4": "Redirección",
   "1ccc41732907ca74": "Esperando a que el agente lea esto. Lee las redirecciones entre pasos, cuando termina un comando en ejecución.",
   "ae3f487ebde9db74": "Se puso en cola y luego se promovió para redirigir el turno activo",
   "4f2ec8c81b4efb22": "Redirigió el turno activo",
@@ -12215,5 +12213,13 @@
   "3885c0f1847cfd38": "Producción está al día.",
   "a621662a702857c6": "La comparación con producción no está disponible.",
   "e900c25fe4c9466d": "Estado de despliegue no disponible",
-  "18992d08e305381b": "No hay despliegues confirmados en producción."
+  "18992d08e305381b": "No hay despliegues confirmados en producción.",
+  "b1ecb46bda52ac00": "Pon un mensaje en cola para el próximo turno…",
+  "c54fb74bb9384081": "Redirige el turno actual…",
+  "9c3d84dab395f4f1": "En cola · Próximo turno",
+  "9c9cd26db75cd251": "Redirigir ahora",
+  "d6567261586276f7": "Enviado desde la cola",
+  "be1b795c75460ffb": "Redirigido · Pendiente de lectura",
+  "999454e377b78de6": "Redirigido · Turno actual",
+  "c4f76abec83c298a": "Este mensaje inició su propio turno desde la cola."
 }

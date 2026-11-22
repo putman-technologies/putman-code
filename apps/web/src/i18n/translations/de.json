@@ -4228,8 +4228,6 @@
   "0647cef26e3b1fa5": "Der Snapshot ist zu groß zum Kopieren.",
   "c036ab3d20c54b5b": "Du",
   "6b2294cfd43aee15": "{name} (Gast)",
-  "d1d1fed744318218": "Umlenkung · wartet darauf, gelesen zu werden",
-  "75948010e112a8f4": "Umlenkung",
   "1ccc41732907ca74": "Wartet darauf, dass der Agent dies liest. Er liest Umlenkungen zwischen Schritten, nachdem ein laufender Befehl beendet ist.",
   "ae3f487ebde9db74": "Zuerst eingereiht, dann zum Umlenken der aktiven Runde vorgezogen",
   "4f2ec8c81b4efb22": "Hat die aktive Runde umgelenkt",
@@ -12219,5 +12217,13 @@
   "3885c0f1847cfd38": "Produktion ist auf dem aktuellen Stand.",
   "a621662a702857c6": "Der Vergleich mit der Produktion ist nicht verfügbar.",
   "e900c25fe4c9466d": "Bereitstellungsstatus nicht verfügbar",
-  "18992d08e305381b": "Keine bestätigte Bereitstellung in Produktion."
+  "18992d08e305381b": "Keine bestätigte Bereitstellung in Produktion.",
+  "b1ecb46bda52ac00": "Nachricht für den nächsten Durchgang einreihen…",
+  "c54fb74bb9384081": "Aktuellen Durchgang lenken…",
+  "9c3d84dab395f4f1": "Eingereiht · Nächster Durchgang",
+  "9c9cd26db75cd251": "Jetzt lenken",
+  "d6567261586276f7": "Aus der Warteschlange gesendet",
+  "be1b795c75460ffb": "Gelenkt · Noch ungelesen",
+  "999454e377b78de6": "Gelenkt · Aktueller Durchgang",
+  "c4f76abec83c298a": "Diese Nachricht hat aus der Warteschlange einen eigenen Durchgang gestartet."
 }

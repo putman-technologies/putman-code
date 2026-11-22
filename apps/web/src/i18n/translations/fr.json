@@ -4226,8 +4226,6 @@
   "0647cef26e3b1fa5": "L’instantané est trop volumineux pour être copié.",
   "c036ab3d20c54b5b": "Vous",
   "6b2294cfd43aee15": "{name} (invité)",
-  "d1d1fed744318218": "Réorientation · en attente de lecture",
-  "75948010e112a8f4": "Réorientation",
   "1ccc41732907ca74": "En attente de lecture par l’agent. Il lit les réorientations entre deux étapes, une fois la commande en cours terminée.",
   "ae3f487ebde9db74": "Initialement en file d’attente, puis promu pour réorienter le tour actif",
   "4f2ec8c81b4efb22": "A réorienté le tour actif",
@@ -12220,5 +12218,13 @@
   "3885c0f1847cfd38": "La production est à jour.",
   "a621662a702857c6": "La comparaison avec la production est indisponible.",
   "e900c25fe4c9466d": "État du déploiement indisponible",
-  "18992d08e305381b": "Aucun déploiement en production confirmé."
+  "18992d08e305381b": "Aucun déploiement en production confirmé.",
+  "b1ecb46bda52ac00": "Mettre un message en attente pour le prochain tour…",
+  "c54fb74bb9384081": "Réorienter le tour en cours…",
+  "9c3d84dab395f4f1": "En attente · Prochain tour",
+  "9c9cd26db75cd251": "Réorienter maintenant",
+  "d6567261586276f7": "Envoyé depuis la file",
+  "be1b795c75460ffb": "Réorienté · En attente de lecture",
+  "999454e377b78de6": "Réorienté · Tour en cours",
+  "c4f76abec83c298a": "Ce message a démarré son propre tour depuis la file d’attente."
 }

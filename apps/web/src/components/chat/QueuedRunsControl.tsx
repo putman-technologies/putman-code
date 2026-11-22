@@ -285,6 +285,10 @@ export function QueuedRunsControl({
               aria-current={isEditing ? "true" : undefined}
               className="group/queued flex w-full flex-col items-end gap-1"
             >
+              <span className="me-1 inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2 py-1 text-xs font-medium leading-none text-foreground">
+                <Clock3Icon aria-hidden className="size-3" />
+                {gt("Queued · Next turn")}
+              </span>
               <QueuedMessage
                 environmentId={props.environmentId}
                 message={item.message}
@@ -310,7 +314,11 @@ export function QueuedRunsControl({
                           }}
                         >
                           <ArrowUpIcon />
-                          <T>Send now</T>
+                          {workflow?.canSendNow || workflow?.promoteSkipsCompaction ? (
+                            <T>Send now</T>
+                          ) : (
+                            gt("Steer now")
+                          )}
                         </Button>
                       </TooltipTrigger>
                       <TooltipPopup>

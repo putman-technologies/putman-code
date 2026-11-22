@@ -1,6 +1,10 @@
 import { expect, it } from "vite-plus/test";
 
-import { compactionBlocksSteering, composerRunsDraftLocally } from "./composerDispatch.ts";
+import {
+  compactionBlocksSteering,
+  composerRunsDraftLocally,
+  resolveComposerDispatchMode,
+} from "./composerDispatch.ts";
 
 it("blocks steering for explicit compaction, and for automatic compaction unless the provider takes steers then", () => {
   const during = (
@@ -70,4 +74,15 @@ it("treats only the commands the composer runs itself as local", () => {
   expect(composerRunsDraftLocally({ ...all, text: "fix the bug" })).toBe(false);
   expect(composerRunsDraftLocally({ ...all, holdsOnlyText: false, text: "/clear" })).toBe(false);
   expect(composerRunsDraftLocally({ ...all, holdsOnlyText: false, text: "/side why?" })).toBe(true);
+});
+
+it("queues running follow-ups unless the user chooses to steer a steerable turn", () => {
+  const running = { running: true, alternateModifier: false };
+  expect(resolveComposerDispatchMode(running)).toBe("queue");
+  expect(resolveComposerDispatchMode({ ...running, alternateModifier: true })).toBe("steer");
+  expect(resolveComposerDispatchMode({ ...running, activeTurnDefault: "steer" })).toBe("steer");
+  expect(
+    resolveComposerDispatchMode({ ...running, alternateModifier: true, canSteer: false }),
+  ).toBe("queue");
+  expect(resolveComposerDispatchMode({ running: false, alternateModifier: false })).toBe("auto");
 });

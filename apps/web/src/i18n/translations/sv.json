@@ -4226,8 +4226,6 @@
   "0647cef26e3b1fa5": "Ögonblicksbilden är för stor för att kopieras.",
   "c036ab3d20c54b5b": "Du",
   "6b2294cfd43aee15": "{name} (gäst)",
-  "d1d1fed744318218": "Omstyrning · väntar på att läsas",
-  "75948010e112a8f4": "Omstyrning",
   "1ccc41732907ca74": "Väntar på att agenten ska läsa det här. Den läser omstyrningar mellan stegen, efter att ett körande kommando är klart.",
   "ae3f487ebde9db74": "Köades först och flyttades sedan upp för att styra om den aktiva omgången",
   "4f2ec8c81b4efb22": "Styrde om den aktiva omgången",
@@ -12227,5 +12225,13 @@
   "3885c0f1847cfd38": "Produktionsmiljön är uppdaterad.",
   "a621662a702857c6": "Jämförelsen med produktion är inte tillgänglig.",
   "e900c25fe4c9466d": "Driftsättningsstatus är inte tillgänglig",
-  "18992d08e305381b": "Ingen bekräftad driftsättning i produktion."
+  "18992d08e305381b": "Ingen bekräftad driftsättning i produktion.",
+  "b1ecb46bda52ac00": "Köa ett meddelande till nästa tur…",
+  "c54fb74bb9384081": "Styr den pågående turen…",
+  "9c3d84dab395f4f1": "Köat · Nästa tur",
+  "9c9cd26db75cd251": "Styr nu",
+  "d6567261586276f7": "Skickat från kön",
+  "be1b795c75460ffb": "Styrning skickad · Väntar på att läsas",
+  "999454e377b78de6": "Styrning skickad · Pågående tur",
+  "c4f76abec83c298a": "Det här meddelandet startade en egen tur från kön."
 }

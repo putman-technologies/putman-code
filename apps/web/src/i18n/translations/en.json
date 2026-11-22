@@ -4227,8 +4227,6 @@
   "0647cef26e3b1fa5": "The snapshot is too large to copy.",
   "c036ab3d20c54b5b": "You",
   "6b2294cfd43aee15": "{name} (guest)",
-  "d1d1fed744318218": "Steer · waiting to be read",
-  "75948010e112a8f4": "Steer",
   "1ccc41732907ca74": "Waiting for the agent to read this. It reads steers between steps, after a running command finishes.",
   "ae3f487ebde9db74": "Originally queued, then promoted to steer the active turn",
   "4f2ec8c81b4efb22": "Steered the active turn",
@@ -12229,5 +12227,13 @@
   "3885c0f1847cfd38": "Production is up to date.",
   "a621662a702857c6": "The production comparison is unavailable.",
   "e900c25fe4c9466d": "Deployment status unavailable",
-  "18992d08e305381b": "No confirmed production deployment."
+  "18992d08e305381b": "No confirmed production deployment.",
+  "b1ecb46bda52ac00": "Queue a message for the next turn…",
+  "c54fb74bb9384081": "Steer the current turn…",
+  "9c3d84dab395f4f1": "Queued · Next turn",
+  "9c9cd26db75cd251": "Steer now",
+  "d6567261586276f7": "Sent from queue",
+  "be1b795c75460ffb": "Steered · Waiting to be read",
+  "999454e377b78de6": "Steered · Current turn",
+  "c4f76abec83c298a": "This message started its own turn from the queue."
 }

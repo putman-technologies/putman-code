@@ -417,7 +417,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.sendShortcut !== DEFAULT_UNIFIED_SETTINGS.sendShortcut
       ? [gt("Send shortcut")]
       : []),
-    ...(settings.followUpBehavior !== DEFAULT_UNIFIED_SETTINGS.followUpBehavior
+    ...(settings.runningTurnSendAction !== DEFAULT_UNIFIED_SETTINGS.runningTurnSendAction
       ? [gt("Follow-up behavior")]
       : []),
     ...(settings.toolCallVisibility !== DEFAULT_UNIFIED_SETTINGS.toolCallVisibility
@@ -550,7 +550,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       showSkillsInSlashMenu: DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu,
       composerRichTextEnabled: DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled,
       sendShortcut: DEFAULT_UNIFIED_SETTINGS.sendShortcut,
-      followUpBehavior: DEFAULT_UNIFIED_SETTINGS.followUpBehavior,
+      runningTurnSendAction: DEFAULT_UNIFIED_SETTINGS.runningTurnSendAction,
       toolCallVisibility: DEFAULT_UNIFIED_SETTINGS.toolCallVisibility,
       screenReaderAnnouncements: DEFAULT_UNIFIED_SETTINGS.screenReaderAnnouncements,
       screenReaderWindowTitle: DEFAULT_UNIFIED_SETTINGS.screenReaderWindowTitle,
@@ -1203,12 +1203,12 @@ export function ChatSettingsPanel() {
                   )
           }
           resetAction={
-            settings.followUpBehavior !== DEFAULT_UNIFIED_SETTINGS.followUpBehavior ? (
+            settings.runningTurnSendAction !== DEFAULT_UNIFIED_SETTINGS.runningTurnSendAction ? (
               <SettingResetButton
                 ariaLabel={gt("Reset follow-up behavior to default")}
                 onClick={() =>
                   updateSettings({
-                    followUpBehavior: DEFAULT_UNIFIED_SETTINGS.followUpBehavior,
+                    runningTurnSendAction: DEFAULT_UNIFIED_SETTINGS.runningTurnSendAction,
                   })
                 }
               />
@@ -1216,10 +1216,10 @@ export function ChatSettingsPanel() {
           }
           control={
             <Select
-              value={settings.followUpBehavior}
+              value={settings.runningTurnSendAction}
               onValueChange={(value) => {
                 if (value === "queue" || value === "steer") {
-                  updateSettings({ followUpBehavior: value });
+                  updateSettings({ runningTurnSendAction: value });
                 }
               }}
             >
@@ -1229,7 +1229,7 @@ export function ChatSettingsPanel() {
                 aria-label={gt("Follow-up behavior")}
               >
                 <SelectValue>
-                  {settings.followUpBehavior === "queue" ? gt("Queue") : gt("Steer")}
+                  {settings.runningTurnSendAction === "queue" ? gt("Queue") : gt("Steer")}
                 </SelectValue>
               </SelectTrigger>
               <SelectPopup align="end" alignItemWithTrigger={false}>

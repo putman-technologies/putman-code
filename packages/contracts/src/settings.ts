@@ -522,8 +522,10 @@ export const ClientSettingsSchema = Schema.Struct({
   sendShortcut: Schema.Literals(["enter", "mod-enter-multiline", "mod-enter"]).pipe(
     Schema.withDecodingDefault(Effect.succeed("enter")),
   ),
-  followUpBehavior: Schema.Literals(["queue", "steer"]).pipe(
-    Schema.withDecodingDefault(Effect.succeed("steer")),
+  // Pre-1.0 clients saved the entire settings object, including the implicit steer default.
+  // A new key lets upgrades start in Queue and preserves subsequent explicit choices.
+  runningTurnSendAction: Schema.Literals(["queue", "steer"]).pipe(
+    Schema.withDecodingDefault(Effect.succeed("queue")),
   ),
   proactivePanelsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   showSkillsInSlashMenu: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
@@ -2097,7 +2099,7 @@ export const ClientSettingsPatch = Schema.Struct({
   pullRequestLinksOpenInApp: Schema.optionalKey(Schema.Boolean),
   composerRichTextEnabled: Schema.optionalKey(Schema.Boolean),
   sendShortcut: Schema.optionalKey(Schema.Literals(["enter", "mod-enter-multiline", "mod-enter"])),
-  followUpBehavior: Schema.optionalKey(Schema.Literals(["queue", "steer"])),
+  runningTurnSendAction: Schema.optionalKey(Schema.Literals(["queue", "steer"])),
   proactivePanelsEnabled: Schema.optionalKey(Schema.Boolean),
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
   boringSidebarEnabled: Schema.optionalKey(Schema.Boolean),

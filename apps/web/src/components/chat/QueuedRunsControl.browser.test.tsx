@@ -410,7 +410,7 @@ it("does not re-render while assistant text streams into the thread", async () =
   expect(renders).toBeGreaterThan(settled);
 });
 
-it("tells the user why Send now was rejected", async () => {
+it("shows the queued status and explains a rejected promotion to Steer", async () => {
   setup();
   const reason = "Target run run:active is stopping and cannot be steered.";
   state.workflow = {
@@ -440,6 +440,7 @@ it("tells the user why Send now was rejected", async () => {
     </ToastProvider>,
   );
 
-  await page.getByRole("button", { name: "Send now" }).click();
+  await expect.element(page.getByText("Queued · Next turn")).toBeVisible();
+  await page.getByRole("button", { name: "Steer now" }).click();
   await vi.waitFor(() => expect(page.getByText(reason).element()).toBeVisible());
 });
