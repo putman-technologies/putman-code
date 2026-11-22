@@ -1,25 +1,24 @@
-"""Run on a disposable GitHub-hosted Mac. Exercises the production updater IPC and ShipIt."""
+"""Exercise one-time setup, its login agent and the native updater on a disposable Mac."""
 import json
 import os
 from pathlib import Path
 import plistlib
 import subprocess
+import sys
 import tempfile
-import threading
 import time
 
 import preview as p
 
 if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted":
     raise SystemExit("This test requires a disposable GitHub-hosted Mac.")
+if p.ROOT.exists() or p.APP.exists():
+    raise SystemExit("The test requires an empty preview folder and no installed copy.")
 
-# No private production identity or repository secrets are used for this test.
 os.umask(0o077)
 with tempfile.TemporaryDirectory() as scratch:
     tmp = Path(scratch)
-    p.ROOT = tmp
-    p.FEED = tmp / "feed"
-    p.FEED.mkdir()
+    p.ROOT.mkdir(mode=0o700, parents=True)
     chain = tmp / "test.keychain-db"
     password = os.urandom(16).hex()
     p.run("security", "create-keychain", "-p", password, chain)
@@ -27,37 +26,51 @@ with tempfile.TemporaryDirectory() as scratch:
     p.run("security", "unlock-keychain", "-p", password, chain)
     p.run("security", "list-keychains", "-d", "user", "-s", chain)
     p.run("security", "default-keychain", "-d", "user", "-s", chain)
+    # Authorize the disposable test identity without an interactive trust dialog.
     def trust_test_leaf(keychain, cert):
         p.run("sudo", "security", "add-trusted-cert", "-d", "-r", "trustRoot", "-p", "codeSign",
               "-k", "/Library/Keychains/System.keychain", cert)
-    fingerprint = p.initialize_identity(trust_test_leaf)
+    fp = p.initialize_identity(trust_test_leaf)
     p.run("security", "set-key-partition-list", "-S", "apple-tool:,apple:,codesign:", "-s",
           "-k", password, chain)
-    server = p.http.server.ThreadingHTTPServer(("127.0.0.1", 0), p.FeedHandler)
-    conf = {"port": server.server_address[1], "fingerprint": fingerprint}
-    all_releases = p.releases()
-    first, second = "1.0.0-beta.1", "1.0.0-beta.3"
-    folder = tmp / "Applications"
-    folder.mkdir()
-    app = p.prepare_app(folder, first, all_releases[first], conf)
-    p.publish(second, all_releases[second], conf)
-    # Verify an unrelated app fails the same identity check.
-    if subprocess.run(["codesign", "--verify", "-R", "=" + p.requirement(fingerprint),
-                       "/System/Applications/Calculator.app"]).returncode == 0:
-        raise RuntimeError("The private signature requirement accepted an unrelated app.")
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    first = "1.0.0-beta.1"
+    available = p.releases()
+    url, sha = available[first]
+    dmg = Path.home() / "Downloads" / p.asset_name(first)
+    dmg.parent.mkdir(exist_ok=True)
+    p.run("curl", "-fsSL", "--proto", "=https", "--proto-redir", "=https", "-o", dmg, url)
+    if p.digest(dmg, "sha256").hexdigest() != sha:
+        raise RuntimeError("Seed digest mismatch")
+    mount = tmp / "mounted"
+    mount.mkdir()
+    p.run("hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", mount, dmg)
+    try:
+        p.run("ditto", mount / "PutmanCode.app", p.APP)
+    finally:
+        p.run("hdiutil", "detach", mount)
+    p.run(sys.executable, Path(__file__).with_name("preview.py"), "setup")
+    # Reproduce the one-time Finder replacement on this otherwise empty test Mac.
+    p.APP.rename(tmp / "original.app")
+    p.run("ditto", p.ROOT / "Ready" / "PutmanCode.app", p.APP)
+    metadata = json.loads((p.FEED / "current.json").read_bytes())
+    latest = metadata["version"]
+    if p.version_key(latest) <= p.version_key(first):
+        raise RuntimeError("The feed does not contain an upgrade")
+    unrelated = subprocess.run(["codesign", "--verify", "-R", "=" + p.requirement(fp),
+                                tmp / "original.app"])
+    if unrelated.returncode == 0:
+        raise RuntimeError("The seed accepted the public ad-hoc signer as its private updater.")
     env = {**os.environ, "PUTMANCODE_HOME": str(tmp / "isolated-state"), "T3CODE_TELEMETRY_ENABLED": "false"}
-    p.run("codesign", "-dr", "-", app)
-    subprocess.run(["node", str(Path(__file__).with_name("verify.cjs")), str(app), first, second],
+    subprocess.run(["node", str(Path(__file__).with_name("verify.cjs")), str(p.APP), first, latest],
                    env=env, timeout=360, check=True)
     for _ in range(90):
         try:
-            if p.bundle_info(app)["CFBundleShortVersionString"] == second:
+            if p.bundle_info(p.APP)["CFBundleShortVersionString"] == latest:
                 break
         except (FileNotFoundError, plistlib.InvalidFileException):
             pass
         time.sleep(1)
     else:
-        raise RuntimeError("ShipIt did not replace the seed with the downloaded beta.")
-    p.signature_check(app, p.requirement(fingerprint))
-    print(f"Verified the native PutmanCode check, download and install from {first} to {second}.")
+        raise RuntimeError("ShipIt did not replace the installed app with the downloaded beta.")
+    p.signature_check(p.APP, p.requirement(fp))
+    print(f"Verified one-time setup, the login agent and native check/download/install from {first} to {latest}.")
