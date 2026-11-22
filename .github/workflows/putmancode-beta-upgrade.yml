@@ -1,0 +1,123 @@
+name: Verify packaged PutmanCode beta updates
+on:
+  push:
+    branches: ['verify/desktop-beta-*']
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inputs:
+    runs-on: ubuntu-24.04
+    # GitHub shows a draft to release editors. Only this download job needs that permission.
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout: apps/desktop/package.json
+          sparse-checkout-cone-mode: false
+      - name: Collect the draft and matching installer fixture
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(jq -er '.version' apps/desktop/package.json)
+          repo="$GITHUB_REPOSITORY"
+          draft=$(gh release view "v$version" --repo "$repo" --json isDraft,targetCommitish)
+          jq -e --arg sha "$GITHUB_SHA" '.isDraft and .targetCommitish == $sha' <<<"$draft"
+          run=$(gh run list --repo "$repo" --workflow putmancode-desktop-release-build.yml --commit "$GITHUB_SHA" --branch release/1.0.0 --status success --json databaseId --jq '.[0].databaseId')
+          test -n "$run"
+          gh release download "v$version" --repo "$repo" --dir mac --pattern '*-arm64.zip*' --pattern 'beta-mac.yml' --pattern 'previous-mac-fixture.zip'
+          gh release download "v$version" --repo "$repo" --dir windows --pattern '*.exe*' --pattern 'beta.yml'
+          gh run download "$run" --repo "$repo" --name windows-upgrade-fixture --dir windows/previous
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: mac-upgrade-inputs
+          path: mac/
+          retention-days: 2
+          compression-level: 0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: windows-upgrade-inputs
+          path: windows/
+          retention-days: 2
+          compression-level: 0
+
+  upgrade:
+    needs: inputs
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            platform: mac
+          - os: windows-2025
+            platform: windows
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            /apps/desktop/package.json
+            /scripts/verify-putmancode-beta-upgrade.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "26.13.1"
+          package-manager-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: ${{ matrix.platform }}-upgrade-inputs
+          path: feed
+      - name: Install native test tools in isolation
+        shell: bash
+        run: |
+          mkdir verification
+          cp scripts/verify-putmancode-beta-upgrade.mjs verification/
+          pw=$(node -p 'require("./apps/desktop/package.json").dependencies["playwright-core"]')
+          cd verification
+          npm install --no-audit --no-fund --ignore-scripts "playwright-core@$pw" "@electron/asar@4.3.0"
+      - name: Upgrade the installed Windows app and confirm relaunch
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = (Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json).version
+          $previous = (Get-Item feed/previous/*.exe).FullName
+          $target = Join-Path $env:LOCALAPPDATA 'Programs\PutmanCodeBetaVerification'
+          $result = Start-Process -FilePath $previous -ArgumentList @('/S', "/D=$target") -Wait -PassThru
+          if ($result.ExitCode -ne 0) { throw "Baseline installation failed" }
+          node verification/verify-putmancode-beta-upgrade.mjs "$target\PutmanCode.exe" (Resolve-Path feed).Path $version
+      - name: Upgrade the installed Mac app and confirm relaunch
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p 'require("./apps/desktop/package.json").version')
+          mkdir -p "$RUNNER_TEMP/previous-app" "$RUNNER_TEMP/new-app"
+          ditto -x -k feed/previous-mac-fixture.zip "$RUNNER_TEMP/previous-app"
+          ditto -x -k "feed/Putman-Code-$version-arm64.zip" "$RUNNER_TEMP/new-app"
+          previous="$RUNNER_TEMP/previous-app/PutmanCode.app"
+          candidate="$RUNNER_TEMP/new-app/PutmanCode.app"
+          requirement=$(codesign -dr- "$previous" 2>&1 | sed -n 's/^designated => //p')
+          [[ "$requirement" == *"certificate leaf"* ]]
+          codesign --verify --deep --strict -R="$requirement" "$candidate"
+          if codesign --verify -R="$requirement" /usr/bin/true 2>/dev/null; then exit 1; fi
+          node verification/verify-putmancode-beta-upgrade.mjs "$previous/Contents/MacOS/PutmanCode" "$PWD/feed" "$version"
+          image="$RUNNER_TEMP/PutmanCode-$version-macOS-arm64.dmg"
+          ln -s /Applications "$RUNNER_TEMP/new-app/Applications"
+          hdiutil create -quiet -volname "PutmanCode $version" -srcfolder "$RUNNER_TEMP/new-app" -format UDZO "$image"
+          hdiutil verify "$image"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: success() && runner.os == 'macOS'
+        with:
+          name: verified-beta-dmg
+          path: ${{ runner.temp }}/PutmanCode-*-macOS-arm64.dmg
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7

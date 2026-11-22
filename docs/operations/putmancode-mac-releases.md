@@ -47,3 +47,14 @@ gh release edit v0.0.4 --repo putman-technologies/putman-code --draft=false --la
 On a second Mac with the previous signed build in Applications, check for an update from the app, download, install, and confirm the new version and existing projects. Run this trial before inviting more friends. Intel Macs need an x64 or universal build and a feed containing the matching artifacts.
 
 [Electron macOS signing](https://www.electronjs.org/docs/latest/tutorial/code-signing) · [Electron Builder updates](https://www.electron.build/docs/features/auto-update/) · [GitHub Releases](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)
+
+## Desktop beta updates
+
+Mac and Windows beta installations check GitHub's beta feed. Each release needs the installable DMG and EXE, both beta manifests, the Mac update ZIP, and matching block maps. Electron's Mac updater checks the installed application's designated signing requirement before accepting its replacement. Use the same release identity for every beta. Beta 1 through 6 require a one-time installer download.
+
+1. Push the versioned source to `release/1.0.0` and wait for **Build PutmanCode desktop release**. Keep the exact commit and successful run ID.
+2. On the release Mac, download the `mac-signing-candidate` and `mac-upgrade-fixture` artifacts. Set `PUTMANCODE_BETA_SIGNING_ID` to the release certificate's SHA-1 identity in the Mac Keychain. Run `scripts/sign-putmancode-beta-mac.sh INPUT.zip OUTPUT VERSION` on each ZIP with separate output directories. Use the release version for the candidate and `1.0.0-beta.0` for the test fixture. Compare the candidate's designated requirement with the last published beta before changing identities.
+3. Create a GitHub draft prerelease at the exact build commit. Attach the candidate's ZIP, ZIP block map and `beta-mac.yml`, plus the verified Windows EXE, EXE block map and `beta.yml`. Attach the signed fixture ZIP as `previous-mac-fixture.zip` for the native tests.
+4. Push that same commit to a new branch named `verify/desktop-beta-<version>`. **Verify packaged PutmanCode beta updates** checks the button, download, install and relaunch on both operating systems. Attach its `verified-beta-dmg` artifact to the draft and remove the temporary fixture from the draft. Compare the GitHub release asset digests with the verified local files before publishing the prerelease.
+
+The beta signing key stays on the release Mac. A Developer ID and notarization are still required for the notarized distribution described above.

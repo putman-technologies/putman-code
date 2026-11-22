@@ -70,6 +70,17 @@ jobs:
           vp run dist:desktop:artifact --skip-build --platform win --target nsis --arch x64 --build-version "$RELEASE_VERSION" --output-dir "$RUNNER_TEMP/installer"
           test -s "$RUNNER_TEMP/installer/beta.yml"
           test -s "$RUNNER_TEMP/installer/Putman-Code-$RELEASE_VERSION-x64.exe.blockmap"
+      - name: Build the previous-version Windows upgrade fixture
+        env:
+          T3CODE_DESKTOP_REUSE_RESOURCE_MONITOR: "true"
+        run: vp run dist:desktop:artifact --skip-build --platform win --target nsis --arch x64 --build-version 1.0.0-beta.0 --output-dir "$RUNNER_TEMP/previous"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: windows-upgrade-fixture
+          path: ${{ runner.temp }}/previous/*.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
       - name: Bundle the existing Windows runtime checks
         run: |
           mkdir -p "$RUNNER_TEMP/verify"
@@ -179,6 +190,15 @@ jobs:
           test "$(node -p 'require("./apps/desktop/package.json").version')" = "$RELEASE_VERSION"
           APP_VERSION="$RELEASE_VERSION" vp run build:desktop:bundle
           vp run dist:desktop:artifact --skip-build --platform mac --target zip --arch arm64 --build-version "$RELEASE_VERSION" --output-dir "$RUNNER_TEMP/package"
+      - name: Build the previous-version Mac upgrade fixture
+        run: vp run dist:desktop:artifact --skip-build --platform mac --target zip --arch arm64 --build-version 1.0.0-beta.0 --output-dir "$RUNNER_TEMP/previous"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: mac-upgrade-fixture
+          path: ${{ runner.temp }}/previous/*.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
       - name: Upload Mac application for release signing
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
