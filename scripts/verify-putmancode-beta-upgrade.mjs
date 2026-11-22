@@ -81,12 +81,21 @@ try {
   }
   offerUpdate = true;
   await check.click({ timeout: 30000 });
-  await page.waitForFunction(
-    async (version) => (await window.desktopBridge.getUpdateState()).availableVersion === version,
-    expectedVersion,
-    { timeout: 90000 },
+  const offerDeadline = Date.now() + 90000;
+  let offer = await bridgeState();
+  while (
+    offer.availableVersion !== expectedVersion &&
+    offer.status !== "error" &&
+    Date.now() < offerDeadline
+  ) {
+    await delay(250);
+    offer = await bridgeState();
+  }
+  assert.equal(offer.availableVersion, expectedVersion, JSON.stringify(offer));
+  assert(
+    requests.has(feedName),
+    `The Update button requested ${[...requests].join(", ")}; expected ${feedName}`,
   );
-  assert(requests.has(feedName), "The Update button must check the beta feed.");
   const downloaded = await page.evaluate(() => window.desktopBridge.downloadUpdate());
   assert(downloaded.completed, JSON.stringify(downloaded.state));
   assert.equal((await bridgeState()).downloadedVersion, expectedVersion);
