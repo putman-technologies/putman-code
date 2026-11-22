@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  RELEASE_VERSION: 1.0.0-beta.4
+  RELEASE_VERSION: 1.0.0-beta.5
 
 jobs:
   assistant-service:
@@ -229,6 +229,8 @@ jobs:
       - run: vp test run src/state/composerDispatch.test.ts src/state/presentation.test.ts
         working-directory: packages/client-runtime
       - run: vp test run --project unit src/components/chat/MessagesTimeline.logic.test.ts src/components/sidebar/sidebarUsage.test.ts src/components/Sidebar.logic.test.ts src/components/Sidebar.drag.test.ts
+        working-directory: apps/web
+      - run: vp test run --project browser src/components/ChatView.browser.test.tsx -t "keeps the queue directly above the composer"
         working-directory: apps/web
       - run: vp test run --project browser src/components/chat/ComposerPrimaryActions.browser.test.tsx src/components/chat/QueuedRunsControl.browser.test.tsx src/components/chat/ChatHeader.browser.test.tsx src/components/pullRequest/RepoWorkflowAction.browser.test.tsx src/components/settings/RenameEnvironmentDialog.browser.test.tsx src/components/assistant/AssistantDialog.browser.test.tsx
         working-directory: apps/web

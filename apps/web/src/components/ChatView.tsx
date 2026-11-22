@@ -3098,30 +3098,29 @@ export default function ChatView(props: ChatViewProps) {
   const onExpandTimelineImageStable = useStableCallback(onExpandTimelineImage);
   const queuedRunsControl =
     isServerThread && activeThread ? (
-      <>
-        <QueuedRunsControl
-          ref={queuedRunsControlRef}
-          steerShortcutLabel={shortcutLabelForCommand(keybindings, "thread.steerQueuedMessage", {
-            context: { terminalFocus: false },
-          })}
-          editShortcutLabel={shortcutLabelForCommand(keybindings, "thread.editQueuedMessage", {
-            context: { composerFocus: true },
-          })}
-          environmentId={activeThread.environmentId}
-          threadId={activeThread.id}
-          optimisticMessages={optimisticUserMessages}
-          editingRunId={queuedRunEdit.editingRunId}
-          editBlockedReason={queuedRunEditBlockedReason(
-            { openQuestionCount: pendingUserInputs.length },
-            messages,
-          )}
-          onEditQueuedRun={queuedRunEdit.beginEdit}
-          onCancelEdit={queuedRunEdit.cancelEdit}
-          timestampFormat={timestampFormat}
-          onOpenThread={onOpenRelatedThreadStable}
-          onImageExpand={onExpandTimelineImageStable}
-        />
-      </>
+      <QueuedRunsControl
+        key={routeThreadKey}
+        ref={queuedRunsControlRef}
+        steerShortcutLabel={shortcutLabelForCommand(keybindings, "thread.steerQueuedMessage", {
+          context: { terminalFocus: false },
+        })}
+        editShortcutLabel={shortcutLabelForCommand(keybindings, "thread.editQueuedMessage", {
+          context: { composerFocus: true },
+        })}
+        environmentId={activeThread.environmentId}
+        threadId={activeThread.id}
+        optimisticMessages={optimisticUserMessages}
+        editingRunId={queuedRunEdit.editingRunId}
+        editBlockedReason={queuedRunEditBlockedReason(
+          { openQuestionCount: pendingUserInputs.length },
+          messages,
+        )}
+        onEditQueuedRun={queuedRunEdit.beginEdit}
+        onCancelEdit={queuedRunEdit.cancelEdit}
+        timestampFormat={timestampFormat}
+        onOpenThread={onOpenRelatedThreadStable}
+        onImageExpand={onExpandTimelineImageStable}
+      />
     ) : null;
   const resendAfterWorkLocally = () => {
     setWorkLocallyResendDraftId(null);
@@ -3169,8 +3168,7 @@ export default function ChatView(props: ChatViewProps) {
   const hasThreadNow =
     attentionNow !== null || workNow !== null || goalNow !== null || shownThreadSyncPhase !== null;
   const queuedRunCount = serverProjection ? getUserQueuedThreadRuns(serverProjection).length : 0;
-  // The queue control is mounted for every server thread but joins the footer only while it shows
-  // something, by its own rule: an optimistic message stops counting once the server has it.
+  // Pending messages appear immediately and yield to the matching server message on acknowledgement.
   const hasQueuedTurns =
     queuedRunCount > 0 ||
     optimisticUserMessages.some(
@@ -3178,25 +3176,11 @@ export default function ChatView(props: ChatViewProps) {
         message.inputIntent === "queued_turn" &&
         !serverProjection?.messages.some((committed) => committed.id === message.id),
     );
-  const scrollToEndSummary =
-    [
-      childInputNow?.waitingLabel ?? null,
-      queuedRunCount === 0
-        ? null
-        : gt("{count, plural, one {{count} queued} other {{count} queued}}", {
-            count: queuedRunCount,
-          }),
-    ]
-      .filter((part) => part !== null)
-      .join(" · ") || null;
-  // The end of the timeline holds the thread's present and next turns: what it is doing now,
-  // its lifecycle status, guest messages awaiting you, then your queued messages.
   const timelineFooter =
     pendingHandoff === null &&
     !hasThreadNow &&
     threadStatusLine === null &&
-    pendingGuestMessageCount === 0 &&
-    !hasQueuedTurns ? null : (
+    pendingGuestMessageCount === 0 ? null : (
       <>
         {pendingHandoff === null ? null : (
           <div className="chat-content-lane">
@@ -3223,7 +3207,6 @@ export default function ChatView(props: ChatViewProps) {
             onFileOpen={openFileAttachmentStable}
           />
         ) : null}
-        {hasQueuedTurns ? queuedRunsControl : null}
       </>
     );
 
@@ -3645,7 +3628,7 @@ export default function ChatView(props: ChatViewProps) {
               {showScrollToBottom && !isThreadFindActive && (
                 <ScrollToEndButton
                   bottom={scrollToEndClearance + 4}
-                  summary={scrollToEndSummary}
+                  summary={childInputNow?.waitingLabel ?? null}
                   onScrollToEnd={() => scrollToEnd(true)}
                 />
               )}
@@ -3703,6 +3686,7 @@ export default function ChatView(props: ChatViewProps) {
                   >
                     <ChildThreadApprovals threadRef={activeThreadRef} />
                     <div className="relative">
+                      {hasQueuedTurns ? queuedRunsControl : null}
                       <ComposerSurface.Shell contextRow={showComposerContextStrip}>
                         <ComposerSurface.Host
                           inert={queuedRunEdit.isSaving}

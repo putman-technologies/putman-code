@@ -117,6 +117,41 @@ vi.mock(import("~/rpc/requestLatencyState"), async (original) => ({
   trackRpcRequestSent: () => {},
 }));
 
+it("keeps the queue directly above the composer outside the scrolling conversation", async () => {
+  const source = threadWithHistory("queue-placement", 16);
+  const next = source.runs.at(-1)!;
+  const thread = {
+    ...source,
+    runs: source.runs.map((run) =>
+      run.id === next.id
+        ? { ...run, status: "queued" as const, startedAt: null, completedAt: null }
+        : run,
+    ),
+    items: source.items.filter((item) => item.runId !== next.id),
+  };
+  using _environment = installFakeEnvironment([thread]);
+  __setClientSettingsForTests({
+    ...DEFAULT_CLIENT_SETTINGS,
+    onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+  });
+  const router = getRouter(
+    createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${thread.id}`] }),
+  );
+  await router.load();
+  await using _app = await render(<AppRoot router={router} />, { router: false });
+  const region = page.getByRole("region", { name: "1 queued message" });
+  await expect.element(region).toBeVisible();
+  const queue = region.element();
+  const overlay = queue.closest("[data-chat-composer-overlay]");
+  expect(overlay).not.toBeNull();
+  expect(queue.nextElementSibling?.contains(page.getByTestId("composer-editor").element())).toBe(
+    true,
+  );
+  expect(document.querySelector("[data-assistant-citation-viewport]")?.contains(queue)).toBe(false);
+  expect(document.querySelectorAll("[data-thread-queue]")).toHaveLength(1);
+  await expect.element(region.getByRole("button", { name: "Edit queued message" })).toBeEnabled();
+});
+
 it("opens a linked Linear issue from an inactive thread's sidebar badge", async () => {
   const style = document.createElement("style");
   style.textContent = stylesheet;

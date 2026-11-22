@@ -257,15 +257,21 @@ export function QueuedRunsControl({
         { count: items.length },
       )}
       data-thread-queue="true"
-      // Anchors the sr-only live region; unanchored, it escapes the timeline scroller and makes the chat column scroll.
-      className="relative mx-auto flex w-full max-w-(--chat-content-max-width) flex-col gap-2 pb-4"
+      className="relative mb-1.5 flex max-h-[min(26dvh,15rem)] w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm"
     >
       <span className="sr-only" aria-live="polite">
         {gt("{count, plural, one {{count} queued} other {{count} queued}}", {
           count: items.length,
         })}
       </span>
-      <ol className="flex flex-col items-end gap-3" id={queueListId}>
+      <div className="flex shrink-0 items-center gap-1.5 px-3 pt-2 text-xs font-medium text-muted-foreground">
+        <Clock3Icon aria-hidden className="size-3.5" />
+        {gt("Queued · Next turn")}
+      </div>
+      <ol
+        className="min-h-0 overflow-y-auto overscroll-contain divide-y divide-border/60"
+        id={queueListId}
+      >
         {visibleItems.map((item, position) => {
           const previewText = isAttachmentOnlyBootstrapPrompt(item.text)
             ? ""
@@ -283,12 +289,8 @@ export function QueuedRunsControl({
               aria-posinset={position + 1}
               aria-setsize={items.length}
               aria-current={isEditing ? "true" : undefined}
-              className="group/queued flex w-full flex-col items-end gap-1"
+              className="group/queued flex flex-wrap items-start gap-x-2 gap-y-1 px-3 py-1.5"
             >
-              <span className="me-1 inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2 py-1 text-xs font-medium leading-none text-foreground">
-                <Clock3Icon aria-hidden className="size-3" />
-                {gt("Queued · Next turn")}
-              </span>
               <QueuedMessage
                 environmentId={props.environmentId}
                 message={item.message}
@@ -429,7 +431,7 @@ export function QueuedRunsControl({
         })}
       </ol>
       {collapsible ? (
-        <div className="self-end pe-1 text-xs pointer-coarse:[&_[data-slot=inline-button]]:relative pointer-coarse:[&_[data-slot=inline-button]]:after:absolute pointer-coarse:[&_[data-slot=inline-button]]:after:-inset-x-1.5 pointer-coarse:[&_[data-slot=inline-button]]:after:-inset-y-3.5">
+        <div className="shrink-0 self-end px-3 pb-1.5 text-xs pointer-coarse:[&_[data-slot=inline-button]]:relative pointer-coarse:[&_[data-slot=inline-button]]:after:absolute pointer-coarse:[&_[data-slot=inline-button]]:after:-inset-x-1.5 pointer-coarse:[&_[data-slot=inline-button]]:after:-inset-y-3.5">
           <InlineButton
             tone="muted"
             aria-expanded={showAll}
@@ -460,7 +462,7 @@ export function QueuedRunsControl({
 
 type QueuedRunMessage = NonNullable<ThreadQueueProjection["messages"][number]>;
 
-/** A queued turn wears its sent form's attribution; only the dashed edge and controls differ. */
+/** Keep the sender and content together when the queue actions wrap on a narrow screen. */
 function QueuedMessage(props: {
   readonly environmentId: EnvironmentId;
   readonly message: QueuedRunMessage | undefined;
@@ -510,80 +512,75 @@ function QueuedMessage(props: {
 
   return (
     <>
-      {attribution === "t3code" ? (
-        <p className="me-1 text-2xs text-muted-foreground/70">
-          <T>Sent by PutmanCode</T>
-        </p>
-      ) : null}
-      {presentation?.guestName === undefined ? null : (
-        <GuestMessageName name={presentation.guestName} />
-      )}
-      {/* Dashed and unfilled: a turn that has not been sent yet. */}
-      <div
-        className={cn(
-          "flex min-w-0 max-w-[80%] flex-col rounded-2xl border border-dashed text-sm",
-          props.isEditing
-            ? "border-primary/60 text-foreground"
-            : attribution === "guest"
-              ? "border-guest/50 text-muted-foreground"
-              : "border-muted-foreground/40 text-muted-foreground",
-          fold === null && "px-3 py-2",
-          fold !== null && expanded && "w-full",
+      <div className="min-w-0 flex-[1_1_12rem]">
+        {attribution === "t3code" ? (
+          <p className="me-1 text-2xs text-muted-foreground/70">
+            <T>Sent by PutmanCode</T>
+          </p>
+        ) : null}
+        {presentation?.guestName === undefined ? null : (
+          <GuestMessageName name={presentation.guestName} />
         )}
-      >
-        {fold ? (
-          <FoldedMessageHeader
-            icon={fold.icon}
-            label={fold.label}
-            fitLabel={fold.fitLabel}
-            summary={fold.summary}
-            expanded={expanded}
-            onToggle={() => setExpanded((value) => !value)}
-          />
-        ) : null}
-        {bodyVisible ? (
-          <div
-            className={cn(
-              "flex flex-col gap-2",
-              fold !== null && "max-h-96 overflow-auto px-3 pb-2",
-            )}
-          >
-            {props.thumbnails.length > 0 ? (
-              <span className="flex flex-wrap items-center gap-1">
-                {props.thumbnails.map((thumbnail) => (
-                  <button
-                    key={thumbnail.id}
-                    type="button"
-                    aria-label={gt("Preview {name}", { name: thumbnail.name })}
-                    disabled={!thumbnail.previewUrl}
-                    className="size-8 overflow-hidden rounded-md border border-border/70 bg-background enabled:cursor-zoom-in"
-                    onPointerDown={(event) => event.preventDefault()}
-                    onClick={() => {
-                      const preview = buildExpandedImagePreview(props.thumbnails, thumbnail.id);
-                      if (preview) props.onImageExpand(preview);
-                    }}
-                  >
-                    {thumbnail.previewUrl ? (
-                      <img
-                        src={thumbnail.previewUrl}
-                        alt={thumbnail.name}
-                        className="size-full object-cover"
-                      />
-                    ) : (
-                      <span aria-label={thumbnail.name} className="block size-full bg-muted/60" />
-                    )}
-                  </button>
-                ))}
-              </span>
-            ) : null}
-            {/* In full, like a sent turn: a queued message is read before it is sent. */}
-            {props.previewText ? (
-              <p className="whitespace-pre-wrap wrap-anywhere">{props.previewText}</p>
-            ) : null}
-          </div>
-        ) : null}
+        <div
+          className={cn(
+            "flex min-w-0 flex-col rounded-md text-sm text-foreground",
+            props.isEditing && "border-s-2 border-primary ps-2",
+          )}
+        >
+          {fold ? (
+            <FoldedMessageHeader
+              icon={fold.icon}
+              label={fold.label}
+              fitLabel={fold.fitLabel}
+              summary={fold.summary}
+              expanded={expanded}
+              onToggle={() => setExpanded((value) => !value)}
+            />
+          ) : null}
+          {bodyVisible ? (
+            <div
+              className={cn(
+                "flex flex-col gap-2",
+                fold !== null && "max-h-96 overflow-auto px-3 pb-2",
+              )}
+            >
+              {props.thumbnails.length > 0 ? (
+                <span className="flex flex-wrap items-center gap-1">
+                  {props.thumbnails.map((thumbnail) => (
+                    <button
+                      key={thumbnail.id}
+                      type="button"
+                      aria-label={gt("Preview {name}", { name: thumbnail.name })}
+                      disabled={!thumbnail.previewUrl}
+                      className="size-8 overflow-hidden rounded-md border border-border/70 bg-background enabled:cursor-zoom-in"
+                      onPointerDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        const preview = buildExpandedImagePreview(props.thumbnails, thumbnail.id);
+                        if (preview) props.onImageExpand(preview);
+                      }}
+                    >
+                      {thumbnail.previewUrl ? (
+                        <img
+                          src={thumbnail.previewUrl}
+                          alt={thumbnail.name}
+                          className="size-full object-cover"
+                        />
+                      ) : (
+                        <span aria-label={thumbnail.name} className="block size-full bg-muted/60" />
+                      )}
+                    </button>
+                  ))}
+                </span>
+              ) : null}
+              {/* In full, like a sent turn: a queued message is read before it is sent. */}
+              {props.previewText ? (
+                <p className="whitespace-pre-wrap wrap-anywhere">{props.previewText}</p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
-      <div className="flex items-center gap-0.5 pe-1 text-xs text-muted-foreground">
+      <div className="ms-auto flex max-w-full flex-wrap items-center justify-end gap-0.5 text-xs text-muted-foreground">
         {props.message ? (
           <span className="me-1 flex items-center gap-2 px-1 opacity-0 transition-opacity duration-200 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/queued:opacity-100">
             {attribution === "agent" &&
