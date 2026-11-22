@@ -166,7 +166,7 @@ function Conversation({
   const [pollError, setPollError] = useState("");
   const [busy, setBusy] = useState(false);
   const [before, setBefore] = useState<number>();
-  const requestId = useRef(randomUUID());
+  const requestId = useRef("");
   const revision = useRef(0);
   const timeline = useRef<HTMLDivElement>(null);
   const followEnd = useRef(true);
@@ -232,7 +232,7 @@ function Conversation({
       if (action.kind === "send") {
         setDraft("");
         setNotify(false);
-        requestId.current = randomUUID();
+        requestId.current = "";
       }
       if (action.kind === "phone" || action.kind === "forgetPhone") {
         setPhoneSetup(false);
@@ -402,7 +402,7 @@ function Conversation({
                 if (draft.trim())
                   void act({
                     kind: "send",
-                    id: requestId.current,
+                    id: (requestId.current ||= randomUUID()),
                     prompt: draft.trim(),
                     notify: notify && state.phone,
                   });
@@ -417,7 +417,7 @@ function Conversation({
                 placeholder={gt("Ask your assistant, or paste rows from your tracker…")}
                 onChange={(e) => {
                   setDraft(e.target.value);
-                  requestId.current = randomUUID();
+                  requestId.current = "";
                 }}
               />
               <div className="flex items-center justify-between gap-2">

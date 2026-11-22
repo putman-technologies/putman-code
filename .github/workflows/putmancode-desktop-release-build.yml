@@ -12,6 +12,16 @@ env:
   RELEASE_VERSION: 1.0.0-beta.3
 
 jobs:
+  assistant-service:
+    name: Install and exercise the Linux user service
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - run: bash scripts/tests/assistant-linux-service.sh
+
   monitor:
     name: Compile Windows resource monitor
     runs-on: windows-2025
