@@ -101,6 +101,16 @@ export function desktopUpdateChannelOf(version: string): "latest" | "nightly" {
   return cliReleaseChannelOf(version) === "nightly" ? "nightly" : "latest";
 }
 
+/** Beta installs follow GitHub prereleases until the first stable release. */
+export function desktopUpdateFeedChannel(
+  channel: "latest" | "nightly",
+  installedVersion: string,
+): "latest" | "beta" | "nightly" {
+  return channel === "latest" && /^\d+\.\d+\.\d+-beta\.\d+$/.test(installedVersion)
+    ? "beta"
+    : channel;
+}
+
 /**
  * The update feed file a desktop app on this platform reads, which an update mirror publishes at
  * its root beside the release's CLI archives.

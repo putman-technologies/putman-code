@@ -43,7 +43,7 @@ import {
   normalizeDesktopUpdateReleaseNotes,
   releaseNotesOfOfferedVersion,
 } from "./releaseNotes.ts";
-import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
+import { desktopUpdateChannelOf, desktopUpdateFeedChannel } from "@t3tools/shared/cliRelease";
 import { compareSemverVersions } from "@t3tools/shared/semver";
 import {
   createInitialDesktopUpdateState,
@@ -543,17 +543,22 @@ export const make = Effect.gen(function* () {
     channel: DesktopUpdateChannel,
   ) {
     yield* Effect.annotateCurrentSpan({ channel });
-    const allowsPrerelease = channel === "nightly";
-    yield* electronUpdater.setChannel(channel);
+    const feedChannel =
+      policy.feedUrl === undefined
+        ? desktopUpdateFeedChannel(channel, environment.appVersion)
+        : channel;
+    const allowsPrerelease = feedChannel !== "latest";
+    yield* electronUpdater.setChannel(feedChannel);
     yield* electronUpdater.setAllowPrerelease(allowsPrerelease);
     // An older build can lack migrations this one ran. Only a guarded track switch's own check
     // may offer one.
     yield* electronUpdater.setAllowDowngrade(false);
-    yield* electronUpdater.setFullChangelog(allowsPrerelease);
+    yield* electronUpdater.setFullChangelog(channel === "nightly");
     yield* logUpdaterInfo("using update channel", {
       channel,
       allowPrerelease: allowsPrerelease,
-      fullChangelog: allowsPrerelease,
+      feedChannel,
+      fullChangelog: channel === "nightly",
     });
   });
 

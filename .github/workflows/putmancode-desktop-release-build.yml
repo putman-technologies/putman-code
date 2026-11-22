@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  RELEASE_VERSION: 1.0.0-beta.6
+  RELEASE_VERSION: 1.0.0-beta.7
 
 jobs:
   assistant-service:
@@ -68,6 +68,8 @@ jobs:
           test "$(node -p 'require("./apps/desktop/package.json").version')" = "$RELEASE_VERSION"
           APP_VERSION="$RELEASE_VERSION" vp run build:desktop:bundle
           vp run dist:desktop:artifact --skip-build --platform win --target nsis --arch x64 --build-version "$RELEASE_VERSION" --output-dir "$RUNNER_TEMP/installer"
+          test -s "$RUNNER_TEMP/installer/beta.yml"
+          test -s "$RUNNER_TEMP/installer/Putman-Code-$RELEASE_VERSION-x64.exe.blockmap"
       - name: Bundle the existing Windows runtime checks
         run: |
           mkdir -p "$RUNNER_TEMP/verify"
@@ -79,7 +81,10 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: candidate-installer
-          path: ${{ runner.temp }}/installer/*.exe
+          path: |
+            ${{ runner.temp }}/installer/*.exe
+            ${{ runner.temp }}/installer/*.exe.blockmap
+            ${{ runner.temp }}/installer/beta.yml
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
@@ -144,7 +149,10 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: PutmanCode-${{ env.RELEASE_VERSION }}-Windows-x64
-          path: installer/*.exe
+          path: |
+            installer/*.exe
+            installer/*.exe.blockmap
+            installer/beta.yml
           compression-level: 0
           if-no-files-found: error
           retention-days: 30
@@ -171,6 +179,14 @@ jobs:
           test "$(node -p 'require("./apps/desktop/package.json").version')" = "$RELEASE_VERSION"
           APP_VERSION="$RELEASE_VERSION" vp run build:desktop:bundle
           vp run dist:desktop:artifact --skip-build --platform mac --target zip --arch arm64 --build-version "$RELEASE_VERSION" --output-dir "$RUNNER_TEMP/package"
+      - name: Upload Mac application for release signing
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: mac-signing-candidate
+          path: ${{ runner.temp }}/package/Putman-Code-*-arm64.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
       - name: Create manual-install disk image and launch its app
         run: |
           set -euo pipefail
@@ -218,7 +234,7 @@ jobs:
           install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
       - run: vp test run src/microsoftProfile.test.ts
         working-directory: packages/shared
-      - run: vp test run src/account/MicrosoftLoopback.test.ts
+      - run: vp test run src/updates/DesktopUpdates.test.ts src/updates/githubUpdateFeed.test.ts src/account/MicrosoftLoopback.test.ts
         working-directory: apps/desktop
       - run: python3 -B scripts/tests/test_personal_assistant.py
       - run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium

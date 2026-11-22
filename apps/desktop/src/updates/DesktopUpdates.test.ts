@@ -105,6 +105,27 @@ describe("DesktopUpdates", () => {
     }),
   );
 
+  it.effect("checks the beta feed on beta installs and the stable feed on stable installs", () =>
+    Effect.gen(function* () {
+      for (const [version, feed, prerelease] of [
+        ["1.0.0-beta.7", "beta", true],
+        ["1.0.0", "latest", false],
+      ] as const) {
+        const harness = makeHarness({ appVersion: version });
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            const updates = yield* DesktopUpdates.DesktopUpdates;
+            yield* updates.configure;
+            assert.deepEqual(harness.feedSettings(), {
+              channel: feed,
+              allowPrerelease: prerelease,
+            });
+          }),
+        ).pipe(Effect.provide(harness.layer));
+      }
+    }),
+  );
+
   it.effect("keeps the disabled reason available after configuration and channel changes", () => {
     const harness = makeHarness({ env: { T3CODE_DISABLE_AUTO_UPDATE: "true" } });
     const reason = "Automatic updates are disabled by the T3CODE_DISABLE_AUTO_UPDATE setting.";
