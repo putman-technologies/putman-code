@@ -1,3 +1,4 @@
+import { MicrosoftAccountRows } from "../microsoft-account/MicrosoftAccountRows";
 import {
   navigationCustomizationAvailable,
   overflowNavigationTabs,
@@ -206,6 +207,7 @@ function SettingsList(props: { readonly connections: readonly SettingsListRow[] 
               : Math.max(Math.max(insets.bottom, 18) + 18, workspace?.bottomClearance ?? 0),
         }}
       >
+        {Platform.OS === "android" ? <MicrosoftAccountRows /> : null}
         {sections.length ? (
           sections.map((section, index) => (
             <SettingsSection key={section.title ?? `untitled-${index}`} title={section.title}>

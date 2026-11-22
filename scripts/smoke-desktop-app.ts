@@ -98,6 +98,9 @@ try {
       await filter.click();
       await page.getByRole("option", { name: /Hide settled chats/ }).click();
       await settled.waitFor({ state: "hidden" });
+      step = "opening Microsoft 365 settings in the installed app";
+      await footer.getByRole("button", { name: "Settings", exact: true }).click();
+      await page.getByRole("button", { name: "Sign in with Microsoft 365", exact: true }).waitFor();
     }
   } catch (error) {
     NodeFS.mkdirSync(artifactsDir, { recursive: true });

@@ -1,3 +1,4 @@
+import type { MicrosoftProfileAction, MicrosoftProfileResult } from "./microsoftProfile.ts";
 import type { AssistantAction, AssistantState } from "./personalAssistant.ts";
 import * as Schema from "effect/Schema";
 import type { PreviewCaptureFailureEncoded } from "./previewCapture.ts";
@@ -1107,6 +1108,7 @@ export interface DesktopBridge {
   setClientSettings: (settings: ClientSettings) => Promise<void>;
   getConnectionCatalog: () => Promise<string | null>;
   setConnectionCatalog: (catalog: string) => Promise<boolean>;
+  microsoftProfile?: (action: MicrosoftProfileAction) => Promise<MicrosoftProfileResult>;
   personalAssistant?: (input: {
     readonly host: string;
     readonly action: AssistantAction;

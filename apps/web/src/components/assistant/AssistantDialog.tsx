@@ -1,3 +1,4 @@
+import { suggestedAssistantHost } from "../../account/profileSync";
 import { AssistantHost, type AssistantAction, type AssistantState } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { T, useGT } from "gt-react";
@@ -46,7 +47,7 @@ export default function AssistantDialog({
 }) {
   const gt = useGT();
   const [host, setHost] = useLocalStorage(hostKey, "", Schema.String);
-  const [address, setAddress] = useState(host);
+  const [address, setAddress] = useState(() => host || suggestedAssistantHost());
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   const [initial, setInitial] = useState<AssistantState>();

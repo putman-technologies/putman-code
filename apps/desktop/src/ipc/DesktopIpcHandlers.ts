@@ -1,3 +1,4 @@
+import { microsoftProfile } from "./methods/microsoftProfile.ts";
 import { personalAssistant } from "./methods/personalAssistant.ts";
 import { startFileDrag } from "./methods/fileDrag.ts";
 import * as Effect from "effect/Effect";
@@ -131,6 +132,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(acknowledgeSnapShot);
   yield* ipc.handle(setConnectionCatalog);
 
+  yield* ipc.handle(microsoftProfile);
   yield* ipc.handle(personalAssistant);
   yield* ipc.handle(discoverSshHosts);
   yield* ipc.handle(resolveSshHost);

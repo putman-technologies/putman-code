@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./microsoftProfile": {
+      "types": "./src/microsoftProfile.ts",
+      "import": "./src/microsoftProfile.ts"
+    },
     "./png": {
       "types": "./src/png.ts",
       "import": "./src/png.ts"

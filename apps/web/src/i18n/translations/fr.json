@@ -12274,5 +12274,11 @@
   "bed31c8c9bb23f63": "Connectez un compte SSH Linux personnel pour conserver la conversation et exécuter des tâches quand l’application de bureau est fermée.",
   "60171bf977d198c5": "Installez Pushover sur Android. Saisissez votre clé utilisateur et votre jeton d’application pour envoyer une notification de test.",
   "c257d5d101ebacf4": "Assistant personnel",
-  "27665d0ac23398d2": "Pushover"
+  "27665d0ac23398d2": "Pushover",
+  "e5b23f2954cd9ba5": "Microsoft 365",
+  "4e089d248f417215": "Synchronisez vos préférences et les adresses de serveur via votre dossier PutmanCode dans OneDrive.",
+  "ca78d6e5cd1bd8a3": "Synchroniser maintenant",
+  "a656dc69a38a3639": "Se déconnecter",
+  "27415c5048e46bd8": "Se connecter avec Microsoft 365",
+  "c269d68d06f92884": "Paramètres synchronisés"
 }

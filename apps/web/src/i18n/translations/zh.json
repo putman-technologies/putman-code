@@ -12299,5 +12299,11 @@
   "bed31c8c9bb23f63": "连接个人 Linux SSH 账户以保存对话，并在桌面应用关闭后继续运行任务。",
   "60171bf977d198c5": "在 Android 上安装 Pushover。输入用户密钥和应用令牌以发送测试通知。",
   "c257d5d101ebacf4": "个人助手",
-  "27665d0ac23398d2": "Pushover"
+  "27665d0ac23398d2": "Pushover",
+  "e5b23f2954cd9ba5": "Microsoft 365",
+  "4e089d248f417215": "通过 OneDrive 中的 PutmanCode 文件夹同步偏好设置和已保存的服务器地址。",
+  "ca78d6e5cd1bd8a3": "立即同步",
+  "a656dc69a38a3639": "退出登录",
+  "27415c5048e46bd8": "使用 Microsoft 365 登录",
+  "c269d68d06f92884": "设置已同步"
 }

@@ -1,3 +1,4 @@
+import { MicrosoftProfileSection } from "./MicrosoftProfileSection";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m as resolveMessage } from "~/i18n/messages";
 import { NotificationSettings } from "./NotificationSettings";
@@ -679,6 +680,7 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <MicrosoftProfileSection />
       <SettingsSection id="notifications" title={gt("Notifications")}>
         <NotificationSettings />
         <SettingsRow

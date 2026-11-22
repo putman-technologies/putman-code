@@ -12281,5 +12281,11 @@
   "bed31c8c9bb23f63": "Anslut ett personligt Linux-konto via SSH för att spara samtalet och köra uppgifter även när skrivbordsappen är stängd.",
   "60171bf977d198c5": "Installera Pushover på Android. Ange användarnyckeln och programtoken för att skicka en testavisering.",
   "c257d5d101ebacf4": "Personlig assistent",
-  "27665d0ac23398d2": "Pushover"
+  "27665d0ac23398d2": "Pushover",
+  "e5b23f2954cd9ba5": "Microsoft 365",
+  "4e089d248f417215": "Synkronisera inställningar och sparade serveradresser via din PutmanCode-mapp i OneDrive.",
+  "ca78d6e5cd1bd8a3": "Synkronisera nu",
+  "a656dc69a38a3639": "Logga ut",
+  "27415c5048e46bd8": "Logga in med Microsoft 365",
+  "c269d68d06f92884": "Inställningarna har synkroniserats"
 }

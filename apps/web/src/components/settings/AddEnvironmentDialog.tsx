@@ -1,3 +1,4 @@
+import { readProfileCache } from "../../account/profileSync";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m } from "~/i18n/messages";
 import { pipe } from "effect/Function";
@@ -503,6 +504,18 @@ export function AddEnvironmentDialog({
   };
   const renderRemoteModeBody = () => (
     <div className="space-y-4">
+      {readProfileCache()?.httpsRoutes.map((url) => (
+        <Button
+          key={url}
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => setSavedBackendHost(url)}
+        >
+          {url}
+        </Button>
+      ))}
+
       {relayRouteOffer !== null ? (
         <div className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
           <p className="text-xs text-muted-foreground">
@@ -533,6 +546,22 @@ export function AddEnvironmentDialog({
   );
   const renderSshFields = () => (
     <div className="space-y-4">
+      {readProfileCache()?.ssh.map((route) => (
+        <Button
+          key={route.alias}
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            setSavedBackendSshHost(route.hostname);
+            setSavedBackendSshUsername(route.username ?? "");
+            setSavedBackendSshPort(route.port === null ? "" : String(route.port));
+          }}
+        >
+          {route.alias}
+        </Button>
+      ))}
+
       <ol className="list-decimal space-y-1 rounded-md bg-muted/40 py-3 pr-3 pl-8 text-xs leading-relaxed text-muted-foreground marker:font-medium">
         <li>
           {gt("Test your SSH login in this computer’s terminal, for example {command}.", {
