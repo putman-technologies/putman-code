@@ -68,6 +68,10 @@ try {
     await thread.click();
     await page.getByText(THREAD_MESSAGE).waitFor({ timeout: STEP_TIMEOUT_MS });
     if (values["check-sidebar"]) {
+      step = "checking the packaged Linux worker";
+      const resources = await app.evaluate(() => process.resourcesPath);
+      const worker = NodePath.join(resources, "assistant", "worker.py");
+      if (!NodeFS.statSync(worker).isFile()) throw new Error("Assistant worker missing");
       step = "opening the personal assistant from the desktop title bar";
       await page.getByRole("button", { name: "Personal assistant", exact: true }).click();
       await page.getByRole("button", { name: "Connect and install worker" }).waitFor();

@@ -399,13 +399,14 @@ function Conversation({
               className="grid gap-2"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (draft.trim())
-                  void act({
-                    kind: "send",
-                    id: (requestId.current ||= randomUUID()),
-                    prompt: draft.trim(),
-                    notify: notify && state.phone,
-                  });
+                if (!draft.trim()) return;
+                if (!requestId.current) requestId.current = randomUUID();
+                void act({
+                  kind: "send",
+                  id: requestId.current,
+                  prompt: draft.trim(),
+                  notify: notify && state.phone,
+                });
               }}
             >
               <Textarea
