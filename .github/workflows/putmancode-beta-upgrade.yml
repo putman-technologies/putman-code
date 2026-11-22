@@ -28,8 +28,13 @@ jobs:
           version=$(jq -er '.version' apps/desktop/package.json)
           repo="$GITHUB_REPOSITORY"
           draft=$(gh release view "v$version" --repo "$repo" --json isDraft,targetCommitish)
-          jq -e --arg sha "$GITHUB_SHA" '.isDraft and .targetCommitish == $sha' <<<"$draft"
-          run=$(gh run list --repo "$repo" --workflow putmancode-desktop-release-build.yml --commit "$GITHUB_SHA" --branch release/1.0.0 --status success --json databaseId --jq '.[0].databaseId')
+          sha=$(jq -er 'select(.isDraft) | .targetCommitish' <<<"$draft")
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          if [[ "$sha" != "$GITHUB_SHA" ]]; then
+            git fetch --no-tags --depth=1 origin "$sha"
+            git diff --exit-code "$sha" HEAD -- . ':!scripts/verify-putmancode-beta-upgrade.mjs' ':!.github/workflows/putmancode-beta-upgrade.yml'
+          fi
+          run=$(gh run list --repo "$repo" --workflow putmancode-desktop-release-build.yml --commit "$sha" --branch release/1.0.0 --status success --json databaseId --jq '.[0].databaseId')
           test -n "$run"
           gh release download "v$version" --repo "$repo" --dir mac --pattern '*-arm64.zip*' --pattern 'beta-mac.yml' --pattern 'previous-mac-fixture.zip'
           gh release download "v$version" --repo "$repo" --dir windows --pattern '*.exe*' --pattern 'beta.yml'
@@ -66,6 +71,7 @@ jobs:
           sparse-checkout: |
             /apps/desktop/package.json
             /scripts/verify-putmancode-beta-upgrade.mjs
+            /scripts/fixtures/desktop-launch/statev2.sqlite
           sparse-checkout-cone-mode: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:

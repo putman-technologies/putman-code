@@ -1,7 +1,7 @@
 // Runs only on a fresh hosted desktop runner. Exercise the packaged updater on a loopback release feed.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { createReadStream, mkdtempSync, statSync } from "node:fs";
+import { copyFileSync, createReadStream, mkdirSync, mkdtempSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -13,7 +13,13 @@ assert(executable && assetDir && expectedVersion);
 const home = mkdtempSync(path.join(tmpdir(), "putmancode-upgrade-"));
 const mac = process.platform === "darwin";
 const feedName = mac ? "beta-mac.yml" : "beta.yml";
+mkdirSync(path.join(home, "userdata"));
+copyFileSync(
+  path.resolve("scripts/fixtures/desktop-launch/statev2.sqlite"),
+  path.join(home, "userdata", "statev2.sqlite"),
+);
 const requests = new Set();
+let offerUpdate = false;
 const server = createServer((req, res) => {
   const name = new URL(req.url, "http://localhost").pathname.slice(1);
   if (!name || name !== path.basename(name)) return res.writeHead(404).end();
@@ -23,6 +29,9 @@ const server = createServer((req, res) => {
     size = statSync(file).size;
   } catch {
     return res.writeHead(404).end();
+  }
+  if (name === feedName && !offerUpdate) {
+    return res.end(JSON.stringify({ version: "1.0.0-beta.0", path: "older", sha512: "older" }));
   }
   requests.add(name);
   res.writeHead(200, { "Content-Length": size });
@@ -53,9 +62,25 @@ try {
   }));
   assert.equal(initial.version, "1.0.0-beta.0");
   const bridgeState = () => page.evaluate(() => window.desktopBridge.getUpdateState());
-  await page
-    .getByRole("button", { name: "Check for updates", exact: true })
-    .click({ timeout: 60000 });
+  await page.getByText("Release launch check", { exact: true }).first().waitFor({ timeout: 90000 });
+  const check = page.getByRole("button", { name: "Check for updates", exact: true });
+  try {
+    await check.waitFor({ timeout: 30000 });
+  } catch (error) {
+    console.error("Updater state:", JSON.stringify(await bridgeState()));
+    console.error(
+      "Buttons:",
+      await page.getByRole("button").evaluateAll((nodes) =>
+        nodes
+          .map((n) => n.getAttribute("aria-label") || n.textContent)
+          .filter(Boolean)
+          .slice(-60),
+      ),
+    );
+    throw error;
+  }
+  offerUpdate = true;
+  await check.click({ timeout: 30000 });
   await page.waitForFunction(
     async (version) => (await window.desktopBridge.getUpdateState()).availableVersion === version,
     expectedVersion,
