@@ -131,10 +131,17 @@ def initialize_identity(trust_user_identity=None):
             run("/usr/bin/openssl", "x509", "-in", tmp / "cert.pem", "-outform", "DER",
                 "-out", tmp / "cert.der")
             # The transfer file exists only in this mode-0700 temporary directory.
+            transfer_password = secrets.token_hex(24)
+            (tmp / "password").write_text(transfer_password)
             run("/usr/bin/openssl", "pkcs12", "-export", "-inkey", tmp / "key",
-                "-in", tmp / "cert.pem", "-out", tmp / "identity.p12", "-passout", "pass:")
-            run("/usr/bin/security", "import", tmp / "identity.p12", "-k", keychain,
-                "-x", "-P", "", "-T", "/usr/bin/codesign")
+                "-in", tmp / "cert.pem", "-out", tmp / "identity.p12", "-macalg", "sha1",
+                "-keypbe", "PBE-SHA1-3DES", "-certpbe", "PBE-SHA1-3DES",
+                "-passout", f"file:{tmp / 'password'}")
+            imported = subprocess.run(["/usr/bin/security", "import", str(tmp / "identity.p12"),
+                                       "-k", keychain, "-x", "-P", transfer_password,
+                                       "-T", "/usr/bin/codesign"])
+            if imported.returncode:
+                raise RuntimeError("macOS could not import the private signing identity.")
             atomic(cert, (tmp / "cert.der").read_bytes())
     fp = digest(cert, "sha1").hexdigest().upper()  # Keychain's public identity selector
     def available():
