@@ -173,6 +173,7 @@ Most code changes do not need an internal documentation change. Agents can read 
 
 ## Plans and work artifacts
 
+- When provisioning AWS or Cloudflare resources for a maintainer deployment, record the resource, its owning project, its purpose, and the provider creation receipt in the maintainer’s private infrastructure inventory. Confirm the registration after creation and record verified retirements there. Keep operational identifiers and receipts private.
 - Do not commit implementation plans, research notes, or agent scratch files. Keep temporary working material outside the worktree. `.plans/` is gitignored only as a safety net for legacy tooling.
 - Track active maintainer work in the GitHub issue or project item that owns it. External proposals follow `CONTRIBUTING.md` and belong in Ideas discussions.
 - A merged PR is the implementation record. Close or update its tracking item when the work lands; do not preserve a second checklist in the repository.
