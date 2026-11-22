@@ -71,23 +71,25 @@ export function RepoWorkflowAction({
     pending.current = true;
     setBusy(true);
     setError("");
-    try {
-      const result = await execute({ environmentId, input: { ...reference, request: action } });
-      if (result._tag === "Failure") throw squashAtomCommandFailure(result);
-      return result.value;
-    } catch (cause) {
-      const message = readableFailure(cause, gt("Check your GitHub Actions access and try again."));
-      setError(message);
-      if (action.kind === "run")
-        toastManager.add({
-          type: "error",
-          title: gt("Workflow could not be started"),
-          description: message,
-        });
-    } finally {
+    const result = await execute({
+      environmentId,
+      input: { ...reference, request: action },
+    }).finally(() => {
       pending.current = false;
       setBusy(false);
-    }
+    });
+    if (result._tag === "Success") return result.value;
+    const message = readableFailure(
+      squashAtomCommandFailure(result),
+      gt("Check your GitHub Actions access and try again."),
+    );
+    setError(message);
+    if (action.kind === "run")
+      toastManager.add({
+        type: "error",
+        title: gt("Workflow could not be started"),
+        description: message,
+      });
   };
   const open = async (next: "configure" | "run") => {
     if (pending.current) return;
@@ -168,9 +170,13 @@ export function RepoWorkflowAction({
                       onChange={(e) => setLabel(e.target.value)}
                     />
                   </label>
-                  <label className="grid gap-1 text-sm">
-                    {gt("GitHub workflow")}
-                    <Select value={String(id ?? "")} onValueChange={(v) => setId(Number(v))}>
+                  <div className="grid gap-1 text-sm">
+                    <span>{gt("GitHub workflow")}</span>
+                    <Select
+                      modal={false}
+                      value={String(id ?? "")}
+                      onValueChange={(v) => setId(Number(v))}
+                    >
                       <SelectTrigger aria-label={gt("GitHub workflow")}>
                         {selected?.name ?? gt("Choose a workflow")}
                       </SelectTrigger>
@@ -182,7 +188,7 @@ export function RepoWorkflowAction({
                         ))}
                       </SelectPopup>
                     </Select>
-                  </label>
+                  </div>
                   {catalog && catalog.workflows.length === 0 && (
                     <p className="text-sm text-muted-foreground">
                       {gt("This branch has no active workflows with a workflow_dispatch trigger.")}
@@ -203,7 +209,7 @@ export function RepoWorkflowAction({
                   const change = (value: string) =>
                     setValues((previous) => ({ ...previous, [f.name]: value }));
                   return (
-                    <label key={f.name} className="grid gap-1 text-sm">
+                    <div key={f.name} className="grid gap-1 text-sm">
                       <span>
                         {f.name}
                         {f.required ? " *" : ""}
@@ -213,6 +219,7 @@ export function RepoWorkflowAction({
                       )}
                       {f.type === "choice" || f.type === "boolean" ? (
                         <Select
+                          modal={false}
                           value={values[f.name] ?? ""}
                           onValueChange={(v) => change(String(v ?? ""))}
                         >
@@ -235,7 +242,7 @@ export function RepoWorkflowAction({
                           onChange={(e) => change(e.target.value)}
                         />
                       )}
-                    </label>
+                    </div>
                   );
                 })}
               {error && (

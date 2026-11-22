@@ -1,3 +1,4 @@
+import "~/index.css";
 import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { createRef } from "react";
 import { expect, it, vi } from "vite-plus/test";
