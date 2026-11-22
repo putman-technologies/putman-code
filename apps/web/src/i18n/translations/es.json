@@ -12239,5 +12239,9 @@
   "e378ca15c1961f1a": "Se ejecuta en el último commit de {branch} tras la fusión.",
   "6f321f153b8711bb": "Elige una opción",
   "ccf4e0010495ff93": "Quitar botón",
-  "0ed97b49c453850f": "Ejecutar flujo"
+  "0ed97b49c453850f": "Ejecutar flujo",
+  "7a5b4572ef7aeae7": "Cambiar el nombre del entorno",
+  "a2a205a9d9c30b1d": "Elige un nombre para este dispositivo. Deja el campo vacío para usar {name}.",
+  "f4daed552bc6cb24": "No se pudo guardar el nombre del entorno. Inténtalo de nuevo.",
+  "9b20df3e21a3d401": "Cambiar nombre"
 }

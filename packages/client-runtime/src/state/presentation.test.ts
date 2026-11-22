@@ -41,19 +41,47 @@ function harness() {
   });
   const configs = Atom.family((_id: EnvironmentId) => Atom.make<ServerConfig | null>(config()));
   const state = Atom.make(AsyncResult.success(AVAILABLE_CONNECTION_STATE));
+  const names = Atom.make<Readonly<Record<EnvironmentId, string>>>({});
   const full = createEnvironmentPresentationAtoms({
+    displayNamesAtom: names,
     catalogValueAtom: catalog,
     stateAtom: () => state,
     serverConfigValueAtom: configs,
   });
   const summaries = createEnvironmentSummaryAtoms({
+    displayNamesAtom: names,
     catalogValueAtom: catalog,
     presentationAtom: full.presentationAtom,
   });
-  return { catalog, configs, state, full, ...summaries, registry: AtomRegistry.make() };
+  return { names, catalog, configs, state, full, ...summaries, registry: AtomRegistry.make() };
 }
 
 describe("environment summary subscriptions", () => {
+  it("keeps a device name across route changes without changing the connection target", () => {
+    const h = harness();
+    using _registry = { [Symbol.dispose]: () => h.registry.dispose() };
+    const host = entry(FIRST, "putman-t3");
+    h.registry.set(h.catalog, { isReady: true, entries: new Map([[FIRST, host]]) });
+    h.registry.set(h.names, { [FIRST]: "Sapphire VPS" });
+    expect(h.registry.get(h.full.presentationAtom(FIRST))).toMatchObject({
+      displayName: "Sapphire VPS",
+      entry: { target: { label: "putman-t3" } },
+    });
+    const next = entry(FIRST, "updated-host-name");
+    h.registry.set(h.catalog, { isReady: true, entries: new Map([[FIRST, next]]) });
+    expect(h.registry.get(h.identitiesAtom)).toEqual([
+      { environmentId: FIRST, label: "Sapphire VPS" },
+    ]);
+    expect(h.registry.get(h.full.presentationsWithProvidersAtom).get(FIRST)?.entry).toBe(next);
+    h.registry.set(h.names, {});
+    expect(h.registry.get(h.identitiesAtom)).toEqual([
+      { environmentId: FIRST, label: "updated-host-name" },
+    ]);
+    expect(
+      h.registry.get(h.full.presentationsWithProvidersAtom).get(FIRST)?.displayName,
+    ).toBeUndefined();
+  });
+
   it("tracks loaded configs across environments, config loss and removal", () => {
     const h = harness();
     const stop = h.registry.subscribe(h.pullRequestsSupportedAtom, () => {});

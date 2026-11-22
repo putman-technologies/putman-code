@@ -10,13 +10,19 @@ import { Atom } from "effect/reactivity";
 import { environmentCatalog } from "../connection/catalog";
 import { serverEnvironment } from "./server";
 
+export const environmentDisplayNamesAtom = Atom.make<Readonly<Record<EnvironmentId, string>>>(
+  {},
+).pipe(Atom.keepAlive);
+
 export const environmentPresentations = createEnvironmentPresentationAtoms({
+  displayNamesAtom: environmentDisplayNamesAtom,
   catalogValueAtom: environmentCatalog.catalogValueAtom,
   stateAtom: environmentCatalog.stateAtom,
   serverConfigValueAtom: serverEnvironment.configValueAtom,
 });
 
 export const environmentSummaries = createEnvironmentSummaryAtoms({
+  displayNamesAtom: environmentDisplayNamesAtom,
   catalogValueAtom: environmentCatalog.catalogValueAtom,
   presentationAtom: environmentPresentations.presentationAtom,
 });

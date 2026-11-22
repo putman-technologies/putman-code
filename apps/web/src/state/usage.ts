@@ -1,3 +1,4 @@
+import { environmentPresentationLabel } from "@t3tools/client-runtime/connection";
 import { useAtomValue } from "@effect/atom-react";
 import {
   AuthDiagnosticsReadScope,
@@ -48,7 +49,7 @@ const usageByWindowAtom = Atom.family((windowKey: string) =>
       if (!access.canReadDiagnostics) {
         statuses.push({
           environmentId,
-          label: presentation.entry.target.label,
+          label: environmentPresentationLabel(presentation),
           isConnected,
           ...access,
           summary: null,
@@ -67,7 +68,7 @@ const usageByWindowAtom = Atom.family((windowKey: string) =>
       const summary = AsyncResult.getOrElse(result, () => null);
       statuses.push({
         environmentId,
-        label: presentation.entry.target.label,
+        label: environmentPresentationLabel(presentation),
         isPending: result.waiting,
         canReadDiagnostics: true,
         isConnected,

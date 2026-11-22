@@ -1,3 +1,4 @@
+import { environmentPresentationLabel } from "@t3tools/client-runtime/connection";
 import { msg } from "gt-react";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m } from "~/i18n/messages";
@@ -553,8 +554,8 @@ export function useComposerSend(input: ComposerSendInput) {
         linkedEnvironments,
       })[0];
       if (!strandedThread) return false;
-      const owner =
-        readEnvironmentPresentation(strandedThread.environmentId)?.entry.target.label ?? null;
+      const presentation = readEnvironmentPresentation(strandedThread.environmentId);
+      const owner = presentation ? environmentPresentationLabel(presentation) : null;
       toastManager.add(
         stackedThreadToast({
           type: "warning",

@@ -12243,5 +12243,9 @@
   "e378ca15c1961f1a": "Läuft nach dem Merge auf dem neuesten Commit von {branch}.",
   "6f321f153b8711bb": "Option auswählen",
   "ccf4e0010495ff93": "Schaltfläche entfernen",
-  "0ed97b49c453850f": "Workflow starten"
+  "0ed97b49c453850f": "Workflow starten",
+  "7a5b4572ef7aeae7": "Umgebung umbenennen",
+  "a2a205a9d9c30b1d": "Wähle einen Namen für dieses Gerät. Lass das Feld leer, um {name} zu verwenden.",
+  "f4daed552bc6cb24": "Der Umgebungsname konnte nicht gespeichert werden. Versuche es erneut.",
+  "9b20df3e21a3d401": "Umbenennen"
 }

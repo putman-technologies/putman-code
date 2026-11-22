@@ -12253,5 +12253,9 @@
   "e378ca15c1961f1a": "Runs on the latest commit of {branch} after merge.",
   "6f321f153b8711bb": "Choose an option",
   "ccf4e0010495ff93": "Remove button",
-  "0ed97b49c453850f": "Run workflow"
+  "0ed97b49c453850f": "Run workflow",
+  "7a5b4572ef7aeae7": "Rename environment",
+  "a2a205a9d9c30b1d": "Choose a name for this device. Leave it blank to use {name}.",
+  "f4daed552bc6cb24": "Could not save the environment name. Try again.",
+  "9b20df3e21a3d401": "Rename"
 }

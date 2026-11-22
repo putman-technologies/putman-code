@@ -12251,5 +12251,9 @@
   "e378ca15c1961f1a": "Körs på senaste commit på {branch} efter sammanslagning.",
   "6f321f153b8711bb": "Välj ett alternativ",
   "ccf4e0010495ff93": "Ta bort knappen",
-  "0ed97b49c453850f": "Kör arbetsflöde"
+  "0ed97b49c453850f": "Kör arbetsflöde",
+  "7a5b4572ef7aeae7": "Byt namn på miljön",
+  "a2a205a9d9c30b1d": "Välj ett namn för den här enheten. Lämna fältet tomt för att använda {name}.",
+  "f4daed552bc6cb24": "Det gick inte att spara miljönamnet. Försök igen.",
+  "9b20df3e21a3d401": "Byt namn"
 }

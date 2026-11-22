@@ -12,6 +12,7 @@ import { AsyncResult, Atom } from "effect/reactivity";
 import { AVAILABLE_CONNECTION_STATE, type SupervisorConnectionState } from "../connection/model.ts";
 import {
   connectionCatalogDisplayUrl,
+  environmentPresentationLabel,
   presentConnectionState,
   type EnvironmentConnectionPhase,
   type EnvironmentConnectionPresentation,
@@ -70,6 +71,7 @@ export interface EnvironmentPresentationWithProviders extends Omit<
 }
 
 export function createEnvironmentPresentationAtoms<E>(input: {
+  readonly displayNamesAtom?: Atom.Atom<Readonly<Record<EnvironmentId, string>>>;
   readonly catalogValueAtom: Atom.Atom<EnvironmentCatalogState>;
   readonly stateAtom: (
     environmentId: EnvironmentId,
@@ -94,7 +96,9 @@ export function createEnvironmentPresentationAtoms<E>(input: {
           : state === AVAILABLE_CONNECTION_STATE && entry.enabled
             ? { phase: "connecting", error: null, traceId: null }
             : presentConnectionState(state);
+      const displayName = input.displayNamesAtom && get(input.displayNamesAtom)[environmentId];
       const next = {
+        ...(displayName ? { displayName } : {}),
         entry,
         connection:
           previous !== null && sameConnection(previous.connection, connection)
@@ -110,6 +114,7 @@ export function createEnvironmentPresentationAtoms<E>(input: {
             : state.refusedRouteIds,
       } satisfies EnvironmentPresentation;
       return previous !== null &&
+        previous.displayName === next.displayName &&
         previous.entry === next.entry &&
         previous.connection === next.connection &&
         previous.serverConfig === next.serverConfig &&
@@ -181,6 +186,7 @@ export function createEnvironmentPresentationAtoms<E>(input: {
       next.set(
         environmentId,
         prior !== undefined &&
+          prior.displayName === presentation.displayName &&
           prior.entry === presentation.entry &&
           prior.connection === presentation.connection &&
           prior.refusedRouteIds === presentation.refusedRouteIds &&
@@ -220,7 +226,7 @@ export function projectEnvironmentConnectionSummary(
 ): EnvironmentConnectionSummary {
   return {
     environmentId,
-    environmentLabel: environment.entry.target.label,
+    environmentLabel: environmentPresentationLabel(environment),
     displayUrl: connectionCatalogDisplayUrl(environment.entry) ?? "",
     isRelayManaged: hasRelayRoute(environment.entry),
     isEnabled: environment.entry.enabled,
@@ -234,6 +240,7 @@ export function projectEnvironmentConnectionSummary(
 }
 
 export function createEnvironmentSummaryAtoms(input: {
+  readonly displayNamesAtom?: Atom.Atom<Readonly<Record<EnvironmentId, string>>>;
   readonly catalogValueAtom: Atom.Atom<EnvironmentCatalogState>;
   readonly presentationAtom: (
     environmentId: EnvironmentId,
@@ -249,9 +256,10 @@ export function createEnvironmentSummaryAtoms(input: {
       : next;
   });
   const identitiesAtom = Atom.make((get) => {
+    const displayNames = input.displayNamesAtom && get(input.displayNamesAtom);
     const next = [...get(input.catalogValueAtom).entries].map(([environmentId, entry]) => ({
       environmentId,
-      label: entry.target.label,
+      label: displayNames?.[environmentId] ?? entry.target.label,
     }));
     const previous = Option.getOrNull(
       get.self<ReadonlyArray<{ readonly environmentId: EnvironmentId; readonly label: string }>>(),

@@ -64,6 +64,7 @@ import {
   useEnvironmentScope,
 } from "~/state/session";
 import { environmentIdsKey } from "~/state/environmentAtomList";
+import { environmentDisplayNamesAtom } from "~/state/presentation";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 
 const CLIENT_SETTINGS_PERSISTENCE_ERROR_SCOPE = "[CLIENT_SETTINGS]";
@@ -99,6 +100,7 @@ function getClientSettingsSnapshot(): ClientSettings {
 
 function replaceClientSettingsSnapshot(settings: ClientSettings): void {
   clientSettingsSnapshot = settings;
+  appAtomRegistry.set(environmentDisplayNamesAtom, settings.environmentDisplayNames);
   emitClientSettingsChange();
 }
 
@@ -815,6 +817,7 @@ export function updateClientSettings(patch: ClientSettingsPatch): Promise<void> 
 export function __resetClientSettingsPersistenceForTests(): void {
   clientSettingsHydrationGeneration += 1;
   clientSettingsSnapshot = DEFAULT_CLIENT_SETTINGS;
+  appAtomRegistry.set(environmentDisplayNamesAtom, DEFAULT_CLIENT_SETTINGS.environmentDisplayNames);
   clientSettingsHydrationStatus = "pending";
   clientSettingsHydrationPromise = null;
   clientSettingsPersistenceQueue = Promise.resolve();
@@ -828,6 +831,7 @@ export function __resetClientSettingsPersistenceForTests(): void {
 export function __setClientSettingsForTests(settings: ClientSettings): void {
   clientSettingsHydrationGeneration += 1;
   clientSettingsSnapshot = settings;
+  appAtomRegistry.set(environmentDisplayNamesAtom, settings.environmentDisplayNames);
   clientSettingsHydrationStatus = "ready";
   clientSettingsHydrationPromise = null;
 }
