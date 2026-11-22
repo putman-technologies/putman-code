@@ -1,0 +1,24 @@
+name: Verify PutmanCode error ingestion
+on:
+  push:
+    branches: [verify/desktop-error-ingestion]
+permissions:
+  contents: read
+jobs:
+  verification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout: apps/web/src/observability
+      - name: Send a synthetic desktop event
+        env:
+          DSN: ${{ secrets.PUTMANCODE_BETTER_STACK_DSN }}
+        run: |
+          node --experimental-strip-types --input-type=module <<'JS'
+          import { sendDesktopError } from "./apps/web/src/observability/betterStackEnvelope.ts";
+          await sendDesktopError(process.env.DSN, "1.0.0-beta.6", {type:"IntegrationCheck"});
+          console.log("Better Stack accepted the verification event.");
+          JS
