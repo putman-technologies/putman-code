@@ -219,7 +219,16 @@ export function mergePortableProfile(
   remote: PortableProfile | undefined,
 ): PortableProfile {
   if (!remote) return local;
-  if (!previous) return remote;
+  if (!previous) {
+    // Restore the cloud preferences on first sign-in, including addresses this device just paired.
+    const ssh = new Map(local.ssh.map((route) => [route.alias, route]));
+    for (const route of remote.ssh) ssh.set(route.alias, route);
+    return {
+      ...remote,
+      ssh: [...ssh.values()],
+      httpsRoutes: [...new Set([...remote.httpsRoutes, ...local.httpsRoutes])],
+    };
+  }
   function field<T>(prior: T, here: T, there: T) {
     return sameProfileValue(prior, here) ? there : here;
   }

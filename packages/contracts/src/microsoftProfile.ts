@@ -17,7 +17,7 @@ export const PortableSshRoute = Schema.Struct({
   port: Schema.NullOr(PortSchema),
 });
 export type PortableSshRoute = typeof PortableSshRoute.Type;
-export const portablePreferenceKeys = [
+const portablePreferenceKeys = [
   "language",
   "appearanceContrast",
   "chatWidth",

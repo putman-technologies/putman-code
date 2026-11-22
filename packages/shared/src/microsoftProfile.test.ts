@@ -99,6 +99,12 @@ describe("Microsoft 365 profile", () => {
     expect((await mac.client({ kind: "status" })).state).toBe("signedOut");
     expect((await phone.client({ kind: "status" })).state).toBe("signedIn");
   });
+  it("restores cloud preferences and retains an already-paired address on first sign-in", () => {
+    const phone = { ...demo, theme: "other", httpsRoutes: ["https://phone.test"] };
+    const restored = mergePortableProfile(phone, null, demo);
+    expect(restored.theme).toBe(demo.theme);
+    expect(restored.httpsRoutes).toEqual(["https://example.test:8443", "https://phone.test"]);
+  });
   it("retains independently changed preferences and destinations", () => {
     const profile = mergePortableProfile(
       {
