@@ -119,7 +119,7 @@ export function SidebarSectionHeader(props: {
   className?: string;
   dragging?: boolean;
   isDropTarget?: boolean;
-  toggle: { expanded: boolean; onToggle: () => void };
+  toggle?: { expanded: boolean; onToggle: () => void };
 }) {
   const shelf =
     props.marker === "working-header"
@@ -135,16 +135,23 @@ export function SidebarSectionHeader(props: {
     >
       <div className="flex h-full items-center">
         <div className="min-w-0 flex-1">
-          <CollapsibleSectionHeader
-            data-sidebar-row={`shelf:${shelf}`}
-            onClick={props.toggle.onToggle}
-            expanded={props.toggle.expanded}
-            tone={props.isDropTarget ? "accent" : props.dragging ? "emphasized" : "muted"}
-            data-testid={`sidebar-${shelf}-shelf-toggle`}
-            accessory={<span className="font-normal tabular-nums">{props.count}</span>}
-          >
-            {props.label}
-          </CollapsibleSectionHeader>
+          {props.toggle ? (
+            <CollapsibleSectionHeader
+              data-sidebar-row={`shelf:${shelf}`}
+              onClick={props.toggle.onToggle}
+              expanded={props.toggle.expanded}
+              tone={props.isDropTarget ? "accent" : props.dragging ? "emphasized" : "muted"}
+              data-testid={`sidebar-${shelf}-shelf-toggle`}
+              accessory={<span className="font-normal tabular-nums">{props.count}</span>}
+            >
+              {props.label}
+            </CollapsibleSectionHeader>
+          ) : (
+            <h3 className="flex items-center justify-between px-2.5 text-xs font-semibold text-sidebar-muted-foreground">
+              {props.label}
+              <span className="font-normal tabular-nums">{props.count}</span>
+            </h3>
+          )}
         </div>
         {props.action}
       </div>

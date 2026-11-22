@@ -11561,7 +11561,6 @@
   "300a948f90c4d75c": "Atrás",
   "2a50e229df85d553": "Adelante",
   "1706e49ef33900da": "Inicio de PutmanCode",
-  "8e9626aa27cb188a": "Issues",
   "9d2fc1003e82feb1": "Uso",
   "20283eb1dd6119f9": "{count, plural, one {{count} adjunto} other {{count} adjuntos}}",
   "ffedb03b620f97a9": "Borrador sin enviar",
@@ -12221,5 +12220,9 @@
   "d6567261586276f7": "Enviado desde la cola",
   "be1b795c75460ffb": "Redirigido · Pendiente de lectura",
   "999454e377b78de6": "Redirigido · Turno actual",
-  "c4f76abec83c298a": "Este mensaje inició su propio turno desde la cola."
+  "c4f76abec83c298a": "Este mensaje inició su propio turno desde la cola.",
+  "317678cdcd957bf9": "Mostrar chats finalizados",
+  "4f53c217457e65c7": "Ocultar chats finalizados",
+  "df130193fd8be551": "{percent}% restante",
+  "58a2ffcbb3216f82": "Uso de {provider} no disponible"
 }

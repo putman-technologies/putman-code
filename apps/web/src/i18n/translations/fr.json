@@ -11566,7 +11566,6 @@
   "300a948f90c4d75c": "Revenir en arrière",
   "2a50e229df85d553": "Avancer",
   "1706e49ef33900da": "Accueil PutmanCode",
-  "8e9626aa27cb188a": "Tickets",
   "9d2fc1003e82feb1": "Utilisation",
   "20283eb1dd6119f9": "{count, plural, one {{count} pièce jointe} other {{count} pièces jointes}}",
   "ffedb03b620f97a9": "Brouillon non envoyé",
@@ -12226,5 +12225,9 @@
   "d6567261586276f7": "Envoyé depuis la file",
   "be1b795c75460ffb": "Réorienté · En attente de lecture",
   "999454e377b78de6": "Réorienté · Tour en cours",
-  "c4f76abec83c298a": "Ce message a démarré son propre tour depuis la file d’attente."
+  "c4f76abec83c298a": "Ce message a démarré son propre tour depuis la file d’attente.",
+  "317678cdcd957bf9": "Afficher les discussions terminées",
+  "4f53c217457e65c7": "Masquer les discussions terminées",
+  "df130193fd8be551": "{percent} % restants",
+  "58a2ffcbb3216f82": "Utilisation de {provider} indisponible"
 }

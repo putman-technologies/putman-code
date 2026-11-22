@@ -11574,7 +11574,6 @@
   "300a948f90c4d75c": "Gå tillbaka",
   "2a50e229df85d553": "Gå framåt",
   "1706e49ef33900da": "PutmanCode start",
-  "8e9626aa27cb188a": "Ärenden",
   "9d2fc1003e82feb1": "Användning",
   "20283eb1dd6119f9": "{count, plural, one {{count} bilaga} other {{count} bilagor}}",
   "ffedb03b620f97a9": "Ej skickat utkast",
@@ -12233,5 +12232,9 @@
   "d6567261586276f7": "Skickat från kön",
   "be1b795c75460ffb": "Styrning skickad · Väntar på att läsas",
   "999454e377b78de6": "Styrning skickad · Pågående tur",
-  "c4f76abec83c298a": "Det här meddelandet startade en egen tur från kön."
+  "c4f76abec83c298a": "Det här meddelandet startade en egen tur från kön.",
+  "317678cdcd957bf9": "Visa avslutade chattar",
+  "4f53c217457e65c7": "Dölj avslutade chattar",
+  "df130193fd8be551": "{percent} % kvar",
+  "58a2ffcbb3216f82": "Användningsdata för {provider} saknas"
 }

@@ -5,7 +5,6 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { Link } from "@tanstack/react-router";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import {
   isAtomCommandInterrupted,
@@ -415,21 +414,6 @@ export const ChatHeader = memo(function ChatHeader({
           ) : null}
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>
-      {activeProject && !activeProject.isScratch && (
-        <Link
-          to="/pull-requests"
-          search={{
-            projectTab: "github",
-            projectId: activeProject.id,
-            environmentId: activeThreadEnvironmentId,
-            involvement: "all",
-            state: "open",
-          }}
-          className="shrink-0 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [-webkit-app-region:no-drag]"
-        >
-          GitHub
-        </Link>
-      )}
       {coordinatorAction}
       {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
     </div>

@@ -11576,7 +11576,6 @@
   "300a948f90c4d75c": "Go back",
   "2a50e229df85d553": "Go forward",
   "1706e49ef33900da": "PutmanCode home",
-  "8e9626aa27cb188a": "Issues",
   "9d2fc1003e82feb1": "Usage",
   "20283eb1dd6119f9": "{count, plural, one {{count} attachment} other {{count} attachments}}",
   "ffedb03b620f97a9": "Unsent draft",
@@ -12235,5 +12234,9 @@
   "d6567261586276f7": "Sent from queue",
   "be1b795c75460ffb": "Steered · Waiting to be read",
   "999454e377b78de6": "Steered · Current turn",
-  "c4f76abec83c298a": "This message started its own turn from the queue."
+  "c4f76abec83c298a": "This message started its own turn from the queue.",
+  "317678cdcd957bf9": "Show settled chats",
+  "4f53c217457e65c7": "Hide settled chats",
+  "df130193fd8be551": "{percent}% left",
+  "58a2ffcbb3216f82": "{provider} usage unavailable"
 }

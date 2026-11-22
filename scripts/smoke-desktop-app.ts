@@ -19,6 +19,7 @@ const STEP_TIMEOUT_MS = 60_000;
 const { values } = NodeUtil.parseArgs({
   options: {
     executable: { type: "string" },
+    "check-sidebar": { type: "boolean", default: false },
     // An unpackaged app directory for a plain Electron executable, as PR CI runs it.
     app: { type: "string" },
     "artifacts-dir": { type: "string" },
@@ -66,6 +67,25 @@ try {
     step = "opening the thread";
     await thread.click();
     await page.getByText(THREAD_MESSAGE).waitFor({ timeout: STEP_TIMEOUT_MS });
+    if (values["check-sidebar"]) {
+      step = "checking the usage meters and sidebar controls";
+      const footer = page.locator('[data-sidebar="footer"]:visible');
+      for (const provider of ["Codex", "Claude"]) {
+        await footer.getByText(provider, { exact: true }).waitFor();
+      }
+      if (await footer.getByRole("button", { name: /^(Issues|Pull requests|Usage)$/ }).count()) {
+        throw new Error("The old sidebar shortcuts are still present");
+      }
+      step = "opening and hiding settled chats through the filter";
+      const filter = page.getByLabel("Filter threads by project", { exact: true });
+      await filter.click();
+      await page.getByRole("option", { name: /Show settled chats/ }).click();
+      const settled = page.getByTestId("sidebar-settled-header").getByRole("heading");
+      await settled.waitFor();
+      await filter.click();
+      await page.getByRole("option", { name: /Hide settled chats/ }).click();
+      await settled.waitFor({ state: "hidden" });
+    }
   } catch (error) {
     NodeFS.mkdirSync(artifactsDir, { recursive: true });
     await page
