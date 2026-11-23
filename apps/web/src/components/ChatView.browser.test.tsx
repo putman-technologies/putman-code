@@ -155,7 +155,7 @@ it("keeps the queue directly above the composer outside the scrolling conversati
 it.each(["Yes", "No"] as const)(
   "answers an approval question with %s and preserves the draft",
   async (answer) => {
-    const history = threadWithHistory("approval-reply", 2);
+    const history = threadWithHistory(`approval-reply-${answer.toLowerCase()}`, 2);
     const question = "Do you approve creating the release account in billing?";
     const thread = {
       ...history,

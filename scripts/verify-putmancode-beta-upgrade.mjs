@@ -8,8 +8,14 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { _electron } from "playwright-core";
 
-const [executable, assetDir, expectedVersion] = process.argv.slice(2);
-assert(executable && assetDir && expectedVersion);
+const [executable, assetDir, expectedVersion, installedVersion] = process.argv.slice(2);
+assert(
+  executable &&
+    assetDir &&
+    expectedVersion &&
+    installedVersion &&
+    expectedVersion !== installedVersion,
+);
 const home = mkdtempSync(path.join(tmpdir(), "putmancode-upgrade-"));
 const mac = process.platform === "darwin";
 const feedName = mac ? "beta-mac.yml" : "beta.yml";
@@ -31,7 +37,7 @@ const server = createServer((req, res) => {
     return res.writeHead(404).end();
   }
   if (name === feedName && !offerUpdate) {
-    return res.end(JSON.stringify({ version: "1.0.0-beta.0", path: "older", sha512: "older" }));
+    return res.end(JSON.stringify({ version: installedVersion, path: "older", sha512: "older" }));
   }
   requests.add(name);
   res.writeHead(200, { "Content-Length": size });
@@ -60,7 +66,7 @@ try {
     resources: process.resourcesPath,
     pid: process.pid,
   }));
-  assert.equal(initial.version, "1.0.0-beta.0");
+  assert.equal(initial.version, installedVersion);
   const bridgeState = () => page.evaluate(() => window.desktopBridge.getUpdateState());
   await page.getByText("Release launch check", { exact: true }).first().waitFor({ timeout: 90000 });
   const check = page.getByRole("button", { name: "Check for updates", exact: true });

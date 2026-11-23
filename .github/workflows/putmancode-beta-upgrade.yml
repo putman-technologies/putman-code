@@ -9,6 +9,8 @@ permissions:
 
 jobs:
   inputs:
+    outputs:
+      previous: ${{ steps.collect.outputs.previous }}
     runs-on: ubuntu-24.04
     # GitHub shows a draft to release editors. Only this download job needs that permission.
     permissions:
@@ -20,7 +22,8 @@ jobs:
           persist-credentials: false
           sparse-checkout: apps/desktop/package.json
           sparse-checkout-cone-mode: false
-      - name: Collect the draft and matching installer fixture
+      - name: Collect the draft and previous public installers
+        id: collect
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -36,9 +39,14 @@ jobs:
           fi
           run=$(gh run list --repo "$repo" --workflow putmancode-desktop-release-build.yml --commit "$sha" --branch release/1.0.0 --status success --json databaseId --jq '.[0].databaseId')
           test -n "$run"
-          gh release download "v$version" --repo "$repo" --dir mac --pattern '*-arm64.zip*' --pattern 'beta-mac.yml' --pattern 'previous-mac-fixture.zip'
+          gh release download "v$version" --repo "$repo" --dir mac --pattern '*-arm64.zip*' --pattern 'beta-mac.yml'
           gh release download "v$version" --repo "$repo" --dir windows --pattern '*.exe*' --pattern 'beta.yml'
-          gh run download "$run" --repo "$repo" --name windows-upgrade-fixture --dir windows/previous
+          [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta\.([1-9][0-9]*)$ ]]
+          previous="${BASH_REMATCH[1]}-beta.$((BASH_REMATCH[2] - 1))"
+          gh release view "v$previous" --repo "$repo" --json isDraft,isPrerelease | jq -e '.isPrerelease and (.isDraft | not)' >/dev/null
+          gh release download "v$previous" --repo "$repo" --dir mac/previous --pattern "PutmanCode-$previous-macOS-arm64.dmg"
+          gh release download "v$previous" --repo "$repo" --dir windows/previous --pattern "Putman-Code-$previous-x64.exe"
+          echo "previous=$previous" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: mac-upgrade-inputs
@@ -54,6 +62,8 @@ jobs:
 
   upgrade:
     needs: inputs
+    env:
+      PREVIOUS_VERSION: ${{ needs.inputs.outputs.previous }}
     strategy:
       fail-fast: false
       matrix:
@@ -98,7 +108,7 @@ jobs:
           $target = Join-Path $env:LOCALAPPDATA 'Programs\PutmanCodeBetaVerification'
           $result = Start-Process -FilePath $previous -ArgumentList @('/S', "/D=$target") -Wait -PassThru
           if ($result.ExitCode -ne 0) { throw "Baseline installation failed" }
-          node verification/verify-putmancode-beta-upgrade.mjs "$target\PutmanCode.exe" (Resolve-Path feed).Path $version
+          node verification/verify-putmancode-beta-upgrade.mjs "$target\PutmanCode.exe" (Resolve-Path feed).Path $version $env:PREVIOUS_VERSION
       - name: Upgrade the installed Mac app and confirm relaunch
         if: runner.os == 'macOS'
         shell: bash
@@ -106,7 +116,10 @@ jobs:
           set -euo pipefail
           version=$(node -p 'require("./apps/desktop/package.json").version')
           mkdir -p "$RUNNER_TEMP/previous-app" "$RUNNER_TEMP/new-app"
-          ditto -x -k feed/previous-mac-fixture.zip "$RUNNER_TEMP/previous-app"
+          mount="$RUNNER_TEMP/previous-install-image"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" "feed/previous/PutmanCode-$PREVIOUS_VERSION-macOS-arm64.dmg"
+          trap 'hdiutil detach "$mount" -force >/dev/null' EXIT
+          ditto "$mount/PutmanCode.app" "$RUNNER_TEMP/previous-app/PutmanCode.app"
           ditto -x -k "feed/Putman-Code-$version-arm64.zip" "$RUNNER_TEMP/new-app"
           previous="$RUNNER_TEMP/previous-app/PutmanCode.app"
           candidate="$RUNNER_TEMP/new-app/PutmanCode.app"
@@ -114,7 +127,7 @@ jobs:
           [[ "$requirement" == *"certificate leaf"* ]]
           codesign --verify --deep --strict -R="$requirement" "$candidate"
           if codesign --verify -R="$requirement" /usr/bin/true 2>/dev/null; then exit 1; fi
-          node verification/verify-putmancode-beta-upgrade.mjs "$previous/Contents/MacOS/PutmanCode" "$PWD/feed" "$version"
+          node verification/verify-putmancode-beta-upgrade.mjs "$previous/Contents/MacOS/PutmanCode" "$PWD/feed" "$version" "$PREVIOUS_VERSION"
           image="$RUNNER_TEMP/PutmanCode-$version-macOS-arm64.dmg"
           ln -s /Applications "$RUNNER_TEMP/new-app/Applications"
           hdiutil create -quiet -volname "PutmanCode $version" -srcfolder "$RUNNER_TEMP/new-app" -format UDZO "$image"
