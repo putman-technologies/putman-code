@@ -152,6 +152,58 @@ it("keeps the queue directly above the composer outside the scrolling conversati
   await expect.element(region.getByRole("button", { name: "Edit queued message" })).toBeEnabled();
 });
 
+it.each(["Yes", "No"] as const)(
+  "answers an approval question with %s and preserves the draft",
+  async (answer) => {
+    const history = threadWithHistory("approval-reply", 2);
+    const question = "Do you approve creating the release account in billing?";
+    const thread = {
+      ...history,
+      items: history.items.map((item) =>
+        item.type === "assistant_message"
+          ? {
+              ...item,
+              text:
+                item.runId === history.runs.at(-1)?.id
+                  ? "Nothing has changed. Do you approve creating the release account in `billing`? If not, the existing account stays in use."
+                  : "Should I make an earlier change?",
+            }
+          : item,
+      ),
+    };
+    using _environment = installFakeEnvironment([thread], { acceptCommands: true });
+    __setClientSettingsForTests({
+      ...DEFAULT_CLIENT_SETTINGS,
+      onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const router = getRouter(
+      createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${thread.id}`] }),
+    );
+    await router.load();
+    await using _app = await render(<AppRoot router={router} />, { router: false });
+    const group = page.getByRole("group", { name: question });
+    await expect.element(group).toBeVisible();
+    await expect
+      .element(page.getByRole("group", { name: "Should I make an earlier change?" }))
+      .not.toBeInTheDocument();
+    const editor = page.getByTestId("composer-editor");
+    await userEvent.click(editor);
+    await insertText("Keep this draft");
+    await userEvent.click(group.getByRole("button", { name: answer, exact: true }));
+    await vi.waitFor(() =>
+      expect(dispatchedCommands().filter((c) => c.type === "message.dispatch")).toEqual([
+        expect.objectContaining({
+          threadId: thread.id,
+          text: `${answer}.\n\n> ${question}`,
+          dispatchMode: { type: "queue_after_active" },
+          attachments: [],
+        }),
+      ]),
+    );
+    await expect.element(editor).toHaveTextContent("Keep this draft");
+  },
+);
+
 it("opens a linked Linear issue from an inactive thread's sidebar badge", async () => {
   const style = document.createElement("style");
   style.textContent = stylesheet;

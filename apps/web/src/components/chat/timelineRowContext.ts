@@ -1,3 +1,4 @@
+import type { ApprovalQuestionReply } from "./approvalQuestion";
 import type { ToolCallDiffTarget } from "../../diffPanelStore";
 import type {
   ProviderApprovalDecision,
@@ -44,6 +45,8 @@ export interface TurnItemSource {
 }
 
 export interface TimelineRowSharedState {
+  approvalQuestionMessageId?: MessageId | undefined;
+  onAnswerApprovalQuestion?: ((reply: ApprovalQuestionReply) => Promise<void>) | undefined;
   pendingApprovals: ReadonlyMap<RuntimeRequestId, PendingApproval>;
   respondingRequestIds: ReadonlyArray<RuntimeRequestId>;
   canOperateThread: boolean;

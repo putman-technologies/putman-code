@@ -1,3 +1,4 @@
+import type { ApprovalQuestionReply } from "./chat/approvalQuestion";
 import { m } from "../i18n/messages";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { useGT, useMessages } from "gt-react";
@@ -62,6 +63,7 @@ import { ChatBannerLane } from "./chat/ChatBannerLane";
 import * as Schema from "effect/Schema";
 import {
   AuthOrchestrationOperateScope,
+  CommandId,
   AuthSourceControlWriteScope,
   AuthPreviewOperateScope,
   AuthTerminalOperateScope,
@@ -71,7 +73,7 @@ import {
   isProjectCoordinatorThread,
   isProviderNativeSubagentThread,
   type EnvironmentId,
-  type MessageId,
+  MessageId,
   type ModelSelection,
   type PreviewAnnotationPayload,
   ProviderInstanceId,
@@ -1919,7 +1921,7 @@ export default function ChatView(props: ChatViewProps) {
     scheduleComposerFocusStable();
   };
   const insertArtifactTemplateStable = useStableCallback(insertArtifactTemplate);
-  const sendAppMessage = async (text: string) => {
+  const sendAppMessage = async (text: string, replyId?: string) => {
     if (!isServerThread || activeThreadId === null) {
       throw new Error(gt("Messages from apps need a started thread."));
     }
@@ -1927,7 +1929,13 @@ export default function ChatView(props: ChatViewProps) {
       environmentId,
       input: {
         threadId: activeThreadId,
-        message: { messageId: newMessageId(), role: "user", text, attachments: [] },
+        ...(replyId ? { commandId: CommandId.make(replyId) } : {}),
+        message: {
+          messageId: replyId ? MessageId.make(replyId) : newMessageId(),
+          role: "user",
+          text,
+          attachments: [],
+        },
         runtimeMode,
         interactionMode: DEFAULT_INTERACTION_MODE,
         dispatchMode: "queue",
@@ -1939,6 +1947,32 @@ export default function ChatView(props: ChatViewProps) {
     }
   };
   const sendAppMessageStable = useStableCallback(sendAppMessage);
+  const canAnswerApprovalQuestion =
+    isServerThread &&
+    canOperateThread &&
+    !isProviderSubagent &&
+    !threadDetailLoading &&
+    !isSendBusy &&
+    !hasHeldQueuedRuns &&
+    !isRevertingCheckpoint &&
+    pendingApprovals.length === 0 &&
+    pendingUserInputs.length === 0 &&
+    activeLatestRun?.status === "completed";
+  const answerApprovalQuestion = useStableCallback(async (reply: ApprovalQuestionReply) => {
+    if (
+      !canAnswerApprovalQuestion ||
+      reply.thread.threadId !== activeThreadId ||
+      reply.thread.environmentId !== environmentId ||
+      reply.runId !== activeLatestRun?.runId ||
+      !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)
+    ) {
+      throw new Error(gt("This question is no longer active."));
+    }
+    await sendAppMessage(
+      `${reply.answer}.\n\n> ${reply.question}`,
+      `approval-reply:${activeThreadId}:${reply.messageId}`,
+    );
+  });
   const queuedRunsControlRef = useRef<QueuedRunsControlHandle>(null);
 
   const {
@@ -3534,6 +3568,9 @@ export default function ChatView(props: ChatViewProps) {
                   citationRequest={citationRequest}
                   citationHistory={citationHistory}
                   onCiteAssistantText={citeAssistantTextStable}
+                  onAnswerApprovalQuestion={
+                    canAnswerApprovalQuestion ? answerApprovalQuestion : undefined
+                  }
                   onReplyToResponse={replyToResponseStable}
                   {...(activeProject
                     ? { onRunShellCommand: parentPanel?.runShellCommand ?? runShellCommandStable }

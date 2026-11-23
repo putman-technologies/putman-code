@@ -1,9 +1,10 @@
+import { readApprovalQuestion, type ApprovalQuestionReply } from "./approvalQuestion";
 import { shouldPreserveAssistantLineBreaks } from "@t3tools/shared/markdownPipeline";
 import { MessageId, type RunId, type TurnItemId } from "@t3tools/contracts";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
 import { agentWorkingDirectories } from "@t3tools/client-runtime/workspace-basename-lookup";
 import { T, useGT, useMessages } from "gt-react";
-import { memo, use, useState } from "react";
+import { memo, use, useRef, useState } from "react";
 import { type ChatMessage, type TurnDiffSummary } from "../../types";
 import ChatMarkdown from "../ChatMarkdown";
 import { GitForkIcon, ReplyIcon } from "lucide-react";
@@ -83,6 +84,21 @@ export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind
             />
           </AssistantCitationSource>
         </div>
+        {ctx.approvalQuestionMessageId === row.message.id &&
+        ctx.threadRef &&
+        row.message.runId &&
+        ctx.onAnswerApprovalQuestion ? (
+          <ApprovalQuestionButtons
+            key={row.message.id}
+            message={text}
+            target={{
+              messageId: row.message.id,
+              runId: row.message.runId,
+              thread: ctx.threadRef,
+            }}
+            onReply={ctx.onAnswerApprovalQuestion}
+          />
+        ) : null}
         {ctx.onOpenTurnDiff ? (
           <AssistantChangedFilesSection
             turnSummary={row.assistantTurnDiffSummary}
@@ -107,6 +123,65 @@ export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind
         ) : null}
       </div>
     </>
+  );
+}
+
+function ApprovalQuestionButtons({
+  message,
+  target,
+  onReply,
+}: {
+  message: string;
+  target: Pick<ApprovalQuestionReply, "thread" | "runId" | "messageId">;
+  onReply: (reply: ApprovalQuestionReply) => Promise<void>;
+}) {
+  const gt = useGT();
+  const question = readApprovalQuestion(message);
+  const submitted = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!question) return null;
+  const reply = async (answer: ApprovalQuestionReply["answer"]) => {
+    if (submitted.current) return;
+    submitted.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      await onReply({ ...target, question, answer });
+    } catch (cause) {
+      submitted.current = false;
+      setBusy(false);
+      setError(cause instanceof Error ? cause.message : gt("Could not send reply."));
+    }
+  };
+  return (
+    <div className="mt-2">
+      <div role="group" aria-label={question} className="flex gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={() => void reply("Yes")}
+        >
+          {gt("Yes")}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={() => void reply("No")}
+        >
+          {gt("No")}
+        </Button>
+      </div>
+      {error && (
+        <p role="alert" className="mt-1 text-sm text-destructive">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 
