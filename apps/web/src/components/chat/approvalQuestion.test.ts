@@ -25,6 +25,8 @@ describe("conversational approval questions", () => {
     "[Should I proceed?](https://example.com)",
     "```text\nDo you approve this change?\n```",
     "Should I proceed? I already did it.",
+    "Can I explain. What name should we use?",
+    "Do you approve changing <b>production</b>?",
   ])("leaves ordinary chat alone for %s", (text) => {
     expect(readApprovalQuestion(text)).toBeNull();
   });

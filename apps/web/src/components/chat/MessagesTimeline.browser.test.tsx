@@ -262,7 +262,7 @@ it("retries a failed approval reply and blocks a second click during submission"
     .fn()
     .mockImplementationOnce(() => first.promise)
     .mockResolvedValue(undefined);
-  await using screen = await renderTimeline(
+  await using _screen = await renderTimeline(
     [message("May I proceed?", { role: "assistant", runId })],
     {
       canOperateThread: true,

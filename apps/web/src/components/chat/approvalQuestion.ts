@@ -15,8 +15,8 @@ function prose(node: PhrasingContent, mask: boolean): string {
       ? node.value
       : node.type === "link" || node.type === "linkReference"
         ? node.children.map((child) => prose(child, false)).join("")
-        : "";
-  return mask ? "·".repeat(value.length) : value;
+        : "\uFFFC";
+  return mask && value !== "\uFFFC" ? "·".repeat(value.length) : value;
 }
 
 /** Only an assistant's own closing prose can offer a conversational reply. */
@@ -27,13 +27,15 @@ export function readApprovalQuestion(markdown: string): string | null {
   const masked = last.children.map((node) => prose(node, true)).join("");
   if (masked.indexOf("?") !== masked.lastIndexOf("?")) return null;
   const match = request.exec(masked);
-  if (!match || /\bor\b/i.test(match[1]!)) return null;
+  const wording = match?.[1];
+  if (!match || !wording || /\bor\b|\uFFFC/i.test(wording) || /[.!]\s+\p{Lu}/u.test(wording))
+    return null;
   const end = match.index + match[0].length;
   const after = masked.slice(end).trim();
   if (after && !/^(?:if (?:not|so|you)\b|otherwise\b)/i.test(after)) return null;
   const plain = last.children.map((node) => prose(node, false)).join("");
   return plain
-    .slice(end - match[1]!.length, end)
+    .slice(end - wording.length, end)
     .replace(/\s+/g, " ")
     .trim();
 }
