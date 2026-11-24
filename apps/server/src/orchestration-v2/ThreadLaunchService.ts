@@ -300,9 +300,8 @@ const make = Effect.gen(function* () {
         cause,
       });
 
-  const recordBranchRenameFailure = Effect.fn("ThreadLaunchService.recordBranchRenameFailure")(
-    function* (threadId: ThreadId, runId: RunId, branch: string, cause: Cause.Cause<unknown>) {
-      const error = Cause.squash(cause);
+  const recordBranchRenameNotice = Effect.fn("ThreadLaunchService.recordBranchRenameNotice")(
+    function* (threadId: ThreadId, runId: RunId, title: string, message: string) {
       const now = yield* DateTime.now;
       yield* eventSink.write({
         events: [
@@ -324,19 +323,19 @@ const make = Effect.gen(function* () {
               // EventSink allocates the real position, after the run's existing items.
               ordinal: 0,
               status: "completed",
-              title: "Branch not renamed",
+              title,
               startedAt: now,
               completedAt: now,
               updatedAt: now,
               type: "system_notice",
-              message: `Could not rename the worktree branch, so it stays ${branch}. ${error instanceof Error ? error.message : String(error)}`,
+              message,
             },
           },
         ],
       });
     },
     Effect.catchCause((cause) =>
-      Effect.logWarning("Could not record the branch rename failure", { cause }),
+      Effect.logWarning("Could not record the branch rename notice", { cause }),
     ),
   );
 
@@ -884,6 +883,14 @@ const make = Effect.gen(function* () {
                     }),
                   ),
                 );
+              if (renamed.configUnconfirmed && runId !== null) {
+                yield* recordBranchRenameNotice(
+                  threadId,
+                  runId,
+                  "Check branch settings",
+                  `The worktree is on ${renamed.branch}. Git timed out before PutmanCode could confirm its branch settings. Check the upstream branch before pushing.`,
+                );
+              }
               // Update parents first so children inherit names; reread each pass for newly updated descendants.
               const visited = new Set([threadId]);
               while (true) {
@@ -915,8 +922,9 @@ const make = Effect.gen(function* () {
               }
             }),
           ),
-          Effect.catchCause((cause) =>
-            Effect.logWarning("Thread worktree branch rename failed", {
+          Effect.catchCause((cause) => {
+            const error = Cause.squash(cause);
+            return Effect.logWarning("Thread worktree branch rename failed", {
               commandId: input.commandId,
               threadId,
               oldBranch,
@@ -925,10 +933,15 @@ const make = Effect.gen(function* () {
               Effect.andThen(
                 runId === null || Cause.hasInterruptsOnly(cause)
                   ? Effect.void
-                  : recordBranchRenameFailure(threadId, runId, oldBranch, cause),
+                  : recordBranchRenameNotice(
+                      threadId,
+                      runId,
+                      "Worktree branch rename unconfirmed",
+                      `Could not confirm the worktree branch rename. The worktree started on ${oldBranch}. ${error instanceof Error ? error.message : String(error)}`,
+                    ),
               ),
-            ),
-          ),
+            );
+          }),
           Effect.forkIn(preparationScope),
         );
       }

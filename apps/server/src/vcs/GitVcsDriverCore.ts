@@ -65,6 +65,7 @@ import * as ServerConfig from "../config.ts";
 import { sourceControlDefinitions } from "../sourceControl/sourceControlDefinitions.ts";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+const GIT_TIMEOUT_DETAIL = "Git command timed out.";
 /** T3's record of the branch, named as on the host, that a branch was cut from. */
 const branchBaseConfigKey = (branch: string) => `branch.${branch}.t3-merge-base`;
 /**
@@ -1181,7 +1182,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
             () =>
               new GitCommandError({
                 ...gitCommandContext(commandInput),
-                detail: "Git command timed out.",
+                detail: GIT_TIMEOUT_DETAIL,
               }),
           ),
         ),
@@ -6091,6 +6092,43 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     );
   });
 
+  const confirmTimedOutRename = Effect.fn("GitVcsDriver.confirmTimedOutRename")(function* (
+    cwd: string,
+    oldBranch: string,
+    targetBranch: string,
+  ) {
+    const oldRef = `refs/heads/${oldBranch}`;
+    const targetRef = `refs/heads/${targetBranch}`;
+    const refs = yield* executeGit(
+      "GitVcsDriver.confirmTimedOutRename.refs",
+      cwd,
+      ["for-each-ref", "--format=%(HEAD)%09%(refname)", "--", oldRef, targetRef],
+      { timeoutMs: 5_000 },
+    );
+    const lines = refs.stdout.split("\n");
+    if (!lines.includes(`*\t${targetRef}`) || lines.some((line) => line.endsWith(`\t${oldRef}`))) {
+      return null;
+    }
+    // Git moves the ref before rewriting its branch configuration.
+    const configMoved = yield* executeGit(
+      "GitVcsDriver.confirmTimedOutRename.config",
+      cwd,
+      ["config", "--local", "--null", "--name-only", "--get-regexp", "^branch\\."],
+      { timeoutMs: 5_000, allowNonZeroExit: true },
+    ).pipe(
+      Effect.map(
+        ({ stdout, exitCode }) =>
+          (exitCode === 1 && stdout === "") ||
+          (exitCode === 0 &&
+            !stdout
+              .split("\0")
+              .some((key) => key.slice(0, key.lastIndexOf(".")) === `branch.${oldBranch}`)),
+      ),
+      Effect.orElseSucceed(() => false),
+    );
+    return { branch: targetBranch, ...(configMoved ? {} : { configUnconfirmed: true as const }) };
+  });
+
   const renameBranch: GitVcsDriver.GitVcsDriver["Service"]["renameBranch"] = Effect.fn(
     "renameBranch",
   )(function* (input) {
@@ -6106,17 +6144,25 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
           ? input.newBranch
           : yield* resolveAvailableBranchName(input.cwd, input.newBranch);
 
-        yield* executeGit(
+        return yield* executeGit(
           "GitVcsDriver.renameBranch",
           input.cwd,
           ["branch", "-m", "--", input.oldBranch, targetBranch],
-          {
-            timeoutMs: 10_000,
-            fallbackErrorDetail: "git branch rename failed",
-          },
+          { fallbackErrorDetail: "git branch rename failed" },
+        ).pipe(
+          Effect.as({ branch: targetBranch }),
+          Effect.catchIf(
+            (error) => error.detail === GIT_TIMEOUT_DETAIL,
+            (error) =>
+              confirmTimedOutRename(input.cwd, input.oldBranch, targetBranch).pipe(
+                Effect.orElseSucceed(() => null),
+                Effect.filterOrFail(
+                  (result) => result !== null,
+                  () => error,
+                ),
+              ),
+          ),
         );
-
-        return { branch: targetBranch };
       }),
     );
   });

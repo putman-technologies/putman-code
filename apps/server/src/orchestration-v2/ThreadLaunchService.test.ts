@@ -2965,7 +2965,41 @@ it.effect("starts the agent of a new worktree thread only after its branch is re
   }),
 );
 
-it.effect("tells the thread when its worktree branch could not be renamed", () =>
+it.effect("uses the observed branch when Git timed out while moving its settings", () =>
+  Effect.gen(function* () {
+    const harness = makeHarness({
+      renameBranch: () => Effect.succeed({ branch: "fix/invoices", configUnconfirmed: true }),
+    });
+    yield* Effect.gen(function* () {
+      const launches = yield* ThreadLaunch.ThreadLaunchService;
+      const tracker = yield* WorktreeSetupTracker.WorktreeSetupTracker;
+      const threads = yield* ThreadManagement.ThreadManagementService;
+      const launched = yield* launches.launch(
+        launchInput({
+          command: "launch:rename-partial",
+          thread: "thread:rename-partial",
+          message: "Start",
+          workspace: { type: "worktree", baseRef: "main" },
+        }),
+      );
+      yield* tracker.stream(launched.threadId).pipe(
+        Stream.filter((snapshot) => snapshot?.phase === "done"),
+        Stream.runHead,
+      );
+      const projection = yield* threads.getThreadProjection(launched.threadId);
+      assert.equal(projection.thread.branch, "fix/invoices");
+      assert.isTrue(
+        projection.turnItems.some(
+          (item) =>
+            item.type === "system_notice" &&
+            item.message.includes("Check the upstream branch before pushing."),
+        ),
+      );
+    }).pipe(Effect.provide(harness.layer));
+  }),
+);
+
+it.effect("reports the starting branch when a rename could not be confirmed", () =>
   Effect.gen(function* () {
     const harness = makeHarness({
       generateBranchName: () =>
@@ -2997,7 +3031,7 @@ it.effect("tells the thread when its worktree branch could not be renamed", () =
       assert.equal(notice?.type === "system_notice" ? notice.runId : null, projection.runs[0]?.id);
       assert.include(
         notice?.type === "system_notice" ? notice.message : "",
-        `stays ${projection.thread.branch}. Text generation failed in generateBranchName: Failed to spawn Codex CLI process`,
+        `The worktree started on ${projection.thread.branch}. Text generation failed in generateBranchName: Failed to spawn Codex CLI process`,
       );
     }).pipe(Effect.provide(harness.layer));
   }),
@@ -3034,7 +3068,7 @@ it.effect("starts the agent on the temporary branch when branch naming hangs", (
       const notice = projection.turnItems.find((item) => item.type === "system_notice");
       assert.include(
         notice?.type === "system_notice" ? notice.message : "",
-        `stays ${projection.thread.branch}. Text generation failed in generateBranchName: Timed out after 20 seconds.`,
+        `The worktree started on ${projection.thread.branch}. Text generation failed in generateBranchName: Timed out after 20 seconds.`,
       );
     }).pipe(Effect.provide(harness.layer));
   }),
