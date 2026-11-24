@@ -54,7 +54,7 @@ Mac and Windows beta installations check GitHub's beta feed. Each release needs 
 
 1. Push the versioned source to `release/1.0.0` and wait for **Build PutmanCode desktop release**. Keep the exact commit and successful run ID.
 2. On the release Mac, download the `mac-signing-candidate` artifact. Set `PUTMANCODE_BETA_SIGNING_ID` to the release certificate's SHA-1 identity in the Mac Keychain. Run `scripts/sign-putmancode-beta-mac.sh INPUT.zip OUTPUT VERSION` with the release version.
-3. Create a GitHub draft prerelease at the exact build commit. Attach the candidate's ZIP, ZIP block map and `beta-mac.yml`, plus the verified Windows EXE, EXE block map and `beta.yml`.
+3. Create a GitHub draft prerelease at the exact build commit. Attach the candidate's ZIP, ZIP block map and `beta-mac.yml`, plus the verified Windows EXE, EXE block map and `beta.yml`. Attach both native Linux SSH archives and a `SHA256SUMS` file generated from those archives before publishing the desktop update.
 4. Push that same commit to a new branch named `verify/desktop-beta-<version>`. **Verify packaged PutmanCode beta updates** installs the preceding public beta on Mac and Windows and verifies its Update button, download, replacement, and relaunch. Attach the resulting `verified-beta-dmg` artifact to the draft. Compare the GitHub release asset digests with the verified local files before publishing the prerelease.
 
 The beta signing key stays on the release Mac. A Developer ID and notarization are still required for the notarized distribution described above.

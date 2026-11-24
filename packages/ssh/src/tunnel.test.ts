@@ -304,11 +304,14 @@ describe("ssh tunnel scripts", () => {
   });
 
   it.each([
-    { host: "Darwin x86_64", system: "Darwin", machine: "x86_64", downloads: false },
-    { host: "Darwin arm64", system: "Darwin", machine: "arm64", downloads: true },
+    { host: "Darwin x86_64", system: "Darwin", machine: "x86_64", glibc: false, downloads: false },
+    { host: "Darwin arm64", system: "Darwin", machine: "arm64", glibc: false, downloads: true },
+    { host: "Linux x64", system: "Linux", machine: "x86_64", glibc: true, downloads: true },
+    { host: "Linux arm64", system: "Linux", machine: "aarch64", glibc: true, downloads: true },
+    { host: "musl Linux", system: "Linux", machine: "x86_64", glibc: false, downloads: true },
   ])(
     "only downloads a release archive the host can run: $host",
-    ({ system, machine, downloads }) => {
+    ({ system, machine, glibc, downloads }) => {
       const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-ssh-runner-"));
       try {
         const bin = NodePath.join(root, "bin");
@@ -324,8 +327,20 @@ describe("ssh tunnel scripts", () => {
           "#!/bin/sh\necho 'download attempt' >&2\necho 'curl: (6) Could not resolve host: github.com' >&2\nexit 6\n",
           { mode: 0o755 },
         );
+        NodeFS.writeFileSync(NodePath.join(bin, "getconf"), `#!/bin/sh\nexit ${glibc ? 0 : 1}\n`, {
+          mode: 0o755,
+        });
         const runner = NodePath.join(root, "run-t3.sh");
-        NodeFS.writeFileSync(runner, SshTunnel.buildRemoteT3RunnerScript(ARCHIVE));
+        NodeFS.writeFileSync(
+          runner,
+          SshTunnel.buildRemoteT3RunnerScript({
+            ...ARCHIVE,
+            linuxArchive: {
+              version: "1.0.0-beta.9",
+              releaseBaseUrl: "https://release.example.test/download",
+            },
+          }),
+        );
         const result = NodeChildProcess.spawnSync("sh", [runner, "--version"], {
           encoding: "utf8",
           env: { HOME: NodePath.join(root, "home"), PATH: `${bin}:${process.env.PATH ?? ""}` },
@@ -334,8 +349,10 @@ describe("ssh tunnel scripts", () => {
         if (downloads) {
           assert.include(result.stderr, "download attempt");
           // A bare curl error does not tell the user that t3 itself could not be downloaded.
-          assert.include(result.stderr, ARCHIVE.archiveVersion);
-          assert.include(result.stderr, "https://github.com/pingdotgg/t3code/releases/download");
+          const expected = glibc
+            ? "https://release.example.test/download/v1.0.0-beta.9/SHA256SUMS"
+            : `https://github.com/pingdotgg/t3code/releases/download/v${ARCHIVE.archiveVersion}/SHA256SUMS`;
+          assert.include(result.stderr, expected);
         } else {
           assert.notInclude(result.stderr, "download attempt");
           assert.include(result.stderr, "has no t3 release archive.");

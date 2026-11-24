@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  RELEASE_VERSION: 1.0.0-beta.8
+  RELEASE_VERSION: 1.0.0-beta.9
 
 jobs:
   assistant-service:
@@ -216,6 +216,66 @@ jobs:
           compression-level: 0
           retention-days: 30
 
+  release-lint:
+    name: Check unused code and dependencies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-ci-deps
+      - run: vp run knip:check
+
+  linux-ssh:
+    name: Build and exercise the Linux SSH companion (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-24.04, arch: x64 }
+          - { runner: ubuntu-24.04-arm, arch: arm64 }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
+          sparse-checkout-cone-mode: false
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/scripts...
+      - uses: ./.github/actions/setup-apt-mirrors
+      - name: Install the Linux archive tooling
+        run: command -v patchelf || { sudo apt-get update && sudo apt-get install -y patchelf; }
+      - name: Build the native server and verify its archive
+        env:
+          ARCH: ${{ matrix.arch }}
+          APP_VERSION: ${{ env.RELEASE_VERSION }}
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: |
+          set -euo pipefail
+          cargo build --locked --release --manifest-path native/resource-monitor/Cargo.toml
+          mkdir -p "$RUNNER_TEMP/monitor/linux-$ARCH"
+          cp native/resource-monitor/target/release/t3-resource-monitor "$RUNNER_TEMP/monitor/linux-$ARCH/"
+          vp run --filter @t3tools/web build
+          node apps/server/scripts/cli.ts build --verbose
+          node scripts/apply-web-brand-assets.ts production apps/server/dist/client
+          node apps/server/scripts/cli.ts build-exe --verbose
+          node scripts/build-cli-archive.ts --platform linux --arch "$ARCH" --version "$RELEASE_VERSION" --resource-monitor-dir "$RUNNER_TEMP/monitor" --output-dir release-cli
+          node scripts/smoke-cli-archive.ts --archive release-cli/*.tar.gz --expect-version "$RELEASE_VERSION"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: ssh-linux-${{ matrix.arch }}
+          path: release-cli/*.tar.gz
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+
   follow-ups:
     name: Check the sidebar and follow-ups
     runs-on: ubuntu-24.04
@@ -232,6 +292,14 @@ jobs:
       - uses: ./.github/actions/setup-ci-deps
         with:
           install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
+      - run: vp test run src/vcs/GitVcsDriverCore.test.ts src/orchestration-v2/ThreadLaunchService.test.ts
+        working-directory: apps/server
+      - run: vp test run src/state/turnItemPresentation.test.ts
+        working-directory: packages/client-runtime
+      - run: vp test run src/tunnel.test.ts
+        working-directory: packages/ssh
+      - run: vp test run --project unit src/ssh/DesktopSshEnvironment.test.ts -t 'resolveDesktopSshCliRunner'
+        working-directory: apps/desktop
       - run: vp test run src/microsoftProfile.test.ts
         working-directory: packages/shared
       - run: vp test run src/updates/DesktopUpdates.test.ts src/updates/githubUpdateFeed.test.ts src/account/MicrosoftLoopback.test.ts

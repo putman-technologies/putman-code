@@ -92,9 +92,16 @@ export const resolveDesktopSshCliRunner = (
   }
   const releaseBaseUrl = env[CLI_RELEASE_BASE_URL_ENV]?.trim() || undefined;
   return {
-    // The published SSH companion follows the upstream runtime's version.
+    // Darwin, musl, and explicitly configured upstream mirrors use the existing companion.
     archiveVersion: "0.1.10",
-    ...(releaseBaseUrl === undefined ? {} : { releaseBaseUrl }),
+    ...(releaseBaseUrl
+      ? { releaseBaseUrl }
+      : {
+          linuxArchive: {
+            version: serverPackageJson.version,
+            releaseBaseUrl: "https://github.com/putman-technologies/putman-code/releases/download",
+          },
+        }),
   };
 };
 

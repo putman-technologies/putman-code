@@ -71,6 +71,29 @@ function run(
 }
 
 describe("turnItemIsWorkspacePreparation", () => {
+  it("keeps an automatic branch naming timeout out of chat, including on older SSH servers", () => {
+    const notice = {
+      ...command(""),
+      type: "system_notice",
+      id: TurnItemId.make("turn-item:run:run-1:signal:branch-rename"),
+      status: "completed",
+      title: "Branch not renamed",
+      message:
+        "Could not rename the worktree branch, so it stays t3/5bf07e5f. Git command failed in GitVcsDriver.renameBranch (/repo): Git command timed out.",
+    } as const;
+    expect(turnItemIsWorkspacePreparation(notice)).toBe(true);
+    expect(
+      turnItemIsWorkspacePreparation({ ...notice, title: "Worktree branch rename unconfirmed" }),
+    ).toBe(true);
+    expect(turnItemIsWorkspacePreparation({ ...notice, message: "Branch is locked." })).toBe(false);
+    expect(turnItemIsWorkspacePreparation({ ...notice, title: "Check branch settings" })).toBe(
+      false,
+    );
+    expect(turnItemIsWorkspacePreparation({ ...notice, id: TurnItemId.make("other-notice") })).toBe(
+      false,
+    );
+  });
+
   it("hides a preparation failure only once a retry cancelled it", () => {
     expect(turnItemIsWorkspacePreparation(preparationFailure("failed"))).toBe(false);
     expect(turnItemIsWorkspacePreparation(preparationFailure("cancelled"))).toBe(true);

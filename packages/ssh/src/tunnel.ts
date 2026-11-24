@@ -110,6 +110,7 @@ export interface RemoteT3RunnerOptions {
   readonly nodeEngineRange?: string | null;
   readonly archiveVersion?: string | null;
   readonly releaseBaseUrl?: string | null;
+  readonly linuxArchive?: { readonly version: string; readonly releaseBaseUrl: string };
 }
 
 export interface SshEnvironmentManagerOptions {
@@ -478,6 +479,8 @@ if [ -n "$T3_NODE_SCRIPT_PATH" ]; then
   exec env T3CODE_TELEMETRY_ENABLED=false node "$T3_NODE_SCRIPT_PATH" "$@"
 fi
 T3_ARCHIVE_VERSION=@@T3_ARCHIVE_VERSION@@
+T3_RELEASE_BASE_URL=@@T3_RELEASE_BASE_URL@@
+@@T3_LINUX_ARCHIVE@@
 if [ -z "$T3_ARCHIVE_VERSION" ]; then
   printf 'No t3 release version was provided for the remote runtime.\\n' >&2
   exit 1
@@ -490,7 +493,6 @@ if [ -n "$T3_SYSTEM_EXECUTABLE" ] && T3_SYSTEM_VERSION="$("$T3_SYSTEM_EXECUTABLE
 fi
 # Self-contained release archive: no Node, npm, or compiler on the remote.
 # Unpacked into the pinned-runtime layout so \`t3 service install\` reuses it.
-T3_RELEASE_BASE_URL=@@T3_RELEASE_BASE_URL@@
 T3_RUNTIME_DIR="$HOME/.putman-code/runtime/versions/$T3_ARCHIVE_VERSION"
 t3_runtime_ready() {
   [ -x "$T3_RUNTIME_DIR/t3" ] && [ "$(cat "$T3_RUNTIME_DIR/.install-complete" 2>/dev/null)" = "$T3_ARCHIVE_VERSION" ]
@@ -1106,6 +1108,10 @@ export function buildRemoteT3RunnerScript(input?: RemoteT3RunnerOptions): string
   if (archiveVersion !== "" && !EXACT_ARCHIVE_VERSION.test(archiveVersion)) {
     throw new SshInvalidArchiveVersionError({ archiveVersion });
   }
+  const linux = input?.linuxArchive;
+  if (linux && !EXACT_ARCHIVE_VERSION.test(linux.version)) {
+    throw new SshInvalidArchiveVersionError({ archiveVersion: linux.version });
+  }
   const releaseBaseUrl = cliReleaseDownloadBaseUrl("", input?.releaseBaseUrl ?? undefined).replace(
     /\/v$/u,
     "",
@@ -1114,6 +1120,16 @@ export function buildRemoteT3RunnerScript(input?: RemoteT3RunnerOptions): string
     applyScriptPlaceholders(REMOTE_RUNNER_SCRIPT, {
       T3_NODE_SCRIPT_PATH: shellSingleQuote(nodeScriptPath),
       T3_ARCHIVE_VERSION: shellSingleQuote(archiveVersion),
+      // The fork publishes native Linux companions. Other SSH targets keep their existing runner.
+      T3_LINUX_ARCHIVE: linux
+        ? `case "$(uname -s) $(uname -m)" in
+  "Linux x86_64"|"Linux amd64"|"Linux arm64"|"Linux aarch64")
+    if getconf GNU_LIBC_VERSION >/dev/null 2>&1; then
+      T3_ARCHIVE_VERSION=${shellSingleQuote(linux.version)}
+      T3_RELEASE_BASE_URL=${shellSingleQuote(linux.releaseBaseUrl)}
+    fi ;;
+esac`
+        : "",
       T3_RELEASE_BASE_URL: shellSingleQuote(releaseBaseUrl),
       T3_ARCHIVE_LOCK_WAIT_SECONDS: String(REMOTE_ARCHIVE_LOCK_WAIT_SECONDS),
       T3_ARCHIVE_DOWNLOAD_SECONDS: String(REMOTE_ARCHIVE_DOWNLOAD_SECONDS),

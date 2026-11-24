@@ -1,3 +1,4 @@
+import serverPackageJson from "../../../server/package.json" with { type: "json" };
 import * as NodePath from "@effect/platform-node/NodePath";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
@@ -30,6 +31,16 @@ const packagedEnvironment = DesktopEnvironment.DesktopEnvironment.pipe(
 );
 
 describe("resolveDesktopSshCliRunner", () => {
+  it.effect("uses the desktop beta's Linux companion for a default SSH connection", () =>
+    Effect.gen(function* () {
+      const runner = resolveDesktopSshCliRunner(yield* packagedEnvironment, {});
+      assert.deepStrictEqual(runner.linuxArchive, {
+        version: serverPackageJson.version,
+        releaseBaseUrl: "https://github.com/putman-technologies/putman-code/releases/download",
+      });
+    }),
+  );
+
   it.effect("downloads the remote runner from the release mirror", () =>
     Effect.gen(function* () {
       const environment = yield* packagedEnvironment;
