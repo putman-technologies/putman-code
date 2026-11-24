@@ -132,6 +132,8 @@ const REPOSITORY_PATHS_CACHE_CAPACITY = 2_048;
 const REPOSITORY_PATHS_CACHE_TTL = Duration.minutes(10);
 const REPOSITORY_PATHS_REFRESH_COALESCE_TTL = Duration.seconds(5);
 const NON_REPOSITORY_PATHS_CACHE_TTL = Duration.seconds(1);
+// All branch pickers share this scan. Large repositories on mounted storage can take over 30s.
+const LIST_REFS_SCAN_TIMEOUT_MS = 120_000;
 const LIST_REFS_SNAPSHOT_CACHE_CAPACITY = 64;
 const LIST_REFS_SNAPSHOT_CACHE_TTL = Duration.minutes(2);
 const LIST_REFS_REFRESH_COALESCE_TTL = Duration.seconds(5);
@@ -4769,7 +4771,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
             "refs/remotes",
           ],
           {
-            timeoutMs: 30_000,
+            timeoutMs: LIST_REFS_SCAN_TIMEOUT_MS,
             maxOutputBytes: 16 * 1024 * 1024,
             fallbackErrorDetail: "Git ref snapshot enumeration failed.",
           },
@@ -4791,7 +4793,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
           },
         ),
         executeWorktreeList("GitVcsDriver.listRefs.worktreeList", fetchCwd, gitDirArgs, {
-          timeoutMs: 30_000,
+          timeoutMs: LIST_REFS_SCAN_TIMEOUT_MS,
           allowNonZeroExit: true,
           maxOutputBytes: 16 * 1024 * 1024,
         }),
@@ -5871,17 +5873,35 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       if (target === null) return null;
       const { remoteName, branchName } = target;
       const remoteRefName = `${remoteName}/${branchName}`;
-      // A missing remote branch can leave a stale tracking ref; never resolve it.
-      if (!(yield* fetchRemote({ cwd: input.cwd, remoteName, refName: remoteRefName }))) {
-        return null;
-      }
-      const resolved = yield* executeGit(
+      const readTrackingCommit = executeGit(
         "GitVcsDriver.fetchWorktreeBaseCommit",
         input.cwd,
         ["rev-parse", "--verify", "--quiet", `refs/remotes/${remoteRefName}^{commit}`],
         { allowNonZeroExit: true },
-      );
-      return resolved.exitCode === 0 ? { commitSha: resolved.stdout.trim(), remoteRefName } : null;
+      ).pipe(Effect.map((result) => (result.exitCode === 0 ? result.stdout.trim() : null)));
+
+      // A fetch can spend minutes traversing a mounted repository even when the selected branch is current.
+      const localTip = yield* readTrackingCommit.pipe(Effect.orElseSucceed(() => null));
+      if (localTip) {
+        const ref = `refs/heads/${branchName}`;
+        const matchesRemote = yield* executeGit(
+          "GitVcsDriver.fetchWorktreeBaseCommit.remoteTip",
+          input.cwd,
+          ["ls-remote", "--exit-code", "--refs", "--", remoteName, ref],
+          { env: STATUS_UPSTREAM_REFRESH_ENV, timeoutMs: 15_000, allowNonZeroExit: true },
+        ).pipe(
+          Effect.map(
+            (result) => result.exitCode === 0 && result.stdout.trimEnd() === `${localTip}\t${ref}`,
+          ),
+          Effect.orElseSucceed(() => false),
+        );
+        if (matchesRemote) return { commitSha: localTip, remoteRefName };
+      }
+      if (!(yield* fetchRemote({ cwd: input.cwd, remoteName, refName: remoteRefName }))) {
+        return null;
+      }
+      const commitSha = yield* readTrackingCommit;
+      return commitSha ? { commitSha, remoteRefName } : null;
     });
 
   const fetchRemoteBranch: GitVcsDriver.GitVcsDriver["Service"]["fetchRemoteBranch"] = Effect.fn(
