@@ -9,6 +9,7 @@ import { T, useGT, useMessages, Var } from "gt-react";
 import {
   type DesktopDiscoveredSshHost,
   type DesktopSshEnvironmentTarget,
+  type EnvironmentId,
 } from "@t3tools/contracts";
 import {
   RelayConnectionRegistration,
@@ -83,6 +84,7 @@ export function AddEnvironmentDialog({
   savedEnvironments,
   onOpenChange,
   onErrorChange,
+  onConnected,
 }: {
   readonly open: boolean;
   readonly routeTarget: EnvironmentPresentation | null;
@@ -90,6 +92,7 @@ export function AddEnvironmentDialog({
   readonly savedEnvironments: ReadonlyArray<EnvironmentPresentation>;
   readonly onOpenChange: (open: boolean) => void;
   readonly onErrorChange: (error: string | null) => void;
+  readonly onConnected?: (environmentId: EnvironmentId) => void;
 }) {
   const gt = useGT();
   const desktopBridge = window.desktopBridge;
@@ -188,6 +191,7 @@ export function AddEnvironmentDialog({
     }
 
     handleOpenChange(false);
+    onConnected?.(result.value);
     toastManager.add({
       type: "success",
       title: routeTarget ? gt("Route added") : gt("Environment connected"),
@@ -269,6 +273,7 @@ export function AddEnvironmentDialog({
     }
 
     handleOpenChange(false);
+    onConnected?.(result.value);
     toastManager.add(
       routeTarget
         ? {

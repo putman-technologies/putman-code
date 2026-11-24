@@ -12301,5 +12301,16 @@
   "090d9cd4e1b4379a": "Total tokens",
   "86215eeddc61bc08": "Estimate excludes {share} of records with unknown prices.",
   "bfefd7fa452d99cf": "Usage data is incomplete.",
-  "38121f3d72cac7e8": "Usage unavailable"
+  "38121f3d72cac7e8": "Usage unavailable",
+  "78e468a9bb8e6f88": "Set up agents and projects",
+  "36b1dab3a6ac28f9": "No project history found. After setup, choose Add project to open a folder or clone a repository.",
+  "1ba9f8e3484f8e81": "Choose where your coding agent will run. Next, connect an agent and pick your projects.",
+  "19d9d88f29a68def": "Work environment",
+  "10858693c3cc46fd": "Add an environment to connect your first computer.",
+  "f7e1877a581fd737": "Skip setup",
+  "d8c2a10aaad37924": "Microsoft 365 (optional)",
+  "d49b30e9824ecfa8": "Getting started",
+  "cb60210a6dae3aef": "Open setup guide",
+  "cb920a9246480622": "Setup guide",
+  "b42f7acc484c0a7b": "Onboarding"
 }

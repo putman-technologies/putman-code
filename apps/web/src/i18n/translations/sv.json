@@ -12299,5 +12299,16 @@
   "090d9cd4e1b4379a": "Totalt antal token",
   "86215eeddc61bc08": "Uppskattningen utesluter {share} av posterna eftersom priset är okänt.",
   "bfefd7fa452d99cf": "Användningsdata är ofullständiga.",
-  "38121f3d72cac7e8": "Användningsdata saknas"
+  "38121f3d72cac7e8": "Användningsdata saknas",
+  "78e468a9bb8e6f88": "Konfigurera agenter och projekt",
+  "36b1dab3a6ac28f9": "Ingen projekthistorik hittades. Välj Lägg till projekt efter konfigurationen för att öppna en mapp eller klona ett kodarkiv.",
+  "1ba9f8e3484f8e81": "Välj var din kodagent ska köras. Anslut sedan en agent och välj dina projekt.",
+  "19d9d88f29a68def": "Arbetsmiljö",
+  "10858693c3cc46fd": "Lägg till en miljö för att ansluta din första dator.",
+  "f7e1877a581fd737": "Hoppa över konfigurationen",
+  "d8c2a10aaad37924": "Microsoft 365 (valfritt)",
+  "d49b30e9824ecfa8": "Kom igång",
+  "cb60210a6dae3aef": "Öppna installationsguiden",
+  "cb920a9246480622": "Installationsguide",
+  "b42f7acc484c0a7b": "Introduktion"
 }

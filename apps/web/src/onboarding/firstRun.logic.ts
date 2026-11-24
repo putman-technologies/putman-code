@@ -34,6 +34,7 @@ interface FirstRunWorkspaceInput {
 }
 
 interface FirstRunDecisionInput {
+  readonly desktop?: boolean;
   readonly enabled: boolean;
   readonly hydrated: boolean;
   readonly completed: boolean;
@@ -117,6 +118,9 @@ export function resolveFirstRunDecision(input: FirstRunDecisionInput): {
   if (!input.hydrated) {
     return { decision: "pending", persistCompletion: false };
   }
+
+  // Desktop completion belongs to the device, even when its first server already has projects.
+  if (input.desktop) return { decision: "wizard", persistCompletion: false };
 
   if (input.projectCount > 1 || input.threadCount > 1) {
     return {

@@ -12291,5 +12291,16 @@
   "090d9cd4e1b4379a": "Total de tokens",
   "86215eeddc61bc08": "A estimativa exclui {share} dos registros cujo preço é desconhecido.",
   "bfefd7fa452d99cf": "Os dados de uso estão incompletos.",
-  "38121f3d72cac7e8": "Dados de uso indisponíveis"
+  "38121f3d72cac7e8": "Dados de uso indisponíveis",
+  "78e468a9bb8e6f88": "Configurar agentes e projetos",
+  "36b1dab3a6ac28f9": "Nenhum histórico de projetos encontrado. Após a configuração, escolha Adicionar projeto para abrir uma pasta ou clonar um repositório.",
+  "1ba9f8e3484f8e81": "Escolha onde o agente de programação será executado. Em seguida, conecte um agente e selecione seus projetos.",
+  "19d9d88f29a68def": "Ambiente de trabalho",
+  "10858693c3cc46fd": "Adicione um ambiente para conectar seu primeiro computador.",
+  "f7e1877a581fd737": "Pular configuração",
+  "d8c2a10aaad37924": "Microsoft 365 (opcional)",
+  "d49b30e9824ecfa8": "Primeiros passos",
+  "cb60210a6dae3aef": "Abrir guia de configuração",
+  "cb920a9246480622": "Guia de configuração",
+  "b42f7acc484c0a7b": "Configuração inicial"
 }

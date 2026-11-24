@@ -8,7 +8,7 @@ import {
 } from "../../account/profileSync";
 import { Button } from "../ui/button";
 
-export function MicrosoftProfileSection() {
+export function MicrosoftProfileSection({ optional = false }: { readonly optional?: boolean }) {
   const gt = useGT();
   const [signedIn, setSignedIn] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -42,7 +42,9 @@ export function MicrosoftProfileSection() {
   if (!window.desktopBridge?.microsoftProfile) return null;
   return (
     <section className="grid gap-2 rounded-lg border bg-card p-4">
-      <h2 className="text-sm font-semibold">{gt("Microsoft 365")}</h2>
+      <h2 className="text-sm font-semibold">
+        {optional ? gt("Microsoft 365 (optional)") : gt("Microsoft 365")}
+      </h2>
       <p className="text-sm text-muted-foreground">
         {gt(
           "Sync preferences and saved server addresses through your PutmanCode folder in OneDrive.",

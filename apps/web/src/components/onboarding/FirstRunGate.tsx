@@ -10,6 +10,7 @@ import {
   useClientSettings,
   useClientSettingsHydrationStatus,
 } from "../../hooks/useSettings";
+import { isElectron } from "../../env";
 import { completeOnboarding } from "../../onboarding/firstRun";
 import {
   isFirstRunWorkspaceProvenanceAuthoritative,
@@ -113,25 +114,27 @@ export function FirstRunGate({
       threads: soleThread === null ? [] : [soleThread],
     });
 
-  const { decision: nextDecision, persistCompletion } = hostedStatic
-    ? resolveHostedFirstRunDecision(hydrated)
-    : resolveFirstRunDecision({
-        enabled,
-        hydrated,
-        completed: onboardingCompletedAt !== null,
-        bootstrapped,
-        authoritative: primaryShellLive,
-        workspaceAuthoritative: workspaceEvidenceLive,
-        workspaceProvenanceAuthoritative: isFirstRunWorkspaceProvenanceAuthoritative({
-          welcomeReceived: serverWelcome !== null,
-          bootstrapStatus: serverWelcome?.bootstrapStatus ?? null,
-        }),
-        catalogReady: environmentCatalogReady,
-        serverConfigAvailable: serverConfig !== null,
-        workspaceFresh,
-        projectCount: projects.length,
-        threadCount,
-      });
+  const { decision: nextDecision, persistCompletion } =
+    hostedStatic && !isElectron
+      ? resolveHostedFirstRunDecision(hydrated)
+      : resolveFirstRunDecision({
+          enabled: enabled || isElectron,
+          desktop: isElectron,
+          hydrated,
+          completed: onboardingCompletedAt !== null,
+          bootstrapped,
+          authoritative: primaryShellLive,
+          workspaceAuthoritative: workspaceEvidenceLive,
+          workspaceProvenanceAuthoritative: isFirstRunWorkspaceProvenanceAuthoritative({
+            welcomeReceived: serverWelcome !== null,
+            bootstrapStatus: serverWelcome?.bootstrapStatus ?? null,
+          }),
+          catalogReady: environmentCatalogReady,
+          serverConfigAvailable: serverConfig !== null,
+          workspaceFresh,
+          projectCount: projects.length,
+          threadCount,
+        });
 
   if (hydrated) {
     const transitioned = transitionFirstRunGateState(gateState, {

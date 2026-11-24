@@ -12292,5 +12292,16 @@
   "090d9cd4e1b4379a": "Total des jetons",
   "86215eeddc61bc08": "L’estimation exclut {share} des enregistrements dont le tarif est inconnu.",
   "bfefd7fa452d99cf": "Les données d’utilisation sont incomplètes.",
-  "38121f3d72cac7e8": "Données d’utilisation indisponibles"
+  "38121f3d72cac7e8": "Données d’utilisation indisponibles",
+  "78e468a9bb8e6f88": "Configurer les agents et les projets",
+  "36b1dab3a6ac28f9": "Aucun historique de projet trouvé. Après la configuration, choisissez Ajouter un projet pour ouvrir un dossier ou cloner un dépôt.",
+  "1ba9f8e3484f8e81": "Choisissez l’ordinateur sur lequel votre agent de programmation fonctionnera. Connectez ensuite un agent et sélectionnez vos projets.",
+  "19d9d88f29a68def": "Environnement de travail",
+  "10858693c3cc46fd": "Ajoutez un environnement pour connecter votre premier ordinateur.",
+  "f7e1877a581fd737": "Passer la configuration",
+  "d8c2a10aaad37924": "Microsoft 365 (facultatif)",
+  "d49b30e9824ecfa8": "Premiers pas",
+  "cb60210a6dae3aef": "Ouvrir le guide de configuration",
+  "cb920a9246480622": "Guide de configuration",
+  "b42f7acc484c0a7b": "Prise en main"
 }

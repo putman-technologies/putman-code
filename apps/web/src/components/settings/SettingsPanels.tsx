@@ -680,6 +680,16 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <SettingsSection id="getting-started" title={gt("Getting started")}>
+        <SettingsRow
+          {...setting("setup-guide")}
+          control={
+            <Button variant="outline" size="sm" render={<Link to="/welcome" />}>
+              {gt("Open setup guide")}
+            </Button>
+          }
+        />
+      </SettingsSection>
       <MicrosoftProfileSection />
       <SettingsSection id="notifications" title={gt("Notifications")}>
         <NotificationSettings />

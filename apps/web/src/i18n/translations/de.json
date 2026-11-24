@@ -12291,5 +12291,16 @@
   "090d9cd4e1b4379a": "Token insgesamt",
   "86215eeddc61bc08": "Die Schätzung schließt {share} der Datensätze aus, für die kein Preis vorliegt.",
   "bfefd7fa452d99cf": "Die Nutzungsdaten sind unvollständig.",
-  "38121f3d72cac7e8": "Nutzungsdaten nicht verfügbar"
+  "38121f3d72cac7e8": "Nutzungsdaten nicht verfügbar",
+  "78e468a9bb8e6f88": "Agenten und Projekte einrichten",
+  "36b1dab3a6ac28f9": "Kein Projektverlauf gefunden. Wähle nach der Einrichtung „Projekt hinzufügen“, um einen Ordner zu öffnen oder ein Repository zu klonen.",
+  "1ba9f8e3484f8e81": "Wähle den Computer, auf dem dein Programmieragent laufen soll. Verbinde danach einen Agenten und wähle deine Projekte aus.",
+  "19d9d88f29a68def": "Arbeitsumgebung",
+  "10858693c3cc46fd": "Füge eine Umgebung hinzu, um deinen ersten Computer zu verbinden.",
+  "f7e1877a581fd737": "Einrichtung überspringen",
+  "d8c2a10aaad37924": "Microsoft 365 (optional)",
+  "d49b30e9824ecfa8": "Erste Schritte",
+  "cb60210a6dae3aef": "Einrichtungsassistent öffnen",
+  "cb920a9246480622": "Einrichtungsassistent",
+  "b42f7acc484c0a7b": "Einführung"
 }

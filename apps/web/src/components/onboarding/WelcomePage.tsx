@@ -1,4 +1,3 @@
-import { APP_BASE_NAME } from "../../branding";
 import { useAuth } from "@clerk/react";
 import { useAtomValue } from "@effect/atom-react";
 import type {
@@ -129,7 +128,9 @@ const SCAN_LIMIT_MESSAGE = msg(
 export function WelcomePage({
   environmentId,
   onDone,
+  onBack,
 }: {
+  readonly onBack?: () => void;
   readonly environmentId: EnvironmentId;
   readonly onDone: (projectRef?: ScopedProjectRef) => void | Promise<void>;
 }) {
@@ -279,8 +280,15 @@ export function WelcomePage({
         {isElectron ? <WorkspacePageHeader electron /> : null}
         <div className="min-h-0 flex-1 overflow-y-auto scrollbar-gutter-both">
           <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-6 pt-12 pb-8 sm:pt-20">
+            {onBack && (
+              <div className="mb-3">
+                <Button size="sm" variant="ghost-muted" disabled={isImporting} onClick={onBack}>
+                  {gt("Back")}
+                </Button>
+              </div>
+            )}
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              {gt("Welcome to {app}", { app: APP_BASE_NAME })}
+              {gt("Set up agents and projects")}
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
               <T>
@@ -815,7 +823,15 @@ function ProjectsSection({
           {m(SCAN_LIMIT_MESSAGE)}
         </p>
       </WelcomeSection>
-    ) : null;
+    ) : (
+      <WelcomeSection title={gt("Projects")}>
+        <p className="py-2 text-sm text-muted-foreground">
+          {gt(
+            "No project history found. After setup, choose Add project to open a folder or clone a repository.",
+          )}
+        </p>
+      </WelcomeSection>
+    );
   }
 
   const allKeys = candidates.map((candidate) => candidate.key);

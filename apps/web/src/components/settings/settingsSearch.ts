@@ -718,6 +718,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("notification sound alert completion input approval desktop")],
   },
   {
+    id: "setup-guide",
+    title: msg("Setup guide"),
+    to: "/settings/general",
+    searchTerms: [msg("Welcome"), msg("Getting started"), msg("Onboarding")],
+  },
+  {
     id: "in-app-notifications",
     title: msg("In-app notifications"),
     to: "/settings/general",

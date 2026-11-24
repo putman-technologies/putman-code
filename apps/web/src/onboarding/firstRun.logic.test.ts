@@ -23,6 +23,32 @@ const freshWorkspace = {
 } as const;
 
 describe("resolveFirstRunDecision", () => {
+  it("guides a new desktop device even before an existing remote workspace connects", () => {
+    const existingRemote = {
+      ...freshWorkspace,
+      desktop: true,
+      projectCount: 3,
+      threadCount: 24,
+      workspaceFresh: false,
+      authoritative: false,
+      bootstrapped: false,
+      workspaceProvenanceAuthoritative: false,
+      serverConfigAvailable: false,
+      catalogReady: false,
+    };
+    expect(resolveFirstRunDecision({ ...existingRemote, hydrated: false }).decision).toBe(
+      "pending",
+    );
+    expect(resolveFirstRunDecision(existingRemote)).toEqual({
+      decision: "wizard",
+      persistCompletion: false,
+    });
+    expect(resolveFirstRunDecision({ ...existingRemote, completed: true })).toEqual({
+      decision: "app",
+      persistCompletion: false,
+    });
+  });
+
   it("opens the wizard for an authoritative fresh workspace", () => {
     expect(resolveFirstRunDecision(freshWorkspace)).toEqual({
       decision: "wizard",
