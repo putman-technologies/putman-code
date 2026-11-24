@@ -14,7 +14,7 @@ import {
   workspacePreparationRetryRunIds,
 } from "./turnItemPresentation.ts";
 
-function command(input: string): OrchestrationV2TurnItem {
+function turnItemBase() {
   const now = DateTime.makeUnsafe("2026-08-03T00:00:00.000Z");
   return {
     id: TurnItemId.make("item-command"),
@@ -31,25 +31,15 @@ function command(input: string): OrchestrationV2TurnItem {
     startedAt: now,
     completedAt: now,
     updatedAt: now,
-    type: "command_execution",
-    input,
-    output: "Workspace preparation completed.",
-    exitCode: 0,
-  };
+  } as const;
 }
 
 function preparationFailure(
   status: OrchestrationV2TurnItem["status"],
   code: string | null = ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE,
 ): OrchestrationV2TurnItem {
-  const {
-    input: _input,
-    output: _output,
-    exitCode: _exitCode,
-    ...base
-  } = command("") as Extract<OrchestrationV2TurnItem, { type: "command_execution" }>;
   return {
-    ...base,
+    ...turnItemBase(),
     id: TurnItemId.make("item-error"),
     status,
     title: "Workspace preparation failed",
@@ -73,7 +63,7 @@ function run(
 describe("turnItemIsWorkspacePreparation", () => {
   it("keeps an automatic branch naming timeout out of chat, including on older SSH servers", () => {
     const notice = {
-      ...command(""),
+      ...turnItemBase(),
       type: "system_notice",
       id: TurnItemId.make("turn-item:run:run-1:signal:branch-rename"),
       status: "completed",

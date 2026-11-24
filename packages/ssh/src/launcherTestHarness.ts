@@ -164,7 +164,7 @@ fi`,
     executable(
       "ps",
       `if [ "$*" = "-ww -o args= -p $TEST_SERVER_PID" ]; then
-  printf '/bin/sh %s/.t3/ssh-launch/test-target/run-t3.sh serve --host 127.0.0.1 --port 5999\\n' "$HOME"
+  printf '/bin/sh %s/.putman-code/ssh-launch/test-target/run-t3.sh serve --host 127.0.0.1 --port 5999\\n' "$HOME"
   exit 0
 fi
 PATH=/usr/bin:/bin exec ps "$@"`,

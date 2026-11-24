@@ -1327,7 +1327,7 @@ server.listen(Number(flag("--port") ?? 0), "127.0.0.1", () => {
         holderPort,
         sshAsLocalShell,
         staleId: staleId === "an unrelated process" ? holder.pid : tid,
-        stateDir: `${home}/.t3/ssh-launch/${yield* remoteStateKey(target)}`,
+        stateDir: `${home}/.putman-code/ssh-launch/${yield* remoteStateKey(target)}`,
       };
     });
 
@@ -1361,7 +1361,7 @@ server.listen(Number(flag("--port") ?? 0), "127.0.0.1", () => {
       // Reboot: our server is gone and its recorded PID now names something that
       // answers on the recorded port.
       process.kill(firstPid, "SIGKILL");
-      yield* fs.remove(`${home}/.t3/userdata/server-runtime.json`);
+      yield* fs.remove(`${home}/.putman-code/userdata/server-runtime.json`);
       yield* fs.writeFileString(`${stateDir}/pid`, `${staleId}\n`);
       yield* fs.writeFileString(`${stateDir}/port`, `${holderPort}\n`);
 
@@ -1396,7 +1396,7 @@ server.listen(Number(flag("--port") ?? 0), "127.0.0.1", () => {
           launcherId,
         ).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, sshAsLocalShell));
       const runtimePid = fs
-        .readFileString(`${home}/.t3/userdata/server-runtime.json`)
+        .readFileString(`${home}/.putman-code/userdata/server-runtime.json`)
         .pipe(Effect.map((runtime) => Number(JSON.parse(runtime).pid)));
       const launchedPids: Array<number> = [];
       yield* Effect.addFinalizer(() =>
@@ -1604,13 +1604,13 @@ const canBind = (port) =>
       const fs = yield* FileSystem.FileSystem;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-archive-launch-" });
       const home = `${root}/home`;
-      const stateDir = `${home}/.t3/ssh-launch/test-state`;
+      const stateDir = `${home}/.putman-code/ssh-launch/test-state`;
       const fakeT3 = `${root}/fake-t3.cjs`;
       yield* fs.makeDirectory(stateDir, { recursive: true });
       yield* fs.writeFileString(`${stateDir}/port`, `${yield* freeLoopbackPort}\n`);
       yield* fs.writeFileString(fakeT3, FAKE_T3);
       for (const version of versions) {
-        const runtimeDir = `${home}/.t3/runtime/versions/${version}`;
+        const runtimeDir = `${home}/.putman-code/runtime/versions/${version}`;
         yield* fs.makeDirectory(runtimeDir, { recursive: true });
         yield* fs.writeFileString(
           `${runtimeDir}/t3`,
@@ -1623,7 +1623,7 @@ const canBind = (port) =>
         .readFileString(`${stateDir}/pid`)
         .pipe(Effect.map((pid) => Number(pid.trim())));
       const readServerVersion = fs
-        .readFileString(`${home}/.t3/userdata/server-runtime.json`)
+        .readFileString(`${home}/.putman-code/userdata/server-runtime.json`)
         .pipe(Effect.map((raw) => (JSON.parse(raw) as { serverVersion: string }).serverVersion));
       // Launched servers outlive the script, so stop each PID it recorded.
       const launchedPids = new Set<number>();

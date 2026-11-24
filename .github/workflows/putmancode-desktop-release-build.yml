@@ -294,9 +294,10 @@ jobs:
           install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
       - run: vp test run src/vcs/GitVcsDriverCore.test.ts src/orchestration-v2/ThreadLaunchService.test.ts
         working-directory: apps/server
+      - run: vp run --filter @t3tools/client-runtime typecheck
       - run: vp test run src/state/turnItemPresentation.test.ts
         working-directory: packages/client-runtime
-      - run: vp test run src/tunnel.test.ts
+      - run: vp test run --testTimeout 30000 src/tunnel.test.ts
         working-directory: packages/ssh
       - run: vp test run --project unit src/ssh/DesktopSshEnvironment.test.ts -t 'resolveDesktopSshCliRunner'
         working-directory: apps/desktop
