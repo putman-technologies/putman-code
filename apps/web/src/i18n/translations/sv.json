@@ -12291,5 +12291,13 @@
   "70ceca26fed3ab78": "Frågan är inte längre aktuell.",
   "9b77b60842223789": "Det gick inte att skicka svaret.",
   "255624ca3232b204": "Ja",
-  "d2a4c751fe055ac5": "Nej"
+  "d2a4c751fe055ac5": "Nej",
+  "9f72f61d3b412054": "Använder kostnader som leverantören rapporterat eller modellpriser i amerikanska dollar.",
+  "ea5c6ad6574ea111": "Senaste 30 dagarna",
+  "28a81924b2ae3938": "Beräknad API-kostnad",
+  "917edb2bad76231b": "Under {amount}",
+  "090d9cd4e1b4379a": "Totalt antal token",
+  "86215eeddc61bc08": "Uppskattningen utesluter {share} av posterna eftersom priset är okänt.",
+  "bfefd7fa452d99cf": "Användningsdata är ofullständiga.",
+  "38121f3d72cac7e8": "Användningsdata saknas"
 }

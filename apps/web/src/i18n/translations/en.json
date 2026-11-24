@@ -12293,5 +12293,13 @@
   "70ceca26fed3ab78": "This question is no longer active.",
   "9b77b60842223789": "Could not send reply.",
   "255624ca3232b204": "Yes",
-  "d2a4c751fe055ac5": "No"
+  "d2a4c751fe055ac5": "No",
+  "9f72f61d3b412054": "Uses provider-reported costs or model rates in USD.",
+  "ea5c6ad6574ea111": "Last 30 days",
+  "28a81924b2ae3938": "Estimated API cost",
+  "917edb2bad76231b": "Under {amount}",
+  "090d9cd4e1b4379a": "Total tokens",
+  "86215eeddc61bc08": "Estimate excludes {share} of records with unknown prices.",
+  "bfefd7fa452d99cf": "Usage data is incomplete.",
+  "38121f3d72cac7e8": "Usage unavailable"
 }

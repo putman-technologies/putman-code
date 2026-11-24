@@ -12284,5 +12284,13 @@
   "70ceca26fed3ab78": "Cette question n’est plus active.",
   "9b77b60842223789": "Impossible d’envoyer la réponse.",
   "255624ca3232b204": "Oui",
-  "d2a4c751fe055ac5": "Non"
+  "d2a4c751fe055ac5": "Non",
+  "9f72f61d3b412054": "Utilise les coûts indiqués par le fournisseur ou les tarifs du modèle en dollars américains.",
+  "ea5c6ad6574ea111": "30 derniers jours",
+  "28a81924b2ae3938": "Coût estimé de l’API",
+  "917edb2bad76231b": "Moins de {amount}",
+  "090d9cd4e1b4379a": "Total des jetons",
+  "86215eeddc61bc08": "L’estimation exclut {share} des enregistrements dont le tarif est inconnu.",
+  "bfefd7fa452d99cf": "Les données d’utilisation sont incomplètes.",
+  "38121f3d72cac7e8": "Données d’utilisation indisponibles"
 }

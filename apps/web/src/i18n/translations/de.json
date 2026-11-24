@@ -12283,5 +12283,13 @@
   "70ceca26fed3ab78": "Diese Frage ist nicht mehr aktuell.",
   "9b77b60842223789": "Die Antwort konnte nicht gesendet werden.",
   "255624ca3232b204": "Ja",
-  "d2a4c751fe055ac5": "Nein"
+  "d2a4c751fe055ac5": "Nein",
+  "9f72f61d3b412054": "Verwendet vom Anbieter gemeldete Kosten oder Modellpreise in US-Dollar.",
+  "ea5c6ad6574ea111": "Letzte 30 Tage",
+  "28a81924b2ae3938": "Geschätzte API-Kosten",
+  "917edb2bad76231b": "Unter {amount}",
+  "090d9cd4e1b4379a": "Token insgesamt",
+  "86215eeddc61bc08": "Die Schätzung schließt {share} der Datensätze aus, für die kein Preis vorliegt.",
+  "bfefd7fa452d99cf": "Die Nutzungsdaten sind unvollständig.",
+  "38121f3d72cac7e8": "Nutzungsdaten nicht verfügbar"
 }
