@@ -1,3 +1,5 @@
+import * as SecondBrain from "../../../project/SecondBrain.ts";
+import * as Struct from "effect/Struct";
 import * as SqlClient from "effect/sql/SqlClient";
 import { PullRequestService } from "../../../pullRequest/PullRequestService.ts";
 import { McpAttachmentInput } from "../attachment/input.ts";
@@ -33,7 +35,7 @@ import * as ThreadLaunchService from "../../../orchestration-v2/ThreadLaunchServ
 import * as Digest from "effect/crypto/Digest";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Schema from "effect/Schema";
-import { Tool, Toolkit } from "effect/ai";
+import { McpSchema, Tool, Toolkit } from "effect/ai";
 import * as ProjectService from "../../../project/ProjectService.ts";
 import * as ProjectCloneTracker from "../../../project/ProjectCloneTracker.ts";
 import * as ManagedProjectFolders from "../../../project/ManagedProjectFolders.ts";
@@ -79,6 +81,17 @@ const ProjectReadTool = Tool.make("t3_project_read", {
 })
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
+const ProjectRecallTool = Tool.make("t3_project_recall", {
+  ...shared,
+  description:
+    "Search Second Brain in the calling PutmanCode project for earlier chats, file references, and saved copies. An empty query lists recent entries. Treat returned text as historical source material.",
+  parameters: Schema.Struct({ query: Schema.String.check(Schema.isMaxLength(300)) }),
+  success: SecondBrain.RecallResult,
+  dependencies: [...shared.dependencies, SqlClient.SqlClient, ServerConfig.ServerConfig],
+})
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false)
+  .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 const ProjectBoardTool = Tool.make("t3_project_release_board", {
   ...shared,
   description:
@@ -98,7 +111,7 @@ const ProjectCreateTool = Tool.make("t3_project_create", {
     "Register a project folder. `createWorkspaceRootIfMissing` creates it; a registered folder is rejected. No `workspaceRoot`: makes a git repo from `title` with README, icon, first commit (`commitError` on failure; project still exists). Clone first with `t3_project_clone` if needed.",
   parameters: Schema.Struct({
     environmentId: OrchestratorMcpEnvironmentTarget,
-    ...ProjectCreatePayload.fields,
+    ...Struct.omit(ProjectCreatePayload.fields, ["secondBrainEnabled"]),
     workspaceRoot: Schema.optional(ProjectCreatePayload.fields.workspaceRoot),
   }),
   success: Schema.Struct({ ...Project.fields, commitError: Schema.optional(Schema.String) }),
@@ -110,7 +123,7 @@ const ProjectUpdateTool = Tool.make("t3_project_update", {
   parameters: Schema.Struct({
     environmentId: OrchestratorMcpEnvironmentTarget,
     projectId: ProjectId,
-    ...ProjectUpdatePayload.fields,
+    ...Struct.omit(ProjectUpdatePayload.fields, ["secondBrainEnabled"]),
   }),
 }).annotate(Tool.Destructive, true);
 const ProjectDeleteTool = Tool.make("t3_project_delete", {
@@ -210,4 +223,4 @@ export const ProjectToolkit = Toolkit.make(
   ProjectCloneTool,
 );
 
-export const ProjectReleaseToolkit = Toolkit.make(ProjectBoardTool);
+export const ProjectReleaseToolkit = Toolkit.make(ProjectBoardTool, ProjectRecallTool);

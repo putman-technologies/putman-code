@@ -84,7 +84,10 @@ vi.mock("../state/environments", async (original) => ({
         connection: { phase: "connected" },
         entry: { target: { _tag: "PrimaryConnectionTarget" } },
         serverConfig: {
-          environment: { platform: { os: "linux" }, capabilities: { projectCloneTracking: true } },
+          environment: {
+            platform: { os: "linux" },
+            capabilities: { projectCloneTracking: true, projectSecondBrain: true },
+          },
           settings: { addProjectBaseDirectory: "/workspace/" },
           newProjectsRoot: "/workspace/",
         },
@@ -232,13 +235,18 @@ it.each([
   await expect.element(submit).toHaveFocus();
 });
 
-it("tells screen readers whether a new project will be published", async () => {
+it("lets users opt into Second Brain independently of publishing a new project", async () => {
   setup(undefined, githubAvailable);
   await using _screen = await render(<CommandPalette>{null}</CommandPalette>);
   await act(() => openCommandPalette({ open: "add-project" }));
   await page.getByText("New project", { exact: true }).click();
   await page.getByRole("combobox").fill("demo-project");
   const option = page.getByRole("option", { name: /Create private repository/ });
+  await expect.element(option).toHaveAttribute("aria-checked", "false");
+  const brain = page.getByRole("option", { name: /Save this project to Second Brain/ });
+  await expect.element(brain).toHaveAttribute("aria-checked", "false");
+  await brain.click();
+  await expect.element(brain).toHaveAttribute("aria-checked", "true");
   await expect.element(option).toHaveAttribute("aria-checked", "false");
   await option.click();
   await expect.element(option).toHaveAttribute("aria-checked", "true");

@@ -23,6 +23,9 @@ export const projectMutationOperation = Effect.fn("projectMutationOperation")(fu
         ...(mutation.defaultModelSelection === undefined
           ? {}
           : { defaultModelSelection: mutation.defaultModelSelection }),
+        ...(mutation.secondBrainEnabled === undefined
+          ? {}
+          : { secondBrainEnabled: mutation.secondBrainEnabled }),
         ...(mutation.scripts === undefined ? {} : { scripts: mutation.scripts }),
       });
 
@@ -35,6 +38,9 @@ export const projectMutationOperation = Effect.fn("projectMutationOperation")(fu
         ...(mutation.defaultModelSelection === undefined
           ? {}
           : { defaultModelSelection: mutation.defaultModelSelection }),
+        ...(mutation.secondBrainEnabled === undefined
+          ? {}
+          : { secondBrainEnabled: mutation.secondBrainEnabled }),
         ...(mutation.autoPull === undefined ? {} : { autoPull: mutation.autoPull }),
         ...(mutation.projectIcon === undefined ? {} : { projectIcon: mutation.projectIcon }),
         ...(mutation.faviconPath === undefined ? {} : { faviconPath: mutation.faviconPath }),

@@ -442,13 +442,20 @@ it.effect("starts a named project as a committed repository, and suffixes a take
         yield* git(baseDir, ["config", "--file", crlfConfig, "core.attributesFile", attributes]);
         (yield* HostProcess.Environment).GIT_CONFIG_GLOBAL = crlfConfig;
 
-        const first = yield* folders.createNamedProject({ name: "Pinball Stats" });
+        const first = yield* folders.createNamedProject({
+          name: "Pinball Stats",
+          secondBrainEnabled: true,
+        });
         const second = yield* folders.createNamedProject({ name: "pinball stats" });
 
         assert.equal(first.workspaceRoot, path.join(root, "pinball-stats"));
         assert.equal(second.workspaceRoot, path.join(root, "pinball-stats-2"));
         assert.isUndefined(first.commitError);
         const project = Option.getOrThrow(yield* projects.getById(first.projectId));
+        assert.isTrue(project.secondBrainEnabled);
+        assert.isFalse(
+          Option.getOrThrow(yield* projects.getById(second.projectId)).secondBrainEnabled,
+        );
         assert.equal(project.title, "Pinball Stats");
         assert.equal(project.workspaceRoot, first.workspaceRoot);
 

@@ -373,6 +373,30 @@ function ProjectOverviewContent(props: {
         </View>
       </SettingsSection>
 
+      {props.members.map((member) =>
+        props.connectedTargets.find((target) => target.environmentId === member.environmentId)
+          ?.serverConfig.environment.capabilities.projectSecondBrain ? (
+          <SettingsSection key={member.id} title={gt("Second Brain")}>
+            <SettingsSwitchRow
+              icon="folder"
+              label={gt("Save this project to Second Brain")}
+              subtitle={
+                props.members.length > 1
+                  ? member.workspaceRoot
+                  : gt("Remember project chats and files in PutmanCode.")
+              }
+              value={member.secondBrainEnabled === true}
+              disabled={!removableEnvironments.has(member.environmentId)}
+              onValueChange={(secondBrainEnabled) =>
+                void updateProject({
+                  environmentId: member.environmentId,
+                  input: { projectId: member.id, secondBrainEnabled },
+                })
+              }
+            />
+          </SettingsSection>
+        ) : null,
+      )}
       {canOrganize ? (
         <SettingsSection title={gt("Organize")}>
           <SettingsSwitchRow

@@ -1,3 +1,4 @@
+import * as SecondBrain from "../../../project/SecondBrain.ts";
 import { ThreadManagementService } from "../../../orchestration-v2/ThreadManagementService.ts";
 import { readCoordinatorBoard } from "../../../orchestration-v2/CoordinatorBoard.ts";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -545,6 +546,17 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
 });
 
 export const releaseBoardLayer = McpToolAccess.toLayer(ProjectReleaseToolkit, {
+  t3_project_recall: McpToolAccess.readsAsCaller(({ query }) =>
+    Effect.gen(function* () {
+      const { caller, scope } = yield* readCaller();
+      if (!caller || scope.client !== undefined || caller.linkOrigin !== undefined)
+        return yield* new OrchestratorMcpFailure({
+          code: "capability_denied",
+          message: "Open a chat in this PutmanCode project to read its Second Brain.",
+        });
+      return yield* SecondBrain.recall(caller.projectId, query).pipe(Effect.mapError(unavailable));
+    }),
+  ),
   t3_project_release_board: McpToolAccess.reads((input) =>
     Effect.gen(function* () {
       const projects = yield* access;

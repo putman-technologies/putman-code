@@ -68,6 +68,7 @@ export interface UpdateProjectInput extends CommandMetadata {
   readonly title?: string;
   readonly workspaceRoot?: string;
   readonly defaultModelSelection?: ModelSelection | null;
+  readonly secondBrainEnabled?: boolean;
   readonly autoPull?: boolean;
   readonly projectIcon?: ProjectIconOverride | null;
   readonly faviconPath?: string | null;
@@ -449,6 +450,9 @@ export const updateProject = Effect.fn("EnvironmentCommands.updateProject")(func
     ...(input.defaultModelSelection === undefined
       ? {}
       : { defaultModelSelection: input.defaultModelSelection }),
+    ...(input.secondBrainEnabled === undefined
+      ? {}
+      : { secondBrainEnabled: input.secondBrainEnabled }),
     ...(input.autoPull === undefined ? {} : { autoPull: input.autoPull }),
     ...(input.projectIcon === undefined ? {} : { projectIcon: input.projectIcon }),
     ...(input.faviconPath === undefined ? {} : { faviconPath: input.faviconPath }),

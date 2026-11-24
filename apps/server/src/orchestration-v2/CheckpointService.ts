@@ -9,6 +9,7 @@ import {
   RunId,
   ThreadId,
 } from "@t3tools/contracts";
+import * as SecondBrain from "../project/SecondBrain.ts";
 import * as Context from "effect/Context";
 import * as Digest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
@@ -241,6 +242,7 @@ export const layer: Layer.Layer<
 > = Layer.effect(
   CheckpointServiceV2,
   Effect.gen(function* () {
+    const brain = yield* SecondBrain.PreserveSources;
     const checkpointStore = yield* CheckpointStore.CheckpointStore;
     const crypto = yield* Digest.Digest;
     const checkpointRefFor = (input: Parameters<typeof checkpointRefForScopeOrdinal>[0]) =>
@@ -564,10 +566,19 @@ export const layer: Layer.Layer<
     const deleteStaleRefs: CheckpointServiceV2Shape["deleteStaleRefs"] = (input) =>
       withWorkspaceLock(
         input.scope.cwd,
-        checkpointStore.deleteCheckpointRefs({
-          cwd: input.scope.cwd,
-          checkpointRefs: input.checkpoints.map((checkpoint) => checkpoint.ref),
-        }),
+        brain
+          .beforeRemoval(
+            "checkpoint",
+            input.checkpoints.map((checkpoint) => checkpoint.ref),
+          )
+          .pipe(
+            Effect.andThen(
+              checkpointStore.deleteCheckpointRefs({
+                cwd: input.scope.cwd,
+                checkpointRefs: input.checkpoints.map((checkpoint) => checkpoint.ref),
+              }),
+            ),
+          ),
       ).pipe(
         Effect.mapError(
           (cause) =>
