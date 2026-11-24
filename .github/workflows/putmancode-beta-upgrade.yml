@@ -1,7 +1,7 @@
 name: Verify packaged PutmanCode beta updates
 on:
   push:
-    branches: ['verify/desktop-beta-*']
+    branches: ["verify/desktop-beta-*"]
 
 permissions:
   contents: read
