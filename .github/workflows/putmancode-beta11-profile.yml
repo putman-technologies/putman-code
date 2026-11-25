@@ -1,7 +1,7 @@
 name: Verify Beta 11 profile continuity
 on:
   push:
-    branches: [qa/beta-11-profile, qa/beta-11-apple-profile, qa/beta-11-apple-profile-diagnostics, qa/beta-11-apple-profile-consent]
+    branches: [qa/beta-11-profile, qa/beta-11-apple-profile, qa/beta-11-apple-profile-diagnostics, qa/beta-11-apple-profile-consent, qa/beta-11-apple-profile-tahoe]
 permissions:
   contents: read
   actions: read
@@ -78,7 +78,7 @@ jobs:
         previous: [1.0.0-beta.9, 1.0.0-beta.10]
     env:
       PREVIOUS: ${{ matrix.previous }}
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 18
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
