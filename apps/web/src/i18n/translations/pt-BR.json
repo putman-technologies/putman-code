@@ -12193,5 +12193,8 @@
   "c2e5587215ab21b7": "Second Brain",
   "809e6698b190c75c": "Salvar este projeto no Second Brain",
   "5e49f5fc881388b0": "Guardar as conversas e os arquivos do projeto no PutmanCode.",
-  "b88b9f277cd45075": "Não foi possível atualizar o projeto"
+  "b88b9f277cd45075": "Não foi possível atualizar o projeto",
+  "3697af6cc598fa88": "Mostrar código QR",
+  "88a97b6961295681": "Insira um endereço do servidor acessível pelo seu celular para mostrar um código QR.",
+  "f705c298af9ee355": "Não foi possível verificar este endereço para o ambiente selecionado."
 }

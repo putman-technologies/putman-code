@@ -12193,5 +12193,8 @@
   "c2e5587215ab21b7": "Second Brain",
   "809e6698b190c75c": "Dieses Projekt im Second Brain speichern",
   "5e49f5fc881388b0": "Projektchats und Dateien in PutmanCode speichern.",
-  "b88b9f277cd45075": "Projekt konnte nicht aktualisiert werden"
+  "b88b9f277cd45075": "Projekt konnte nicht aktualisiert werden",
+  "3697af6cc598fa88": "QR-Code anzeigen",
+  "88a97b6961295681": "Gib die von deinem Smartphone erreichbare Serveradresse ein, um einen QR-Code anzuzeigen.",
+  "f705c298af9ee355": "Diese Adresse konnte für die ausgewählte Umgebung nicht bestätigt werden."
 }
