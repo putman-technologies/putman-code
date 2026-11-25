@@ -2306,6 +2306,66 @@ it.effect("cancels a slow submodule checkout without reporting best-effort succe
   ),
 );
 
+it.effect.each(["updated", "stale", "unreachable"] as const)(
+  "checks the %s worktree tracking ref against the remote after a fetch timeout",
+  (outcome) =>
+    Effect.gen(function* () {
+      const started = yield* Deferred.make<void>();
+      const oldTip = "a".repeat(40);
+      const remoteTip = "b".repeat(40);
+      const spawner = ChildProcessSpawner.make((command) =>
+        Effect.gen(function* () {
+          if (!ChildProcess.isStandardCommand(command)) return makeNonRepositoryHandle();
+          const fetching = yield* Deferred.isDone(started);
+          switch (command.args[0]) {
+            case "rev-parse":
+              return makeSuccessfulHandle(fetching && outcome === "updated" ? remoteTip : oldTip);
+            case "ls-remote":
+              return outcome === "unreachable" && fetching
+                ? makeFailedHandle("Could not resolve host")
+                : makeSuccessfulHandle(`${remoteTip}\trefs/heads/main\n`);
+            case "fetch":
+              assert.includeMembers([...command.args], [
+                "--no-auto-gc",
+                "--no-write-commit-graph",
+                "--no-recurse-submodules",
+              ]);
+              return ChildProcessSpawner.makeHandle({
+                ...makeSuccessfulHandle(""),
+                exitCode: Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+              });
+            default:
+              return makeNonRepositoryHandle();
+          }
+        }),
+      );
+      const driver = yield* makeGitVcsDriverCore().pipe(
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      );
+      const fetching = yield* driver
+        .fetchWorktreeBaseCommit({
+          cwd: yield* makeTmpDir(),
+          refName: "main",
+          remote: { remoteName: "origin", branchName: "main" },
+        })
+        .pipe(Effect.result, Effect.forkChild({ startImmediately: true }));
+      yield* Deferred.await(started);
+      yield* TestClock.adjust("5 minutes");
+      const result = yield* Fiber.join(fetching);
+      if (outcome === "updated") {
+        assert.deepEqual(Result.isSuccess(result) && result.success, {
+          commitSha: remoteTip,
+          remoteRefName: "origin/main",
+        });
+      } else {
+        assert.include(
+          Result.isFailure(result) ? result.failure.detail : "",
+          "Fetching origin/main timed out",
+        );
+      }
+    }).pipe(Effect.provide(layerTest)),
+);
+
 // regression: #18537 the fetch before creating a worktree outgrew the 30s default
 it.effect.each(["healthy", "hung"] as const)("bounds a %s remote fetch at five minutes", (fetch) =>
   Effect.gen(function* () {

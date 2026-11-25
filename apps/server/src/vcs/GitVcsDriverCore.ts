@@ -5726,7 +5726,10 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       return { headCommit: input.targetCommit, moved: true, onTarget: true };
     });
 
-  const fetchRemote = Effect.fn("fetchRemote")(function* (input: GitVcsDriver.GitFetchRemoteInput) {
+  const fetchRemote = Effect.fn("fetchRemote")(function* (
+    input: GitVcsDriver.GitFetchRemoteInput,
+    scopedOptions: readonly string[] = [],
+  ) {
     const args = ["fetch", "--quiet", "--", input.remoteName];
     const options = {
       env: STATUS_UPSTREAM_REFRESH_ENV,
@@ -5781,6 +5784,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       "fetch",
       "--quiet",
       "--no-tags",
+      ...scopedOptions,
       "--",
       input.remoteName,
       `+refs/heads/${branch}:refs/remotes/${input.remoteName}/${branch}`,
@@ -5881,8 +5885,9 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       ).pipe(Effect.map((result) => (result.exitCode === 0 ? result.stdout.trim() : null)));
 
       // A fetch can spend minutes traversing a mounted repository even when the selected branch is current.
-      const localTip = yield* readTrackingCommit.pipe(Effect.orElseSucceed(() => null));
-      if (localTip) {
+      const readVerifiedTip = Effect.gen(function* () {
+        const localTip = yield* readTrackingCommit.pipe(Effect.orElseSucceed(() => null));
+        if (!localTip) return null;
         const ref = `refs/heads/${branchName}`;
         const matchesRemote = yield* executeGit(
           "GitVcsDriver.fetchWorktreeBaseCommit.remoteTip",
@@ -5895,13 +5900,32 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
           ),
           Effect.orElseSucceed(() => false),
         );
-        if (matchesRemote) return { commitSha: localTip, remoteRefName };
-      }
-      if (!(yield* fetchRemote({ cwd: input.cwd, remoteName, refName: remoteRefName }))) {
-        return null;
-      }
-      const commitSha = yield* readTrackingCommit;
-      return commitSha ? { commitSha, remoteRefName } : null;
+        return matchesRemote ? { commitSha: localTip, remoteRefName } : null;
+      });
+      const verified = yield* readVerifiedTip;
+      if (verified) return verified;
+      return yield* fetchRemote({ cwd: input.cwd, remoteName, refName: remoteRefName }, [
+        "--no-auto-gc",
+        "--no-write-commit-graph",
+        "--no-recurse-submodules",
+      ]).pipe(
+        Effect.flatMap((fetched) => (fetched ? readTrackingCommit : Effect.succeed(null))),
+        Effect.map((commitSha) => (commitSha ? { commitSha, remoteRefName } : null)),
+        Effect.catchIf(
+          (error) =>
+            error.operation === "GitVcsDriver.fetchRemote" && error.detail === GIT_TIMEOUT_DETAIL,
+          (error) =>
+            Effect.gen(function* () {
+              // Fetch may have updated the tracking ref before its process timed out.
+              const completed = yield* readVerifiedTip;
+              if (completed) return completed;
+              return yield* new GitCommandError({
+                ...error,
+                detail: `Fetching ${remoteRefName} timed out. Retry to require the latest remote commit, or start a new worktree with “Start from remote” off to use the local base.`,
+              });
+            }),
+        ),
+      );
     });
 
   const fetchRemoteBranch: GitVcsDriver.GitVcsDriver["Service"]["fetchRemoteBranch"] = Effect.fn(
