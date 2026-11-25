@@ -1,7 +1,7 @@
 name: Verify Beta 11 profile continuity
 on:
   push:
-    branches: [qa/beta-11-profile, qa/beta-11-apple-profile]
+    branches: [qa/beta-11-profile, qa/beta-11-apple-profile, qa/beta-11-apple-profile-diagnostics]
 permissions:
   contents: read
   actions: read
@@ -51,7 +51,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
   collect-mac:
-    if: github.ref_name == 'qa/beta-11-apple-profile'
+    if: startsWith(github.ref_name, 'qa/beta-11-apple-profile')
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -122,6 +122,7 @@ jobs:
               xcrun stapler validate new/*.dmg
               codesign --verify --deep --strict -R='identifier "com.putmantechnologies.putmancode" and anchor apple generic and certificate leaf[subject.OU] = "2NZKUVA6F5" and certificate leaf[field.1.2.840.113635.100.6.1.13] exists' "$target"
               spctl --assess --type execute "$target"
+              echo "Developer ID and Gatekeeper verification passed"
             fi
             node verification/verify-putmancode-profile-upgrade.mjs "$phase" "$target/Contents/MacOS/PutmanCode" "$RUNNER_TEMP/putmancode-persist-test" "$version"
           done
