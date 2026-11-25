@@ -1,0 +1,50 @@
+name: Stage Beta 11 recovery and SSH files
+on:
+  push:
+    branches: [release/beta-11-verification]
+    paths: [.github/workflows/putmancode-beta11-stage.yml]
+permissions:
+  contents: read
+jobs:
+  stage:
+    if: github.repository == 'putman-technologies/putman-code'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/backup-putmancode-mac.command
+          sparse-checkout-cone-mode: false
+      - name: Check the source and attach files to the existing draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=v1.0.0-beta.11
+          sha=0bf2ab0d4d34dec4b79415b83520f4e860d9c9cd
+          run=45636072600
+          assert_draft() { gh release view "$tag" --json isDraft,targetCommitish --jq 'select(.isDraft)|.targetCommitish' | grep -Fx "$sha" >/dev/null; }
+          assert_draft
+          gh run view "$run" --json headSha,headBranch,jobs | jq -e --arg sha "$sha" '.headSha==$sha and .headBranch=="release/1.0.0" and ([.jobs[]|select(.name|startswith("Build and exercise the Linux SSH companion"))|.conclusion] | sort == ["success","success"])'
+          mkdir assets
+          for arch in x64 arm64; do
+            file="t3-1.0.0-beta.11-linux-$arch.tar.gz"
+            gh run download "$run" --name "ssh-linux-$arch" --dir "incoming-$arch"
+            tar -tzf "incoming-$arch/$file" > /dev/null
+            cp "incoming-$arch/$file" "assets/$file"
+          done
+          cp scripts/backup-putmancode-mac.command assets/
+          (cd assets && sha256sum t3-* > SHA256SUMS)
+          for file in assets/*; do
+            assert_draft
+            name=${file##*/}
+            expected="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
+            existing=$(gh release view "$tag" --json assets | jq -r --arg name "$name" '.assets[] | select(.name==$name) | .digest')
+            if [[ -z "$existing" ]]; then gh release upload "$tag" "$file"; fi
+            gh release view "$tag" --json assets | jq -e --arg name "$name" --arg digest "$expected" 'any(.assets[]; .name==$name and .digest==$digest)'
+          done
