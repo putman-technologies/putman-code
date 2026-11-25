@@ -1,0 +1,121 @@
+name: Verify Beta 11 profile continuity
+on:
+  push:
+    branches: [qa/beta-11-profile, qa/beta-11-apple-profile]
+permissions:
+  contents: read
+  actions: read
+env:
+  VERSION: 1.0.0-beta.11
+  PREVIOUS: 1.0.0-beta.10
+jobs:
+  windows:
+    if: github.ref_name == 'qa/beta-11-profile'
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/verify-putmancode-profile-upgrade.mjs
+            /scripts/fixtures/desktop-launch/statev2.sqlite
+            /apps/desktop/package.json
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "26.13.1"
+          package-manager-cache: false
+      - name: Obtain tested candidate and published baseline
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir old new verification
+          test "$(gh run view 45636072600 --json headSha --jq .headSha)" = 0bf2ab0d4d34dec4b79415b83520f4e860d9c9cd
+          gh release download "v$PREVIOUS" --pattern "Putman-Code-$PREVIOUS-x64.exe" --dir old
+          gh run download 45636072600 --name "PutmanCode-$VERSION-Windows-x64" --dir new
+          cp scripts/verify-putmancode-profile-upgrade.mjs verification/
+          pw=$(node -p 'require("./apps/desktop/package.json").dependencies["playwright-core"]')
+          cd verification && npm install --no-fund --no-audit --ignore-scripts "playwright-core@$pw"
+      - name: Install each EXE in place under the same Windows account
+        run: |
+          $target = Join-Path $env:LOCALAPPDATA 'Programs\PutmanCodeProfileVerification'
+          $profilePath = Join-Path $env:RUNNER_TEMP 'putmancode-persist-test'
+          foreach ($item in @(@('old','seed',$env:PREVIOUS),@('new','verify',$env:VERSION))) {
+            $setup = (Get-Item "$($item[0])/*.exe").FullName
+            $installer = Start-Process $setup -ArgumentList '/S',"/D=$target" -Wait -PassThru
+            if ($installer.ExitCode -ne 0) { throw "Installer failed" }
+            node verification/verify-putmancode-profile-upgrade.mjs $item[1] "$target/PutmanCode.exe" $profilePath $item[2]
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+  collect-mac:
+    if: github.ref_name == 'qa/beta-11-apple-profile'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Read the signed DMG from the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release view "v$VERSION" --json isDraft,targetCommitish | jq -e '.isDraft and .targetCommitish=="0bf2ab0d4d34dec4b79415b83520f4e860d9c9cd"'
+          gh release download "v$VERSION" --pattern "PutmanCode-$VERSION-macOS-arm64.dmg"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: signed-mac-profile-test
+          path: '*.dmg'
+          compression-level: 0
+          retention-days: 2
+  mac:
+    needs: collect-mac
+    runs-on: macos-15
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/verify-putmancode-profile-upgrade.mjs
+            /scripts/fixtures/desktop-launch/statev2.sqlite
+            /apps/desktop/package.json
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "26.13.1"
+          package-manager-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: signed-mac-profile-test
+          path: new
+      - name: Obtain preview and test harness
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir old verification
+          gh release download "v$PREVIOUS" --pattern "PutmanCode-$PREVIOUS-macOS-arm64.dmg" --dir old
+          cp scripts/verify-putmancode-profile-upgrade.mjs verification/
+          pw=$(node -p 'require("./apps/desktop/package.json").dependencies["playwright-core"]')
+          cd verification && npm install --no-fund --no-audit --ignore-scripts "playwright-core@$pw"
+      - name: Replace the preview app with the verified Developer ID app
+        run: |
+          set -euo pipefail
+          target="$RUNNER_TEMP/installation/PutmanCode.app"
+          mkdir -p "$(dirname "$target")" "$RUNNER_TEMP/mounted"
+          for stage in old new; do
+            hdiutil attach -nobrowse -readonly -mountpoint "$RUNNER_TEMP/mounted" "$stage/"*.dmg
+            if [[ -d "$target" ]]; then mv "$target" "$RUNNER_TEMP/previous.app"; fi
+            ditto "$RUNNER_TEMP/mounted/PutmanCode.app" "$target"
+            hdiutil detach "$RUNNER_TEMP/mounted"
+            if [[ "$stage" == old ]]; then phase=seed; version=$PREVIOUS; else
+              phase=verify; version=$VERSION
+              xcrun stapler validate new/*.dmg
+              codesign --verify --deep --strict -R='identifier "com.putmantechnologies.putmancode" and anchor apple generic and certificate leaf[subject.OU] = "2NZKUVA6F5" and certificate leaf[field.1.2.840.113635.100.6.1.13] exists' "$target"
+              spctl --assess --type execute "$target"
+            fi
+            node verification/verify-putmancode-profile-upgrade.mjs "$phase" "$target/Contents/MacOS/PutmanCode" "$RUNNER_TEMP/putmancode-persist-test" "$version"
+          done
