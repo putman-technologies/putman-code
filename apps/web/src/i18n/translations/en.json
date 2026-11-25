@@ -12203,5 +12203,8 @@
   "c2e5587215ab21b7": "Second Brain",
   "809e6698b190c75c": "Save this project to Second Brain",
   "5e49f5fc881388b0": "Remember project chats and files in PutmanCode.",
-  "b88b9f277cd45075": "Failed to update project"
+  "b88b9f277cd45075": "Failed to update project",
+  "3697af6cc598fa88": "Show QR code",
+  "88a97b6961295681": "Enter the server address your phone can reach to show a QR code.",
+  "f705c298af9ee355": "Could not verify this address for the selected environment."
 }

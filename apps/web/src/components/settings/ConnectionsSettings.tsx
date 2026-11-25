@@ -2,6 +2,7 @@ import { errorDisplayMessage, thrownErrorMessage } from "@t3tools/client-runtime
 import { m as resolveMessage } from "~/i18n/messages";
 import { managedCapabilityDenial } from "@t3tools/client-runtime/contract-labels";
 import { SessionPermissions } from "./SessionPermissions";
+import { remotePairingEndpoints } from "./pairingUrls";
 import { useSearch } from "@tanstack/react-router";
 import { ChevronRightIcon, EllipsisIcon } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
@@ -1151,9 +1152,16 @@ function ConnectionsSettingsContent({
   ) => (
     <PairingClientsList
       servedByEnvironment={isPrimaryAccess}
-      endpointUrl={desktopServerExposureState?.endpointUrl}
-      endpoints={visibleDesktopAdvertisedEndpoints}
-      defaultEndpointKey={defaultDesktopAdvertisedEndpointKey}
+      remoteEnvironmentId={isPrimaryAccess ? null : accessEnvironmentId}
+      endpointUrl={isPrimaryAccess ? desktopServerExposureState?.endpointUrl : null}
+      endpoints={
+        isPrimaryAccess
+          ? visibleDesktopAdvertisedEndpoints
+          : accessEnvironment
+            ? remotePairingEndpoints(accessEnvironment)
+            : []
+      }
+      defaultEndpointKey={isPrimaryAccess ? defaultDesktopAdvertisedEndpointKey : null}
       isLoading={isLoadingDesktopAccessManagement}
       pairingLinks={pairingLinks}
       createdPairingCredentials={createdPairingCredentials}

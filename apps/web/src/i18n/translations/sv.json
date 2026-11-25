@@ -12201,5 +12201,8 @@
   "c2e5587215ab21b7": "Second Brain",
   "809e6698b190c75c": "Spara projektet i Second Brain",
   "5e49f5fc881388b0": "Spara projektets chattar och filer i PutmanCode.",
-  "b88b9f277cd45075": "Kunde inte uppdatera projektet"
+  "b88b9f277cd45075": "Kunde inte uppdatera projektet",
+  "3697af6cc598fa88": "Visa QR-kod",
+  "88a97b6961295681": "Ange en serveradress som din telefon kan nå för att visa en QR-kod.",
+  "f705c298af9ee355": "Det gick inte att verifiera adressen för den valda miljön."
 }

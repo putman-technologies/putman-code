@@ -1,4 +1,7 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { fetchRemoteEnvironmentDescriptor } from "@t3tools/client-runtime/environment";
+import { layerRemoteHttpClient } from "@t3tools/client-runtime/rpc";
+import * as Effect from "effect/Effect";
 import { m as resolveMessage } from "~/i18n/messages";
 import { managedCapabilityDenial } from "@t3tools/client-runtime/contract-labels";
 import { AUTH_SCOPE_OPTIONS as PAIRING_SCOPE_OPTIONS } from "@t3tools/shared/authScopeOptions";
@@ -28,7 +31,11 @@ import {
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { cn } from "../../lib/utils";
 import { formatElapsedDurationLabel, formatExpiresInLabel } from "../../timestampFormat";
-import { resolveDesktopPairingUrl, resolveHostedPairingUrl } from "./pairingUrls";
+import {
+  remotePairingOrigin,
+  resolveDesktopPairingUrl,
+  resolveHostedPairingUrl,
+} from "./pairingUrls";
 import {
   canRevokeOtherClients,
   isQrShareableEndpoint,
@@ -133,12 +140,87 @@ function endpointRowClassName(isAvailable: boolean) {
   );
 }
 
+function RemotePairingAddress({
+  environmentId,
+  onVerified,
+}: {
+  environmentId: EnvironmentId;
+  onVerified: (origin: string) => void;
+}) {
+  const gt = useGT();
+  const [address, setAddress] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const origin = remotePairingOrigin(address);
+  const verify = async () => {
+    if (!origin || checking) return;
+    setChecking(true);
+    setFailed(false);
+    try {
+      const descriptor = await Effect.runPromise(
+        fetchRemoteEnvironmentDescriptor({ httpBaseUrl: origin }).pipe(
+          Effect.provide(
+            layerRemoteHttpClient((request, init) =>
+              fetch(request, {
+                ...init,
+                credentials: "omit",
+                redirect: "error",
+                referrerPolicy: "no-referrer",
+              }),
+            ),
+          ),
+        ),
+      );
+      if (descriptor.environmentId === environmentId) onVerified(origin);
+      else setFailed(true);
+    } catch {
+      setFailed(true);
+    }
+    setChecking(false);
+  };
+  return (
+    <form
+      className="mt-2 space-y-1.5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void verify();
+      }}
+    >
+      <label className="block text-xs text-muted-foreground">
+        <T>Enter the server address your phone can reach to show a QR code.</T>
+        <Input
+          type="url"
+          required
+          value={address}
+          disabled={checking}
+          placeholder="https://"
+          className="mt-1"
+          onChange={(event) => {
+            setAddress(event.target.value);
+            setFailed(false);
+          }}
+        />
+      </label>
+      <Button type="submit" size="xs" variant="outline" disabled={!origin || checking}>
+        <QrCodeIcon aria-hidden />
+        {checking ? gt("Checking…") : gt("Show QR code")}
+      </Button>
+      {failed ? (
+        <p role="alert" className="text-xs text-destructive">
+          <T>Could not verify this address for the selected environment.</T>
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
 type PairingLinkListRowProps = {
   pairingLink: ServerPairingLinkRecord;
   credential: string | undefined;
   defaultShareOpen: boolean;
   /** Whether this page is served by the environment the link pairs with. */
   servedByEnvironment: boolean;
+  remoteEnvironmentId: EnvironmentId | null;
   endpointUrl: string | null | undefined;
   endpoints: ReadonlyArray<AdvertisedEndpoint>;
   defaultEndpointKey: string | null;
@@ -152,6 +234,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
   credential,
   defaultShareOpen,
   servedByEnvironment,
+  remoteEnvironmentId,
   endpointUrl,
   endpoints,
   defaultEndpointKey,
@@ -166,12 +249,15 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
   const [isRevealDialogOpen, setIsRevealDialogOpen] = useState(false);
   const [isQrPanelOpen, setIsQrPanelOpen] = useState(defaultShareOpen);
   const [qrEndpointId, setQrEndpointId] = useState<string | null>(null);
+  const [verifiedOrigin, setVerifiedOrigin] = useState<string | null>(null);
   const qrPanelId = useId();
 
-  const currentOriginPairingUrl = credential ? resolveCurrentOriginPairingUrl(credential) : null;
-  const hostedPairingUrl =
+  const currentOriginPairingUrl =
+    servedByEnvironment && credential ? resolveCurrentOriginPairingUrl(credential) : null;
+  const desktopPairingUrl =
     credential && endpointUrl != null && endpointUrl !== ""
-      ? resolveHostedPairingUrl(endpointUrl, credential)
+      ? (resolveHostedPairingUrl(endpointUrl, credential) ??
+        resolveDesktopPairingUrl(endpointUrl, credential))
       : null;
   const endpointPairingUrl = (() => {
     const endpoint = selectPairingEndpoint(endpoints, defaultEndpointKey);
@@ -205,13 +291,10 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
     }
     return options;
   })();
+  const verifiedPairingUrl =
+    verifiedOrigin && credential ? resolveDesktopPairingUrl(verifiedOrigin, credential) : null;
   const shareablePairingUrl =
-    endpointPairingUrl ??
-    (credential && endpointUrl != null && endpointUrl !== ""
-      ? (hostedPairingUrl ?? resolveDesktopPairingUrl(endpointUrl, credential))
-      : servedByEnvironment
-        ? currentOriginPairingUrl
-        : null);
+    endpointPairingUrl ?? desktopPairingUrl ?? verifiedPairingUrl ?? currentOriginPairingUrl;
   const [failedCopyValue, setFailedCopyValue] = useState<string | null>(null);
   const revealValue = failedCopyValue ?? shareablePairingUrl ?? credential ?? "";
   const isRevealValueUrl = revealValue !== credential;
@@ -300,6 +383,14 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
             <p className="text-2xs text-muted-foreground/70">
               <T>Create a new link to share from this client.</T>
             </p>
+          ) : shareablePairingUrl === null && remoteEnvironmentId ? (
+            <RemotePairingAddress
+              environmentId={remoteEnvironmentId}
+              onVerified={(origin) => {
+                setVerifiedOrigin(origin);
+                setIsQrPanelOpen(true);
+              }}
+            />
           ) : shareablePairingUrl === null ? (
             <p className="text-2xs text-muted-foreground/70">
               <T>
@@ -848,6 +939,7 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
 
 type PairingClientsListProps = {
   servedByEnvironment: boolean;
+  remoteEnvironmentId: EnvironmentId | null;
   endpointUrl: string | null | undefined;
   endpoints: ReadonlyArray<AdvertisedEndpoint>;
   defaultEndpointKey: string | null;
@@ -865,6 +957,7 @@ type PairingClientsListProps = {
 
 export const PairingClientsList = memo(function PairingClientsList({
   servedByEnvironment,
+  remoteEnvironmentId,
   endpointUrl,
   endpoints,
   defaultEndpointKey,
@@ -888,6 +981,7 @@ export const PairingClientsList = memo(function PairingClientsList({
           credential={createdPairingCredentials.get(pairingLink.id)}
           defaultShareOpen={pairingLink.id === sharedPairingLinkId}
           servedByEnvironment={servedByEnvironment}
+          remoteEnvironmentId={remoteEnvironmentId}
           endpointUrl={endpointUrl}
           endpoints={endpoints}
           defaultEndpointKey={defaultEndpointKey}

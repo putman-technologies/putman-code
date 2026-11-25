@@ -12194,5 +12194,8 @@
   "c2e5587215ab21b7": "Second Brain",
   "809e6698b190c75c": "Enregistrer ce projet dans Second Brain",
   "5e49f5fc881388b0": "Conserver les discussions et les fichiers du projet dans PutmanCode.",
-  "b88b9f277cd45075": "Impossible de mettre à jour le projet"
+  "b88b9f277cd45075": "Impossible de mettre à jour le projet",
+  "3697af6cc598fa88": "Afficher le QR code",
+  "88a97b6961295681": "Saisissez une adresse du serveur accessible depuis votre téléphone pour afficher un QR code.",
+  "f705c298af9ee355": "Impossible de vérifier cette adresse pour l’environnement sélectionné."
 }
