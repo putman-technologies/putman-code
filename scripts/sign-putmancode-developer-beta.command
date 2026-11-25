@@ -20,8 +20,27 @@ if ! xcrun notarytool history --keychain-profile "$profile" --output-format json
   echo "Open Terminal in the Mac login session that holds the PutmanCode notarytool profile."
   exit 1
 fi
-echo "Waiting for all release checks on $version before signing."
-gh run watch "$run" --repo "$repo" --exit-status --interval 25 >/dev/null || { echo "Release checks failed."; exit 1; }
+echo "Waiting for verified Apple silicon packaging of $version."
+primary=$run
+ready=false
+for ((attempt=0; attempt<144; attempt++)); do
+  result=$(gh run view "$primary" --repo "$repo" --json conclusion --jq .conclusion)
+  if [[ "$result" == success ]]; then ready=true; break; fi
+  # An alternate hosted runner checks out the same pinned release sources.
+  if [[ "$sha" == 0bf2ab0d4d34dec4b79415b83520f4e860d9c9cd ]]; then
+    alternate=45639215960
+    metadata=$(gh api "repos/$repo/actions/runs/$alternate")
+    jq -e '.head_sha=="20f01b3f7c625f2d0da7b991a539080ea5f5af24" and .path==".github/workflows/putmancode-beta11-mac-fallback.yml" and .head_repository.full_name=="putman-technologies/putman-code"' <<<"$metadata" >/dev/null
+    if [[ "$(jq -r .conclusion <<<"$metadata")" == success ]]; then
+      gh api "repos/$repo/actions/runs/$primary/attempts/1/jobs" | jq -e '[.jobs[] | select(.name!="Package and launch on macOS")] | length==8 and all(.[]; .conclusion=="success")' >/dev/null
+      run=$alternate; ready=true; break
+    fi
+    if [[ "$(jq -r .status <<<"$metadata")" == completed && -n "$result" ]]; then break; fi
+  elif [[ -n "$result" ]]; then break
+  fi
+  sleep 25
+done
+[[ "$ready" == true ]] || { echo "No verified Mac build is ready. The draft is intact."; exit 1; }
 dir="$root/dist/developer-id/$sha"
 mkdir -p "$dir"
 work=$(mktemp -d "$dir/.working.XXXXXX")
@@ -98,3 +117,25 @@ const file = process.argv[3], version = pkg('./package.json').version;
 NODE
 mv "$work/$name.zip" "$work/$name.zip.blockmap" "$work/beta-mac.yml" "$dir/"
 echo "Verified Apple Developer ID installer and updater files in $dir"
+
+# Upload only signed distribution files to the existing draft. The local user profile stays on the Mac.
+for file in "$dir/$dmg" "$dir/$name.zip" "$dir/$name.zip.blockmap" "$dir/beta-mac.yml"; do
+  current=$(gh release view "$tag" --repo "$repo" --json isDraft,targetCommitish,assets)
+  jq -e --arg sha "$sha" '.isDraft and .targetCommitish==$sha' <<<"$current" >/dev/null
+  asset=${file##*/}
+  want="sha256:$(shasum -a 256 "$file" | cut -d' ' -f1)"
+  present=$(jq -r --arg asset "$asset" '.assets[]|select(.name==$asset)|.digest' <<<"$current")
+  if [[ -z "$present" ]]; then gh release upload "$tag" --repo "$repo" "$file"; fi
+  gh release view "$tag" --repo "$repo" --json assets | jq -e --arg asset "$asset" --arg want "$want" 'any(.assets[]; .name==$asset and .digest==$want)' >/dev/null
+done
+if [[ "$sha" == 0bf2ab0d4d34dec4b79415b83520f4e860d9c9cd ]]; then
+  verification=d31cec8b36670a3a4cef907df3f7f58dba94664d
+  branch=qa/beta-11-apple-profile
+  existing=$(gh api "repos/$repo/git/matching-refs/heads/$branch" --jq ".[]|select(.ref==\"refs/heads/$branch\")|.object.sha")
+  if [[ -z "$existing" ]]; then
+    gh api -X POST "repos/$repo/git/refs" -f ref="refs/heads/$branch" -f sha="$verification" --silent
+  else
+    [[ "$existing" == "$verification" ]]
+  fi
+fi
+echo "Signed files are in the GitHub draft for the preview-to-Developer ID upgrade check."
