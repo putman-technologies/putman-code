@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  RELEASE_VERSION: 1.0.0-beta.9
+  RELEASE_VERSION: 1.0.0-beta.10
 
 jobs:
   assistant-service:

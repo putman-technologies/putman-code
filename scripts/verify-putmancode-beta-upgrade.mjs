@@ -1,38 +1,39 @@
 // Runs only on a fresh hosted desktop runner. Exercise the packaged updater on a loopback release feed.
-import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { copyFileSync, createReadStream, mkdirSync, mkdtempSync, statSync } from "node:fs";
-import { createServer } from "node:http";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
+import * as NodeAssert from "node:assert/strict";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFS from "node:fs";
+import * as NodeHttp from "node:http";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeTimersPromises from "node:timers/promises";
 import { _electron } from "playwright-core";
 
 const [executable, assetDir, expectedVersion, installedVersion] = process.argv.slice(2);
-assert(
+NodeAssert.ok(
   executable &&
     assetDir &&
     expectedVersion &&
     installedVersion &&
     expectedVersion !== installedVersion,
 );
-const home = mkdtempSync(path.join(tmpdir(), "putmancode-upgrade-"));
-const mac = process.platform === "darwin";
+const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "putmancode-upgrade-"));
+// oxlint-disable-next-line t3code/no-global-process-runtime -- This standalone installer test runs directly on the native CI host.
+const mac = NodeOS.platform() === "darwin";
 const feedName = mac ? "beta-mac.yml" : "beta.yml";
-mkdirSync(path.join(home, "userdata"));
-copyFileSync(
-  path.resolve("scripts/fixtures/desktop-launch/statev2.sqlite"),
-  path.join(home, "userdata", "statev2.sqlite"),
+NodeFS.mkdirSync(NodePath.join(home, "userdata"));
+NodeFS.copyFileSync(
+  NodePath.resolve("scripts/fixtures/desktop-launch/statev2.sqlite"),
+  NodePath.join(home, "userdata", "statev2.sqlite"),
 );
 const requests = new Set();
 let offerUpdate = false;
-const server = createServer((req, res) => {
+const server = NodeHttp.createServer((req, res) => {
   const name = new URL(req.url, "http://localhost").pathname.slice(1);
-  if (!name || name !== path.basename(name)) return res.writeHead(404).end();
-  const file = path.join(assetDir, name);
+  if (!name || name !== NodePath.basename(name)) return res.writeHead(404).end();
+  const file = NodePath.join(assetDir, name);
   let size;
   try {
-    size = statSync(file).size;
+    size = NodeFS.statSync(file).size;
   } catch {
     return res.writeHead(404).end();
   }
@@ -41,7 +42,7 @@ const server = createServer((req, res) => {
   }
   requests.add(name);
   res.writeHead(200, { "Content-Length": size });
-  createReadStream(file)
+  NodeFS.createReadStream(file)
     .on("error", () => res.destroy())
     .pipe(res);
 });
@@ -66,7 +67,7 @@ try {
     resources: process.resourcesPath,
     pid: process.pid,
   }));
-  assert.equal(initial.version, installedVersion);
+  NodeAssert.equal(initial.version, installedVersion);
   const bridgeState = () => page.evaluate(() => window.desktopBridge.getUpdateState());
   await page.getByText("Release launch check", { exact: true }).first().waitFor({ timeout: 90000 });
   const check = page.getByRole("button", { name: "Check for updates", exact: true });
@@ -94,18 +95,28 @@ try {
     offer.status !== "error" &&
     Date.now() < offerDeadline
   ) {
-    await delay(250);
+    await NodeTimersPromises.setTimeout(250);
     offer = await bridgeState();
   }
-  assert.equal(offer.availableVersion, expectedVersion, JSON.stringify(offer));
-  assert(
+  NodeAssert.equal(offer.availableVersion, expectedVersion, JSON.stringify(offer));
+  NodeAssert.ok(
     requests.has(feedName),
     `The Update button requested ${[...requests].join(", ")}; expected ${feedName}`,
   );
-  const downloaded = await page.evaluate(() => window.desktopBridge.downloadUpdate());
-  assert(downloaded.completed, JSON.stringify(downloaded.state));
-  assert.equal((await bridgeState()).downloadedVersion, expectedVersion);
-  assert([...requests].some((name) => name.endsWith(mac ? ".zip" : ".exe")));
+  // The sidebar can already be downloading when the bridge receives a second request.
+  // Wait for the updater's confirmed version before asking the native installer to run.
+  let download = (await page.evaluate(() => window.desktopBridge.downloadUpdate())).state;
+  const downloadDeadline = Date.now() + 120000;
+  while (
+    download.status === "downloading" &&
+    download.downloadedVersion !== expectedVersion &&
+    Date.now() < downloadDeadline
+  ) {
+    await NodeTimersPromises.setTimeout(250);
+    download = await bridgeState();
+  }
+  NodeAssert.equal(download.downloadedVersion, expectedVersion, JSON.stringify(download));
+  NodeAssert.ok([...requests].some((name) => name.endsWith(mac ? ".zip" : ".exe")));
   const closed = app.waitForEvent("close", { timeout: 90000 });
   await page
     .evaluate((version) => window.desktopBridge.installUpdate(version), expectedVersion)
@@ -115,12 +126,12 @@ try {
   await closed;
   app = undefined;
   const deadline = Date.now() + 150000;
-  const asar = path.join(initial.resources, "app.asar");
+  const asar = NodePath.join(initial.resources, "app.asar");
   let installed;
   while (Date.now() < deadline) {
     try {
       // A separate process avoids caching the original ASAR header across replacement.
-      installed = execFileSync(
+      installed = NodeChildProcess.execFileSync(
         process.execPath,
         [
           "--input-type=module",
@@ -134,12 +145,12 @@ try {
     } catch {
       /* The native installer is swapping the app. */
     }
-    await delay(1000);
+    await NodeTimersPromises.setTimeout(1000);
   }
-  assert.equal(installed, expectedVersion, "Native update must replace the installed app");
+  NodeAssert.equal(installed, expectedVersion, "Native update must replace the installed app");
   const processQuery = mac
     ? () =>
-        execFileSync("ps", ["-ax", "-o", "pid=,command="], { encoding: "utf8" })
+        NodeChildProcess.execFileSync("ps", ["-ax", "-o", "pid=,command="], { encoding: "utf8" })
           .split("\n")
           .some((line) => {
             const match = /^\s*(\d+)\s+(.+)$/.exec(line);
@@ -150,7 +161,7 @@ try {
             );
           })
     : () =>
-        execFileSync(
+        NodeChildProcess.execFileSync(
           "powershell",
           [
             "-NoProfile",
@@ -173,9 +184,9 @@ try {
     } catch {
       /* Waiting for the replacement process. */
     }
-    if (!running) await delay(1000);
+    if (!running) await NodeTimersPromises.setTimeout(1000);
   }
-  assert(running, "The new app must relaunch at the installed path");
+  NodeAssert.ok(running, "The new app must relaunch at the installed path");
   console.log(
     `Update button checked ${feedName}, downloaded, installed and relaunched ${initial.version} → ${installed}.`,
   );
