@@ -17,6 +17,7 @@ it("keeps simultaneous branch and file lookups out of the slow warning while tra
   try {
     trackRpcRequestSent("branch-1", WS_METHODS.vcsListRefs);
     trackRpcRequestSent("branch-2", WS_METHODS.vcsListRefs);
+    trackRpcRequestSent("wake", WS_METHODS.vcsRefreshBranch);
     trackRpcRequestSent("files", WS_METHODS.projectsSearchEntries);
     trackRpcRequestSent("config", WS_METHODS.serverGetConfig);
     await vi.advanceTimersByTimeAsync(15_001);
@@ -25,7 +26,7 @@ it("keeps simultaneous branch and file lookups out of the slow warning while tra
     await vi.advanceTimersByTimeAsync(120_000);
     expect(visible).toEqual([]);
   } finally {
-    for (const id of ["branch-1", "branch-2", "files", "config"]) acknowledgeRpcRequest(id);
+    for (const id of ["branch-1", "branch-2", "wake", "files", "config"]) acknowledgeRpcRequest(id);
     unsubscribe();
     vi.useRealTimers();
   }

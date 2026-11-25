@@ -29,6 +29,8 @@ const pendingRpcAckRequests = new Map<string, PendingRpcAckRequest>();
 // Branch and file pickers show their own loading state. Opening several panels can
 // start multiple read-only lookups against the same busy host.
 const untrackedRpcAckMethods = new Set<string>([
+  // Returning to the window refreshes branch labels in the background.
+  WS_METHODS.vcsRefreshBranch,
   WS_METHODS.vcsListRefs,
   WS_METHODS.projectsSearchEntries,
   WS_METHODS.serverGetUsageSummary,
