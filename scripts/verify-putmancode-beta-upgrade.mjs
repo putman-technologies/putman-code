@@ -69,7 +69,11 @@ try {
   }));
   NodeAssert.equal(initial.version, installedVersion);
   const bridgeState = () => page.evaluate(() => window.desktopBridge.getUpdateState());
-  await page.getByText("Release launch check", { exact: true }).first().waitFor({ timeout: 90000 });
+  const thread = page.getByText("Release launch check", { exact: true }).first();
+  const skipSetup = page.getByRole("button", { name: "Skip setup", exact: true });
+  await thread.or(skipSetup).first().waitFor({ timeout: 90000 });
+  if (await skipSetup.isVisible()) await skipSetup.click();
+  await thread.waitFor({ timeout: 90000 });
   const check = page.getByRole("button", { name: "Check for updates", exact: true });
   try {
     await check.waitFor({ timeout: 30000 });

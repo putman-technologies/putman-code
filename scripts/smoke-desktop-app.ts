@@ -61,8 +61,12 @@ try {
   step = "waiting for the first window";
   const page = await app.firstWindow({ timeout: STEP_TIMEOUT_MS });
   try {
-    step = `finding "${THREAD_TITLE}" in the sidebar`;
+    step = "entering the workspace on first launch";
     const thread = page.locator("li[data-thread-item]", { hasText: THREAD_TITLE });
+    const skipSetup = page.getByRole("button", { name: "Skip setup", exact: true });
+    await thread.or(skipSetup).first().waitFor({ timeout: STEP_TIMEOUT_MS });
+    if (await skipSetup.isVisible()) await skipSetup.click();
+    step = `finding "${THREAD_TITLE}" in the sidebar`;
     await thread.waitFor({ timeout: STEP_TIMEOUT_MS });
     step = "opening the thread";
     await thread.click();
