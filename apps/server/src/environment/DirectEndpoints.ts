@@ -2,6 +2,7 @@ import type { ServerDirectEndpoint } from "@t3tools/contracts";
 import {
   buildTailscaleHttpsBaseUrl,
   probeTailscaleHttpsEndpoint,
+  readTailscaleServeRoutesTo,
   readTailscaleStatus,
 } from "@t3tools/tailscale";
 import * as Context from "effect/Context";
@@ -152,21 +153,44 @@ export const make = Effect.gen(function* () {
     return endpoints;
   });
 
+  const discoverServedEndpoint = Effect.gen(function* () {
+    const { magicDnsName, running } = yield* readTailscaleStatus;
+    if (magicDnsName === null || running === false) return null;
+
+    const ports = new Set([config.tailscaleServePort]);
+    if (!config.tailscaleServeEnabled) {
+      // A host administrator can provision Serve independently of the SSH-launched server.
+      const routes = yield* readTailscaleServeRoutesTo({
+        host: (config.host || "127.0.0.1").replace(/^\\[|\\]$/gu, ""),
+        port: config.port,
+      }).pipe(Effect.orElseSucceed(() => []));
+      for (const route of routes) {
+        if (
+          route.mount === "/" &&
+          route.host?.toLowerCase() === magicDnsName.toLowerCase() &&
+          !route.ambiguous &&
+          route.servePort > 0 &&
+          route.servePort <= 65535
+        ) {
+          ports.add(route.servePort);
+        }
+      }
+    }
+    const verified = yield* Effect.forEach(
+      [...ports],
+      (servePort) => {
+        const baseUrl = buildTailscaleHttpsBaseUrl({ magicDnsName, servePort });
+        return probeTailscaleHttpsEndpoint({ baseUrl, environmentId }).pipe(
+          Effect.map((reachable) => (reachable ? baseUrl : null)),
+        );
+      },
+      { concurrency: 4 },
+    );
+    return verified.find((url) => url !== null) ?? null;
+  });
   const resolve = Effect.gen(function* () {
-    // Serve setup can fail without stopping startup; advertise only after it answers as this server.
-    if (config.tailscaleServeEnabled) {
-      const servedUrl = yield* readTailscaleStatus.pipe(
-        Effect.map((status) => status.magicDnsName),
-        Effect.flatMap((magicDnsName) => {
-          if (magicDnsName === null) return Effect.succeed(null);
-          const httpBaseUrl = buildTailscaleHttpsBaseUrl({
-            magicDnsName,
-            servePort: config.tailscaleServePort,
-          });
-          return probeTailscaleHttpsEndpoint({ baseUrl: httpBaseUrl, environmentId }).pipe(
-            Effect.map((reachable) => (reachable ? httpBaseUrl : null)),
-          );
-        }),
+    if (config.tailscaleServeEnabled || isLoopbackHost(config.host)) {
+      const servedUrl = yield* discoverServedEndpoint.pipe(
         Effect.timeoutOption(TAILSCALE_ENDPOINT_TIMEOUT),
         Effect.map(Option.flatMap(Option.fromNullishOr)),
         Effect.orElseSucceed(() => Option.none<string>()),
