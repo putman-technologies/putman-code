@@ -129,7 +129,7 @@ for file in "$dir/$dmg" "$dir/$name.zip" "$dir/$name.zip.blockmap" "$dir/beta-ma
   gh release view "$tag" --repo "$repo" --json assets | jq -e --arg asset "$asset" --arg want "$want" 'any(.assets[]; .name==$asset and .digest==$want)' >/dev/null
 done
 if [[ "$sha" == 0bf2ab0d4d34dec4b79415b83520f4e860d9c9cd ]]; then
-  verification=d31cec8b36670a3a4cef907df3f7f58dba94664d
+  verification=17aabf549a48734ed2a5bec1071756ebc69dba3f
   branch=qa/beta-11-apple-profile
   existing=$(gh api "repos/$repo/git/matching-refs/heads/$branch" --jq ".[]|select(.ref==\"refs/heads/$branch\")|.object.sha")
   if [[ -z "$existing" ]]; then
