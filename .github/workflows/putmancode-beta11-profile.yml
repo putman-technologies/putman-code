@@ -113,13 +113,16 @@ jobs:
           test "$RUNNER_ENVIRONMENT" = github-hosted
           target="$RUNNER_TEMP/installation/PutmanCode.app"
           fixture=$(mktemp -d "$RUNNER_TEMP/putmancode-keychain.XXXXXX")
-          keychain="$fixture/test.keychain-db"
           keychain_password=$(openssl rand -hex 32)
-          security create-keychain -p "$keychain_password" "$keychain"
+          select_fixture_keychain() {
+            keychain="$fixture/$1.keychain-db"
+            security create-keychain -p "$keychain_password" "$keychain"
           security set-keychain-settings -lut 3600 "$keychain"
           security unlock-keychain -p "$keychain_password" "$keychain"
           security list-keychains -d user -s "$keychain"
-          security default-keychain -d user -s "$keychain"
+            security default-keychain -d user -s "$keychain"
+          }
+          select_fixture_keychain discovery
           mkdir -p "$(dirname "$target")" "$fixture/mount"
           for stage in old new; do
             mkdir "$fixture/$stage"
@@ -135,8 +138,31 @@ jobs:
 
           # Model the owner granting the two release identities access to a new, synthetic item.
           # Specify both apps individually. The test never accesses the runner's login keychain.
-          security add-generic-password -a "PutmanCode Key" -s "PutmanCode Safe Storage" \
-            -w "$(openssl rand -base64 24)" -T "$target" -T "$candidate" "$keychain"
+          node verification/verify-putmancode-profile-upgrade.mjs seed "$target/Contents/MacOS/PutmanCode" "$RUNNER_TEMP/putmancode-discovery" "$PREVIOUS"
+          # Read only service and account names from this job's newly created test keychain.
+          security dump-keychain "$keychain" | python3 -c '
+          import re, sys
+          data=sys.stdin.read()
+          found=[]
+          for obj in re.split(r"(?m)^keychain: ", data):
+              service=re.search(r"\"svce\"<blob>=\"([^\"]+)\"",obj)
+              account=re.search(r"\"acct\"<blob>=\"([^\"]+)\"",obj)
+              if not service or not account or not service[1].endswith(" Safe Storage"):continue
+              assert all(re.fullmatch(r"[A-Za-z0-9 ()-]+",v) for v in (service[1],account[1]))
+              found.append((service[1],account[1]))
+          assert found, "No app-created Safe Storage fixture item was found"
+          for item in found:print(*item,sep="|")' > "$fixture/storage-items"
+          select_fixture_keychain upgrade
+          old_hash=$(codesign -dv --verbose=4 "$target" 2>&1 | sed -n 's/^CDHash=//p')
+          [[ "$old_hash" =~ ^[a-fA-F0-9]{40}$ ]]
+          while IFS='|' read -r service account; do
+            echo "Testing the fixture item named $service for $account"
+            security add-generic-password -a "$account" -s "$service" -w "$(openssl rand -base64 24)" \
+              -T "$target/Contents/MacOS/PutmanCode" -T "$candidate/Contents/MacOS/PutmanCode" "$keychain"
+            # Scope access to this fixture item, preview binary hash and verified Developer ID team.
+            security set-generic-password-partition-list -a "$account" -s "$service" \
+              -S "cdhash:$old_hash,teamid:2NZKUVA6F5" -k "$keychain_password" "$keychain" >/dev/null
+          done < "$fixture/storage-items"
           node verification/verify-putmancode-profile-upgrade.mjs seed "$target/Contents/MacOS/PutmanCode" "$RUNNER_TEMP/putmancode-persist-test" "$PREVIOUS"
           mv "$target" "$fixture/previous.app"
           ditto "$candidate" "$target"

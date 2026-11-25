@@ -49,6 +49,7 @@ const deadline = setTimeout(() => {
 }, 100000);
 const app = await _electron.launch({ executablePath: executable, timeout: 90000,
   env: {...process.env, PUTMANCODE_HOME: home, T3CODE_DISABLE_AUTO_UPDATE: "true", T3CODE_TELEMETRY_ENABLED: "false"} });
+let page;
 try {
   progress("reading the installed version and profile path");
   const installed = await app.evaluate(({app}) => ({version: app.getVersion(), profile: app.getPath("userData")}));
@@ -57,13 +58,15 @@ try {
   if (phase === "seed") fs.writeFileSync(profileMarker, installed.profile);
   else assert.equal(installed.profile, fs.readFileSync(profileMarker, "utf8"));
   progress("opening the app window");
-  const page = await app.firstWindow({timeout:90000});
+  page = await app.firstWindow({timeout:90000});
   const thread = page.getByText("Release launch check", {exact: true}).first();
   const skip = page.getByRole("button", {name:"Skip setup",exact:true});
   progress("opening the saved chat");
-  await thread.or(skip).first().waitFor({timeout:90000});
+  await thread.or(skip).first().waitFor({timeout:45000});
   if (await skip.isVisible()) await skip.click();
-  await thread.click({timeout:90000});
+  progress("selecting the saved chat");
+  await thread.click({timeout:20000});
+  progress("checking the saved message");
   await page.getByText("The release opens and shows this thread.", {exact:true}).first().waitFor({timeout:90000});
   progress("chat text verified");
   if (phase === "seed") {
@@ -87,6 +90,13 @@ try {
   assert.ok(envelope.encryptedCatalog && !JSON.stringify(envelope).includes(testCredential));
   assert.equal(fs.readFileSync(attachment,"utf8"),"test attachment");
   console.log(phase, version, "opened the saved chat and read its attachment, preference, saved connection and protected credential");
+} catch (error) {
+  console.error("Failed at", stage, String(error).slice(0, 1200));
+  if (page) {
+    const body = await page.locator("body").innerText({timeout: 3000}).catch(() => "");
+    console.error("Fixture window:", body.replace(/https?:\/\/\S+/g,"[URL]").slice(0, 1000));
+  }
+  throw error;
 } finally {
   progress("closing the app");
   await app.close();
