@@ -7,8 +7,9 @@ on:
       - ".gitmodules"
       - ".github/workflows/putmancode-coordinator-checks.yml"
       - "apps/web/src/components/settings/**"
-      - "apps/web/src/components/chat/CoordinatorBoard*"
-      - "apps/web/src/components/chat/CoordinatorTeamPanel.tsx"
+      - "apps/web/src/components/Sidebar.tsx"
+      - "apps/web/src/components/ChatView.tsx"
+      - "apps/web/src/components/chat/ChatOverlapNotice.tsx"
       - "apps/web/src/components/chat/ChatHeader.tsx"
       - "apps/web/src/components/pullRequest/ProjectGitHubTab*"
       - "apps/web/src/components/sidebar/CoordinatorStatusBadge.tsx"
@@ -55,9 +56,9 @@ jobs:
           PUTMANCODE_TEST_IMAGE=$(docker inspect --format '{{index .RepoDigests 0}}' alpine:3.22) python3 scripts/test-putmancode-worker.py -v
       - name: Install Chromium
         run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
-      - name: Test the release board in Chromium
+      - name: Test chat and pull request controls in Chromium
         working-directory: apps/web
-        run: vp test run --project browser src/components/chat/CoordinatorBoard.browser.test.tsx src/components/chat/ChatHeader.browser.test.tsx src/components/pullRequest/PullRequestActionsMenu.browser.test.tsx src/components/pullRequest/ProjectGitHubTab.browser.test.tsx
+        run: vp test run --project browser src/components/chat/ChatHeader.browser.test.tsx src/components/pullRequest/PullRequestActionsMenu.browser.test.tsx src/components/pullRequest/ProjectGitHubTab.browser.test.tsx src/components/pullRequest/RepoWorkflowAction.browser.test.tsx
       - name: Test settings navigation and search
         working-directory: apps/web
         run: |

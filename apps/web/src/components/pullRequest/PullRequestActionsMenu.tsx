@@ -107,7 +107,6 @@ export function PullRequestActionsMenu({
   perform,
   openOnHostText,
   copyReference,
-  submitToCoordinator,
   configureWorkflow,
 }: {
   environmentId: EnvironmentId;
@@ -161,7 +160,6 @@ export function PullRequestActionsMenu({
   perform: PerformPullRequestAction;
   openOnHostText: string;
   configureWorkflow?: (() => void) | undefined;
-  submitToCoordinator?: (() => void) | undefined;
   copyReference: (value: string, failureTitle: string) => void;
 }) {
   const gt = useGT();
@@ -438,9 +436,6 @@ export function PullRequestActionsMenu({
             ) : null}
           </>
         ) : null}
-        {submitToCoordinator && (
-          <MenuItem onClick={submitToCoordinator}>{gt("Send PR to Coordinator")}</MenuItem>
-        )}
         {configureWorkflow && (
           <MenuItem onClick={configureWorkflow}>{gt("Configure workflow button")}</MenuItem>
         )}

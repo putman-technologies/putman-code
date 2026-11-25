@@ -18,7 +18,6 @@ import { pullRequestEnvironment } from "../../state/pullRequests";
 import { useEnvironmentQuery } from "../../state/query";
 import { orchestrationEnvironment } from "../../state/orchestration";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { ReleaseBoardButton } from "../chat/CoordinatorBoard";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { guideRunKey, useGuideRunStore } from "./guide/guideRunStore";
@@ -103,27 +102,28 @@ function ChangeSummary({
             if (!question.trim() || lock.current) return;
             lock.current = true;
             setBusy(true);
-            attempt.current ||= randomUUID();
-            try {
-              const result = await ask({
-                environmentId: scope.environmentId,
-                input: {
-                  type: "askPull",
-                  projectId: scope.projectId,
-                  url: pull.url,
-                  question: question.trim(),
-                  requestId: attempt.current,
-                },
+            if (!attempt.current) attempt.current = randomUUID();
+            await ask({
+              environmentId: scope.environmentId,
+              input: {
+                type: "askPull",
+                projectId: scope.projectId,
+                url: pull.url,
+                question: question.trim(),
+                requestId: attempt.current,
+              },
+            })
+              .then((result) => {
+                if (result._tag === "Success")
+                  return navigate({
+                    to: "/$environmentId/$threadId",
+                    params: { environmentId: scope.environmentId, threadId: result.value.threadId },
+                  });
+              })
+              .finally(() => {
+                lock.current = false;
+                setBusy(false);
               });
-              if (result._tag === "Success")
-                await navigate({
-                  to: "/$environmentId/$threadId",
-                  params: { environmentId: scope.environmentId, threadId: result.value.threadId },
-                });
-            } finally {
-              lock.current = false;
-              setBusy(false);
-            }
           }}
         >
           <Input
@@ -188,21 +188,6 @@ function ProjectChanges({ scope, board }: { scope: Scope; board: CoordinatorBoar
   const range = github.unshipped;
   const merges = new Map<number, string>();
   for (const c of range?.commits ?? []) for (const pr of c.pulls) merges.set(pr, c.title);
-  const reviewHandoff = (id: string) => (
-    <ReleaseBoardButton
-      projects={[{ ...scope, title: github.title }]}
-      startInProject
-      focusItemId={id}
-      onOpen={(threadId, environmentId) => {
-        void navigate({ to: "/$environmentId/$threadId", params: { environmentId, threadId } });
-      }}
-    />
-  );
-  const extra = board.items.filter(
-    (i) =>
-      i.phase === "review" &&
-      !i.pulls.some((p) => pulls.some((open) => open.url.toLowerCase() === p.url?.toLowerCase())),
-  );
   const blocked = pulls.filter(
     (p) =>
       !p.isDraft ||
@@ -216,7 +201,7 @@ function ProjectChanges({ scope, board }: { scope: Scope; board: CoordinatorBoar
         <h2 className="text-lg font-semibold">{gt("Needs your attention")}</h2>
         {github.open === null ? (
           <p role="status">{gt("Pull requests unavailable")}</p>
-        ) : blocked.length === 0 && extra.length === 0 ? (
+        ) : blocked.length === 0 ? (
           <p className="text-muted-foreground">{gt("Nothing needs your attention.")}</p>
         ) : (
           <ul className="divide-y rounded-lg border">
@@ -225,9 +210,6 @@ function ProjectChanges({ scope, board }: { scope: Scope; board: CoordinatorBoar
                 (link) => link.url?.toLowerCase() === p.url.toLowerCase(),
               );
               const failing = p.checksState === "failing";
-              const handoffReview = handoff(p.url);
-              const waiting =
-                handoffReview?.phase === "review" && !handoffReview.approved && !p.isDraft;
               const confirmed = evidence?.evidence?.headChecksComplete
                 ? evidence.evidence.headChecks?.filter((c) => failure(c.status) && !c.placeholder)
                 : undefined;
@@ -239,17 +221,15 @@ function ProjectChanges({ scope, board }: { scope: Scope; board: CoordinatorBoar
                   ? gt("Resolve merge conflicts")
                   : p.reviewDecision === "changes-requested"
                     ? gt("Changes requested")
-                    : waiting
-                      ? gt("Waiting for approval")
-                      : p.viewerReviewRequested
-                        ? gt("Ready for your review")
-                        : p.reviewDecision === "review-required"
-                          ? gt("Waiting for approval")
-                          : p.checksState === "pending"
-                            ? gt("CI running")
-                            : p.reviewDecision === "approved"
-                              ? gt("Approved")
-                              : gt("Ready for your review");
+                    : p.viewerReviewRequested
+                      ? gt("Ready for your review")
+                      : p.reviewDecision === "review-required"
+                        ? gt("Waiting for approval")
+                        : p.checksState === "pending"
+                          ? gt("CI running")
+                          : p.reviewDecision === "approved"
+                            ? gt("Approved")
+                            : gt("Ready for your review");
               const failedUrl =
                 coordinatorWebUrl(evidence?.checks.find((c) => failure(c.status) && c.url)?.url) ??
                 (coordinatorWebUrl(p.url) ? p.url + "/checks" : null);
@@ -276,8 +256,6 @@ function ProjectChanges({ scope, board }: { scope: Scope; board: CoordinatorBoar
                     >
                       {gt("Open failed check")}
                     </a>
-                  ) : waiting && handoffReview ? (
-                    reviewHandoff(handoffReview.id)
                   ) : (
                     <Button
                       size="sm"
@@ -294,17 +272,6 @@ function ProjectChanges({ scope, board }: { scope: Scope; board: CoordinatorBoar
             })}
           </ul>
         )}
-        {extra.map((i) => (
-          <div key={i.id} className="flex items-center justify-between rounded border p-3">
-            <div>
-              {i.title}
-              <p className="text-xs text-muted-foreground">
-                {i.pulls.length ? gt("Waiting for approval") : gt("No linked pull request")}
-              </p>
-            </div>
-            {reviewHandoff(i.id)}
-          </div>
-        ))}
         {github.truncated && (
           <Link
             className="text-sm text-primary underline"

@@ -18,7 +18,6 @@ import {
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
-  type ReactNode,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { isTrailingDoubleClick } from "../Sidebar.logic";
@@ -47,7 +46,7 @@ import { useClientSettings } from "../../hooks/useSettings";
 import { GuestShareIndicator } from "./GuestShareControls";
 
 interface ChatHeaderProps {
-  coordinatorAction?: ReactNode;
+  coordinatorModelLabel?: string | undefined;
   activeThreadEnvironmentId: EnvironmentId;
   activeThreadId: ThreadId;
   activeThreadTitle: string;
@@ -73,7 +72,7 @@ function resolveRenameCommit(input: {
 }
 
 export const ChatHeader = memo(function ChatHeader({
-  coordinatorAction,
+  coordinatorModelLabel,
   activeThreadEnvironmentId,
   activeThreadId,
   activeThreadTitle,
@@ -414,7 +413,9 @@ export const ChatHeader = memo(function ChatHeader({
           ) : null}
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>
-      {coordinatorAction}
+      {coordinatorModelLabel && (
+        <span className="truncate text-xs text-muted-foreground">{coordinatorModelLabel}</span>
+      )}
       {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
     </div>
   );

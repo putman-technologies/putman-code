@@ -7,9 +7,10 @@ import { ProjectGitHubTab } from "./ProjectGitHubTab";
 const scope = { environmentId: EnvironmentId.make("linux"), projectId: ProjectId.make("sapphire") };
 const repo = "acme/sapphire";
 const url = "https://github.com/" + repo + "/pull/19";
+const approvedUrl = "https://github.com/" + repo + "/pull/190";
 const data = Atom.make(
   AsyncResult.success({
-    items: [],
+    items: [{ phase: "review", approved: false, pulls: [{ url: approvedUrl, checks: [] }] }],
     questions: [],
     overlaps: [],
     github: {
@@ -26,6 +27,18 @@ const data = Atom.make(
           baseBranch: "main",
           checksState: "failing",
           viewerReviewRequested: true,
+        },
+        {
+          url: approvedUrl,
+          projectId: scope.projectId,
+          host: "github.com",
+          repository: repo,
+          number: 190,
+          title: "Update totals",
+          headBranch: "totals",
+          baseBranch: "main",
+          checksState: "passing",
+          reviewDecision: "approved",
         },
       ],
       truncated: false,
@@ -46,7 +59,6 @@ const data = Atom.make(
     ],
   }),
 );
-vi.mock("../chat/CoordinatorBoard", () => ({ ReleaseBoardButton: () => null }));
 vi.mock("../../rpc/atomRegistry", () => ({ appAtomRegistry: { refresh: vi.fn() } }));
 vi.mock("../../state/projects", () => ({ coordinatorBoardQuery: () => data }));
 vi.mock("../../state/pullRequests", () => ({ pullRequestEnvironment: { detail: () => null } }));
@@ -69,6 +81,7 @@ it("keeps the failing PR, its review and the production revision distinguishable
     .element(screen.getByRole("link", { name: "aaaaaaaaaaaa" }))
     .toHaveAttribute("href", "https://github.com/" + repo + "/commit/" + "a".repeat(40));
   await expect.element(screen.getByRole("button", { name: "#21 · New report" })).toBeVisible();
+  await expect.element(screen.getByRole("button", { name: "Review and merge" })).toBeVisible();
   await screen.getByRole("button", { name: "Ask coordinator" }).click();
   await screen
     .getByRole("textbox", { name: "Question about this change" })

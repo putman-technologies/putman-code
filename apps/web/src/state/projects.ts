@@ -54,13 +54,6 @@ export const defaultProjectFallbackReadyAtom = Atom.family((projectKey: string |
   }).pipe(Atom.withLabel(`web-default-project-fallback-ready:${projectKey}`)),
 );
 
-export const coordinatorStatusQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
-  label: "environment-data:coordinator-status",
-  tag: ORCHESTRATION_V2_WS_METHODS.coordinatorStatus,
-  refreshIntervalMs: 60_000,
-  idleTtlMs: 0,
-});
-
 export const coordinatorBoardQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
   label: "environment-data:coordinator-board",
   tag: ORCHESTRATION_V2_WS_METHODS.coordinatorBoard,

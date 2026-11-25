@@ -307,8 +307,7 @@ import { NativeChildWorkDialog } from "./chat/NativeChildWorkDialog";
 import { ProviderSubagentBar } from "./chat/ProviderSubagentBar";
 import { getTriggerDisplayModelName } from "./chat/providerIconUtils";
 import { resolveScrollToEndClearance } from "./composerFooterLayout";
-import { ChatOverlapNotice, ReleaseBoardButton } from "./chat/CoordinatorBoard";
-import { ProjectCoordinatorButton } from "./chat/ProjectCoordinatorButton";
+import { ChatOverlapNotice } from "./chat/ChatOverlapNotice";
 import { ChatHeader } from "./chat/ChatHeader";
 import { useSideChat } from "./chat/useSideChat";
 import { useRemoteOpenState } from "~/remoteOpen";
@@ -3438,50 +3437,12 @@ export default function ChatView(props: ChatViewProps) {
             {!rightPanelControlsAtRoot && !rightPanelControlsInPanel ? panelLayoutControls : null}
             {inlineRightPanelOwnsTitleBar ? threadPanelHeaderControl : null}
             <ChatHeader
-              coordinatorAction={
-                activeProject &&
-                serverConfig?.environment.capabilities.coordinatorBoard &&
-                isProjectCoordinatorThread(activeProject.id, activeThread.id) ? (
-                  <div className="flex items-center gap-2">
-                    <ReleaseBoardButton
-                      projects={[
-                        {
-                          projectId: activeProject.id,
-                          environmentId: activeThread.environmentId,
-                          title: activeProject.title,
-                        },
-                      ]}
-                      startInProject
-                      onOpen={onOpenRelatedThreadStable}
-                    />
-                    {coordinatorRun && (
-                      <span className="truncate text-xs text-muted-foreground">
-                        {coordinatorRun.coordinatorWorkModel
-                          ? gt("Quick · {model}", { model: coordinatorRun.modelSelection.model })
-                          : gt("Work · {model}", { model: coordinatorRun.modelSelection.model })}
-                      </span>
-                    )}
-                  </div>
-                ) : activeProject &&
-                  !activeProject.isScratch &&
-                  serverConfig?.environment.capabilities.projectCoordinator === true &&
-                  !isProjectCoordinatorThread(activeProject.id, activeThread.id) &&
-                  activeThread.lineage.relationshipToParent !== "subagent" &&
-                  activeThread.lineage.sideChat !== true ? (
-                  <ProjectCoordinatorButton
-                    key={activeThreadKey}
-                    environmentId={activeThread.environmentId}
-                    projectId={activeProject.id}
-                    threadId={activeThread.id}
-                    modelSelection={activeThread.modelSelection}
-                    completedRunId={
-                      isServerThread && activeThreadShell?.latestRun?.status === "completed"
-                        ? activeThreadShell.latestRun.runId
-                        : null
-                    }
-                    onOpen={onOpenRelatedThreadStable}
-                  />
-                ) : null
+              coordinatorModelLabel={
+                coordinatorRun
+                  ? coordinatorRun.coordinatorWorkModel
+                    ? gt("Quick · {model}", { model: coordinatorRun.modelSelection.model })
+                    : gt("Work · {model}", { model: coordinatorRun.modelSelection.model })
+                  : undefined
               }
               activeThreadEnvironmentId={activeThread.environmentId}
               activeThreadId={activeThread.id}
