@@ -1,0 +1,101 @@
+name: Build the Beta 11 Mac fallback
+on:
+  push:
+    branches: [release/beta-11-verification]
+    paths: [.github/workflows/putmancode-beta11-mac-fallback.yml]
+permissions:
+  contents: read
+env:
+  RELEASE_VERSION: 1.0.0-beta.11
+jobs:
+  report-start:
+    runs-on: ubuntu-24.04
+    permissions:
+      statuses: write
+    steps:
+      - name: Record the fallback run on the release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/0bf2ab0d4d34dec4b79415b83520f4e860d9c9cd"
+          -f state=pending -f context='Beta 11 Mac fallback'
+          -f description='Packaging and launching the pinned release source on Apple silicon'
+          -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --silent
+  mac:
+    name: Package and launch on macOS
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: 0bf2ab0d4d34dec4b79415b83520f4e860d9c9cd
+          persist-credentials: false
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
+          sparse-checkout-cone-mode: false
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
+      - name: Build Apple silicon app
+        run: |
+          set -euo pipefail
+          test "$(node -p 'require("./apps/desktop/package.json").version')" = "$RELEASE_VERSION"
+          APP_VERSION="$RELEASE_VERSION" vp run build:desktop:bundle
+          python3 scripts/verify-putmancode-privacy.py apps/desktop/dist-electron apps/server/dist
+          vp run dist:desktop:artifact --skip-build --platform mac --target zip --arch arm64 --build-version "$RELEASE_VERSION" --output-dir "$RUNNER_TEMP/package"
+      - name: Upload Mac application for release signing
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: mac-signing-candidate
+          path: ${{ runner.temp }}/package/Putman-Code-*-arm64.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+      - name: Create manual-install disk image and launch its app
+        run: |
+          set -euo pipefail
+          folder="$RUNNER_TEMP/image"
+          mount="$RUNNER_TEMP/mounted"
+          mkdir -p "$folder" "$mount"
+          ditto -x -k "$RUNNER_TEMP/package/Putman-Code-$RELEASE_VERSION-arm64.zip" "$folder"
+          app="$folder/PutmanCode.app"
+          codesign --force --deep --sign - --timestamp=none "$app"
+          ln -s /Applications "$folder/Applications"
+          image="$RUNNER_TEMP/PutmanCode-$RELEASE_VERSION-macOS-arm64.dmg"
+          hdiutil create -quiet -volname "PutmanCode $RELEASE_VERSION" -srcfolder "$folder" -format UDZO "$image"
+          hdiutil verify "$image"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$image"
+          trap 'hdiutil detach "$mount" -force >/dev/null || true' EXIT
+          installed="$RUNNER_TEMP/Installed/PutmanCode.app"
+          mkdir -p "$RUNNER_TEMP/Installed"
+          ditto "$mount/PutmanCode.app" "$installed"
+          codesign --verify --deep --strict "$installed"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$installed/Contents/Info.plist")" = "$RELEASE_VERSION"
+          node scripts/smoke-desktop-app.ts --check-sidebar --executable "$installed/Contents/MacOS/PutmanCode" --artifacts-dir "$RUNNER_TEMP/launch"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: PutmanCode-${{ env.RELEASE_VERSION }}-macOS-arm64
+          path: ${{ runner.temp }}/PutmanCode-*-macOS-arm64.dmg
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  report-result:
+    if: always()
+    needs: mac
+    runs-on: ubuntu-24.04
+    permissions:
+      statuses: write
+    steps:
+      - name: Record the verified package result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ needs.mac.result }}
+        run: |
+          state=failure
+          if [[ "$RESULT" == success ]]; then state=success; fi
+          gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/0bf2ab0d4d34dec4b79415b83520f4e860d9c9cd" \
+            -f state="$state" -f context='Beta 11 Mac fallback' -f description="Apple silicon package and launch: $RESULT" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --silent
