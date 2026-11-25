@@ -25,7 +25,9 @@ primary=$run
 ready=false
 native=false
 for ((attempt=0; attempt<144; attempt++)); do
-  result=$(gh run view "$primary" --repo "$repo" --json conclusion --jq .conclusion)
+  primary_metadata=$(gh api "repos/$repo/actions/runs/$primary")
+  jq -e --arg sha "$sha" '.head_sha==$sha and .head_branch=="release/1.0.0" and .head_repository.full_name=="putman-technologies/putman-code"' <<<"$primary_metadata" >/dev/null
+  result=$(jq -r '.conclusion // empty' <<<"$primary_metadata")
   if [[ "$result" == success ]]; then ready=true; break; fi
   # An alternate hosted runner checks out the same pinned release sources.
   if [[ "$sha" == 0bf2ab0d4d34dec4b79415b83520f4e860d9c9cd ]]; then
@@ -33,19 +35,26 @@ for ((attempt=0; attempt<144; attempt++)); do
     metadata=$(gh api "repos/$repo/actions/runs/$alternate")
     jq -e '.head_sha=="20f01b3f7c625f2d0da7b991a539080ea5f5af24" and .path==".github/workflows/putmancode-beta11-mac-fallback.yml" and .head_repository.full_name=="putman-technologies/putman-code"' <<<"$metadata" >/dev/null
     if [[ "$(jq -r .conclusion <<<"$metadata")" == success ]]; then
-      gh api "repos/$repo/actions/runs/$primary/attempts/1/jobs" | jq -e '[.jobs[] | select(.name!="Package and launch on macOS")] | length==8 and all(.[]; .conclusion=="success")' >/dev/null
+      gh api "repos/$repo/actions/runs/$primary/jobs" | jq -e '[.jobs[] | select(.name!="Package and launch on macOS")] | length==8 and all(.[]; .conclusion=="success")' >/dev/null
       run=$alternate; ready=true; break
     fi
-    if [[ "$(jq -r .status <<<"$metadata")" == completed && -n "$result" ]]; then
-      if [[ "$result" == cancelled && "$(jq -r .conclusion <<<"$metadata")" == cancelled ]]; then
-        for build in "$primary" "$alternate"; do
-          gh api "repos/$repo/actions/runs/$build/jobs" | jq -e '
-            [.jobs[] | select(.name=="Package and launch on macOS")] |
-            length==1 and all(.[]; .conclusion=="cancelled" and .runner_id==0 and (.steps|length)==0)' >/dev/null
-        done
-        gh api "repos/$repo/actions/runs/$primary/attempts/1/jobs" | jq -e '[.jobs[] | select(.name!="Package and launch on macOS")] | length==8 and all(.[]; .conclusion=="success")' >/dev/null
-        native=true; ready=true
-      fi
+    if [[ "$(jq -r .status <<<"$metadata")" == completed && "$(jq -r .status <<<"$primary_metadata")" == completed ]]; then
+      for build in "$primary" "$alternate"; do
+        jobs=$(gh api "repos/$repo/actions/runs/$build/jobs?per_page=100")
+        if ! jq -e '
+          (.jobs|length)==.total_count and
+          ([.jobs[] | select(.name=="Package and launch on macOS")] |
+            length==1 and all(.[]; .status=="completed" and .conclusion=="cancelled" and .runner_id==0 and .steps==[])) and
+          all(.jobs[] | select(.name!="Package and launch on macOS"); .conclusion=="success")' <<<"$jobs" >/dev/null; then
+          echo "Build $build has a failed, incomplete, or executed job. Review https://github.com/$repo/actions/runs/$build" >&2
+          exit 1
+        fi
+        if [[ "$build" == "$primary" ]] && ! jq -e '.total_count==9' <<<"$jobs" >/dev/null; then
+          echo "Build $primary is missing expected release checks." >&2
+          exit 1
+        fi
+      done
+      native=true; ready=true
       break
     fi
   elif [[ -n "$result" ]]; then break
