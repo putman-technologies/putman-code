@@ -71,12 +71,25 @@ dmg="PutmanCode-$version-macOS-arm64.dmg"
 account='anchor apple generic and certificate leaf[subject.OU] = "2NZKUVA6F5" and certificate leaf[field.1.2.840.113635.100.6.1.13] exists'
 req="$account and identifier \"com.putmantechnologies.putmancode\""
 if [[ ! -f "$dir/submission-id" ]]; then
-  if [[ "$native" == true ]]; then
+  archive="$work/package/$name.zip"
+  tested="$root/../release-beta11/mac-candidate/$name.zip"
+  if [[ "$native" == true && "$sha" == 0bf2ab0d4d34dec4b79415b83520f4e860d9c9cd && -f "$tested" ]]; then
+    mkdir -p "$work/package"
+    cp "$tested" "$archive"
+    actual=$(shasum -a 256 "$archive" | cut -d' ' -f1)
+    [[ "$actual" == 9d26a9e36b60f9ea719dea1267ec2fdcb5a4ed659c50a28b7af30097757c13fa ]] || { echo "The prepared Beta 11 package does not match the tested archive." >&2; exit 1; }
+    echo "Using the verified Beta 11 package. Signing with Apple Developer ID."
+  elif [[ "$native" == true ]]; then
     checkout="$root/../putmancode-beta11-local-build"
     [[ "$(uname -sm)" == "Darwin arm64" && "$(git -C "$checkout" rev-parse HEAD)" == "$sha" ]]
     [[ -z "$(git -C "$checkout" status --porcelain --untracked-files=normal)" ]]
     echo "Packaging the verified release sources on this Mac."
     (cd "$checkout"
+      SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
+      CC=$(xcrun --sdk macosx --find clang)
+      CXX=$(xcrun --sdk macosx --find clang++)
+      export SDKROOT CC CXX
+      export LDFLAGS="${LDFLAGS:+$LDFLAGS }-isysroot \"$SDKROOT\""
       APP_VERSION="$version" vp run build:desktop:bundle
       python3 scripts/verify-putmancode-privacy.py apps/desktop/dist-electron apps/server/dist
       vp run dist:desktop:artifact --skip-build --platform mac --target zip --arch arm64 --build-version "$version" --output-dir "$work/package"
@@ -91,7 +104,7 @@ if [[ ! -f "$dir/submission-id" ]]; then
     ditto -x -k "$work/artifact.zip" "$work/package"
   fi
   mkdir "$work/image"
-  ditto -x -k "$work/package/$name.zip" "$work/image"
+  ditto -x -k "$archive" "$work/image"
   app="$work/image/PutmanCode.app"
   [[ "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist")" == "$version" ]]
   [[ "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Contents/Info.plist")" == com.putmantechnologies.putmancode ]]
