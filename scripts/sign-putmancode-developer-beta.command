@@ -2,7 +2,7 @@
 # Run on the signing Mac, using its existing Developer ID and notarytool profile.
 set -euo pipefail
 umask 077
-export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.local/share/vite-plus/bin:$HOME/.cargo/bin:$PATH"
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 repo=putman-technologies/putman-code
@@ -23,6 +23,7 @@ fi
 echo "Waiting for verified Apple silicon packaging of $version."
 primary=$run
 ready=false
+native=false
 for ((attempt=0; attempt<144; attempt++)); do
   result=$(gh run view "$primary" --repo "$repo" --json conclusion --jq .conclusion)
   if [[ "$result" == success ]]; then ready=true; break; fi
@@ -35,7 +36,18 @@ for ((attempt=0; attempt<144; attempt++)); do
       gh api "repos/$repo/actions/runs/$primary/attempts/1/jobs" | jq -e '[.jobs[] | select(.name!="Package and launch on macOS")] | length==8 and all(.[]; .conclusion=="success")' >/dev/null
       run=$alternate; ready=true; break
     fi
-    if [[ "$(jq -r .status <<<"$metadata")" == completed && -n "$result" ]]; then break; fi
+    if [[ "$(jq -r .status <<<"$metadata")" == completed && -n "$result" ]]; then
+      if [[ "$result" == cancelled && "$(jq -r .conclusion <<<"$metadata")" == cancelled ]]; then
+        for build in "$primary" "$alternate"; do
+          gh api "repos/$repo/actions/runs/$build/jobs" | jq -e '
+            [.jobs[] | select(.name=="Package and launch on macOS")] |
+            length==1 and all(.[]; .conclusion=="cancelled" and .runner_id==0 and (.steps|length)==0)' >/dev/null
+        done
+        gh api "repos/$repo/actions/runs/$primary/attempts/1/jobs" | jq -e '[.jobs[] | select(.name!="Package and launch on macOS")] | length==8 and all(.[]; .conclusion=="success")' >/dev/null
+        native=true; ready=true
+      fi
+      break
+    fi
   elif [[ -n "$result" ]]; then break
   fi
   sleep 25
@@ -49,14 +61,26 @@ name="Putman-Code-$version-arm64"
 dmg="PutmanCode-$version-macOS-arm64.dmg"
 account='anchor apple generic and certificate leaf[subject.OU] = "2NZKUVA6F5" and certificate leaf[field.1.2.840.113635.100.6.1.13] exists'
 req="$account and identifier \"com.putmantechnologies.putmancode\""
-artifact=$(gh api "repos/$repo/actions/runs/$run/artifacts" --jq '.artifacts[] | select(.name=="mac-signing-candidate" and .expired==false)')
-id=$(jq -er .id <<<"$artifact")
-digest=$(jq -er '.digest | select(test("^sha256:[0-9a-f]{64}$"))' <<<"$artifact")
 if [[ ! -f "$dir/submission-id" ]]; then
-  gh api "repos/$repo/actions/artifacts/$id/zip" > "$work/artifact.zip"
-  actual=$(shasum -a 256 "$work/artifact.zip" | cut -d' ' -f1)
-  [[ sha256:$actual == "$digest" ]]
-  ditto -x -k "$work/artifact.zip" "$work/package"
+  if [[ "$native" == true ]]; then
+    checkout="$root/../putmancode-beta11-local-build"
+    [[ "$(uname -sm)" == "Darwin arm64" && "$(git -C "$checkout" rev-parse HEAD)" == "$sha" ]]
+    [[ -z "$(git -C "$checkout" status --porcelain --untracked-files=normal)" ]]
+    echo "Packaging the verified release sources on this Mac."
+    (cd "$checkout"
+      APP_VERSION="$version" vp run build:desktop:bundle
+      python3 scripts/verify-putmancode-privacy.py apps/desktop/dist-electron apps/server/dist
+      vp run dist:desktop:artifact --skip-build --platform mac --target zip --arch arm64 --build-version "$version" --output-dir "$work/package"
+    )
+  else
+    artifact=$(gh api "repos/$repo/actions/runs/$run/artifacts" --jq '.artifacts[] | select(.name=="mac-signing-candidate" and .expired==false)')
+    id=$(jq -er .id <<<"$artifact")
+    digest=$(jq -er '.digest | select(test("^sha256:[0-9a-f]{64}$"))' <<<"$artifact")
+    gh api "repos/$repo/actions/artifacts/$id/zip" > "$work/artifact.zip"
+    actual=$(shasum -a 256 "$work/artifact.zip" | cut -d' ' -f1)
+    [[ sha256:$actual == "$digest" ]]
+    ditto -x -k "$work/artifact.zip" "$work/package"
+  fi
   mkdir "$work/image"
   ditto -x -k "$work/package/$name.zip" "$work/image"
   app="$work/image/PutmanCode.app"
