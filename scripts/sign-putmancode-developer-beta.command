@@ -13,6 +13,70 @@ version=$(jq -er '.version | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+-beta\\.[0-9]
 tag=v$version
 draft=$(gh release view "$tag" --repo "$repo" --json isDraft,targetCommitish)
 sha=$(jq -er 'select(.isDraft) | .targetCommitish | select(test("^[a-f0-9]{40}$"))' <<<"$draft")
+
+dir="$root/dist/developer-id/$sha"
+name="Putman-Code-$version-arm64"
+dmg="PutmanCode-$version-macOS-arm64.dmg"
+assets=("$dmg" "$name.zip" "$name.zip.blockmap" "beta-mac.yml")
+manifest="$dir/verified-assets.sha256"
+
+asset_checksums() (
+  cd "$dir" && shasum -a 256 "${assets[@]}"
+)
+
+stage_assets() {
+  local asset want size metadata entry attempt done_upload
+  for asset in "${assets[@]}"; do
+    want="sha256:$(shasum -a 256 "$dir/$asset" | cut -d' ' -f1)"
+    size=$(stat -f %z "$dir/$asset")
+    done_upload=false
+    for attempt in 1 2 3 4; do
+      metadata=$(gh release view "$tag" --repo "$repo" --json isDraft,targetCommitish,assets)
+      jq -e --arg sha "$sha" '.isDraft and .targetCommitish==$sha' <<<"$metadata" >/dev/null
+      entry=$(jq -c --arg asset "$asset" '.assets[] | select(.name==$asset)' <<<"$metadata")
+      if [[ -n "$entry" ]]; then
+        if jq -e --arg digest "$want" --argjson size "$size" \
+          '.state=="uploaded" and .digest==$digest and .size==$size' <<<"$entry" >/dev/null; then
+          done_upload=true
+          break
+        fi
+        echo "Existing draft asset $asset differs from the verified local copy or is incomplete." >&2
+        return 1
+      fi
+      if [[ "$attempt" -lt 4 ]]; then
+        # The server can accept the file before returning HTTP 500. Read back before retrying.
+        gh release upload "$tag" --repo "$repo" "$dir/$asset" || true
+        sleep "$attempt"
+      fi
+    done
+    if [[ "$done_upload" != true ]]; then
+      echo "GitHub has not confirmed $asset. Run this command again to resume the upload." >&2
+      return 1
+    fi
+  done
+  if [[ "$sha" == 0bf2ab0d4d34dec4b79415b83520f4e860d9c9cd ]]; then
+    verification=17aabf549a48734ed2a5bec1071756ebc69dba3f
+    branch=qa/beta-11-apple-profile
+    existing=$(gh api "repos/$repo/git/matching-refs/heads/$branch" --jq ".[]|select(.ref==\"refs/heads/$branch\")|.object.sha")
+    if [[ -z "$existing" ]]; then
+      gh api -X POST "repos/$repo/git/refs" -f ref="refs/heads/$branch" -f sha="$verification" --silent
+    else
+      [[ "$existing" == "$verification" ]]
+    fi
+  fi
+  echo "Signed files are in the GitHub draft for the preview-to-Developer ID upgrade check."
+}
+
+if [[ -f "$manifest" ]]; then
+  if ! asset_checksums | cmp -s "$manifest" -; then
+    echo "The signed files have changed since verification. Check the local release folder." >&2
+    exit 1
+  fi
+  echo "Resuming the upload of the verified signed files for $version."
+  stage_assets
+  exit 0
+fi
+
 run=$(gh run list --repo "$repo" --workflow putmancode-desktop-release-build.yml --branch release/1.0.0 --commit "$sha" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
 [[ -n "$run" ]] || { echo "No build for the draft release commit."; exit 1; }
 security find-identity -v -p codesigning | grep -F "\"$identity\"" >/dev/null
@@ -62,12 +126,9 @@ for ((attempt=0; attempt<144; attempt++)); do
   sleep 25
 done
 [[ "$ready" == true ]] || { echo "No verified Mac build is ready. The draft is intact."; exit 1; }
-dir="$root/dist/developer-id/$sha"
 mkdir -p "$dir"
 work=$(mktemp -d "$dir/.working.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-name="Putman-Code-$version-arm64"
-dmg="PutmanCode-$version-macOS-arm64.dmg"
 account='anchor apple generic and certificate leaf[subject.OU] = "2NZKUVA6F5" and certificate leaf[field.1.2.840.113635.100.6.1.13] exists'
 req="$account and identifier \"com.putmantechnologies.putmancode\""
 if [[ ! -f "$dir/submission-id" ]]; then
@@ -162,26 +223,7 @@ const file = process.argv[3], version = pkg('./package.json').version;
 })().catch(e => { console.error(e);process.exitCode=1; });
 NODE
 mv "$work/$name.zip" "$work/$name.zip.blockmap" "$work/beta-mac.yml" "$dir/"
+asset_checksums > "$work/verified-assets.sha256"
+mv "$work/verified-assets.sha256" "$manifest"
 echo "Verified Apple Developer ID installer and updater files in $dir"
-
-# Upload only signed distribution files to the existing draft. The local user profile stays on the Mac.
-for file in "$dir/$dmg" "$dir/$name.zip" "$dir/$name.zip.blockmap" "$dir/beta-mac.yml"; do
-  current=$(gh release view "$tag" --repo "$repo" --json isDraft,targetCommitish,assets)
-  jq -e --arg sha "$sha" '.isDraft and .targetCommitish==$sha' <<<"$current" >/dev/null
-  asset=${file##*/}
-  want="sha256:$(shasum -a 256 "$file" | cut -d' ' -f1)"
-  present=$(jq -r --arg asset "$asset" '.assets[]|select(.name==$asset)|.digest' <<<"$current")
-  if [[ -z "$present" ]]; then gh release upload "$tag" --repo "$repo" "$file"; fi
-  gh release view "$tag" --repo "$repo" --json assets | jq -e --arg asset "$asset" --arg want "$want" 'any(.assets[]; .name==$asset and .digest==$want)' >/dev/null
-done
-if [[ "$sha" == 0bf2ab0d4d34dec4b79415b83520f4e860d9c9cd ]]; then
-  verification=17aabf549a48734ed2a5bec1071756ebc69dba3f
-  branch=qa/beta-11-apple-profile
-  existing=$(gh api "repos/$repo/git/matching-refs/heads/$branch" --jq ".[]|select(.ref==\"refs/heads/$branch\")|.object.sha")
-  if [[ -z "$existing" ]]; then
-    gh api -X POST "repos/$repo/git/refs" -f ref="refs/heads/$branch" -f sha="$verification" --silent
-  else
-    [[ "$existing" == "$verification" ]]
-  fi
-fi
-echo "Signed files are in the GitHub draft for the preview-to-Developer ID upgrade check."
+stage_assets
