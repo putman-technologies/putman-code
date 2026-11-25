@@ -4,7 +4,7 @@ PutmanCode disables anonymous product usage reporting. The bundled server has no
 
 ## Relay connection diagnostics
 
-The PutmanCode desktop build ships without a relay trace destination. A separately configured diagnostics exporter has its own settings.
+The browser, desktop, mobile, and SSH clients never send relay spans to T3 or Axiom. A relay trace URL or token in an old build configuration cannot enable that exporter. The browser sends local diagnostic spans to the PutmanCode environment you connected to. That environment controls any explicitly configured OpenTelemetry export.
 
 ## Mobile app diagnostics
 

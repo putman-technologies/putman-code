@@ -67,6 +67,7 @@ jobs:
         run: |
           test "$(node -p 'require("./apps/desktop/package.json").version')" = "$RELEASE_VERSION"
           APP_VERSION="$RELEASE_VERSION" vp run build:desktop:bundle
+          python3 scripts/verify-putmancode-privacy.py apps/desktop/dist-electron apps/server/dist
           vp run dist:desktop:artifact --skip-build --platform win --target nsis --arch x64 --build-version "$RELEASE_VERSION" --output-dir "$RUNNER_TEMP/installer"
           test -s "$RUNNER_TEMP/installer/beta.yml"
           test -s "$RUNNER_TEMP/installer/Putman-Code-$RELEASE_VERSION-x64.exe.blockmap"
@@ -178,6 +179,7 @@ jobs:
           set -euo pipefail
           test "$(node -p 'require("./apps/desktop/package.json").version')" = "$RELEASE_VERSION"
           APP_VERSION="$RELEASE_VERSION" vp run build:desktop:bundle
+          python3 scripts/verify-putmancode-privacy.py apps/desktop/dist-electron apps/server/dist
           vp run dist:desktop:artifact --skip-build --platform mac --target zip --arch arm64 --build-version "$RELEASE_VERSION" --output-dir "$RUNNER_TEMP/package"
       - name: Upload Mac application for release signing
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -264,6 +266,7 @@ jobs:
           cp native/resource-monitor/target/release/t3-resource-monitor "$RUNNER_TEMP/monitor/linux-$ARCH/"
           vp run --filter @t3tools/web build
           node apps/server/scripts/cli.ts build --verbose
+          python3 scripts/verify-putmancode-privacy.py apps/server/dist
           node scripts/apply-web-brand-assets.ts production apps/server/dist/client
           node apps/server/scripts/cli.ts build-exe --verbose
           node scripts/build-cli-archive.ts --platform linux --arch "$ARCH" --version "$RELEASE_VERSION" --resource-monitor-dir "$RUNNER_TEMP/monitor" --output-dir release-cli
@@ -292,7 +295,7 @@ jobs:
       - uses: ./.github/actions/setup-ci-deps
         with:
           install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
-      - run: vp test run src/vcs/GitVcsDriverCore.test.ts src/orchestration-v2/ThreadLaunchService.test.ts
+      - run: vp test run src/vcs/GitVcsDriverCore.test.ts src/orchestration-v2/ThreadLaunchService.test.ts src/telemetry/AnalyticsService.test.ts src/cloud/relayTracing.test.ts src/cloud/publicConfig.test.ts
         working-directory: apps/server
       - run: vp run --filter @t3tools/client-runtime typecheck
       - run: vp test run src/state/turnItemPresentation.test.ts
@@ -313,7 +316,7 @@ jobs:
         working-directory: packages/contracts
       - run: vp test run src/state/composerDispatch.test.ts src/state/presentation.test.ts
         working-directory: packages/client-runtime
-      - run: vp test run --project unit src/components/chat/approvalQuestion.test.ts src/components/chat/MessagesTimeline.logic.test.ts src/components/sidebar/sidebarUsage.test.ts src/components/Sidebar.logic.test.ts src/components/Sidebar.drag.test.ts
+      - run: vp test run --project unit src/lib/runtime.test.ts src/components/chat/approvalQuestion.test.ts src/components/chat/MessagesTimeline.logic.test.ts src/components/sidebar/sidebarUsage.test.ts src/components/Sidebar.logic.test.ts src/components/Sidebar.drag.test.ts
         working-directory: apps/web
       - run: vp test run --project browser src/components/Sidebar.browser.test.tsx -t "hides the open chat after it settles"
         working-directory: apps/web

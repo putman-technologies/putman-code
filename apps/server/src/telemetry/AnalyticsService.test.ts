@@ -18,7 +18,6 @@ it.effect("sends zero usage requests even with the legacy exporter explicitly en
     yield* Effect.gen(function* () {
       const analytics = yield* AnalyticsService;
       yield* analytics.record("session.started");
-      yield* analytics.recordOwners([{ source: "device", ownerId: "example" }], "client");
       yield* analytics.flush;
     }).pipe(
       Effect.provide(layer),
