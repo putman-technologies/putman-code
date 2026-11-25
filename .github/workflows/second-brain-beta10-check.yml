@@ -1,0 +1,29 @@
+name: Verify Beta 10 project Second Brain
+on:
+  push:
+    branches: [verify/second-brain-beta-10]
+permissions:
+  contents: read
+jobs:
+  second-brain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
+          sparse-checkout-cone-mode: false
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=t3... --filter=@t3tools/web...
+      - name: Verify project creation, history, file capture and project isolation
+        working-directory: apps/server
+        run: vp test run src/project/SecondBrain.test.ts src/project/secondBrainFiles.test.ts src/project/ManagedProjectFolders.test.ts
+      - name: Install Chromium
+        run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
+      - name: Verify opt-in from the new project screen
+        working-directory: apps/web
+        run: vp test run --project browser src/components/CommandPalette.composition.browser.test.tsx -t "lets users opt into Second Brain"
