@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  RELEASE_VERSION: 1.0.0-beta.10
+  RELEASE_VERSION: 1.0.0-beta.11
 
 jobs:
   assistant-service:
@@ -306,10 +306,14 @@ jobs:
         working-directory: apps/desktop
       - run: vp test run src/microsoftProfile.test.ts
         working-directory: packages/shared
+      - run: vp test run --project unit src/app/DesktopUserData.test.ts src/app/DesktopAppIdentity.test.ts src/app/DesktopConnectionCatalogStore.test.ts
+        working-directory: apps/desktop
       - run: vp test run src/updates/DesktopUpdates.test.ts src/updates/githubUpdateFeed.test.ts src/account/MicrosoftLoopback.test.ts
         working-directory: apps/desktop
       - run: python3 -B scripts/tests/test_personal_assistant.py
       - run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
+      - run: vp test run src/components/settings/pairingUrls.test.ts src/components/settings/AuthorizedClientsSettings.browser.test.tsx
+        working-directory: apps/web
       - run: vp test run src/server/repoWorkflowButton.test.ts
         working-directory: packages/source-control-github
       - run: vp test run src/settings.test.ts
