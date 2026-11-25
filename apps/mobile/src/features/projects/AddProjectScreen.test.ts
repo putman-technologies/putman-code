@@ -31,6 +31,7 @@ const state = vi.hoisted(() => ({
   cloneDestinations: [] as string[],
   createResult: null as Promise<unknown> | null,
   createNewResult: null as Promise<unknown> | null,
+  createNewInputs: vi.fn(),
   startCloneResult: null as Promise<unknown> | null,
   connectionStates: {} as Record<string, EnvironmentConnectionPhase>,
   newProjectsRoot: null as string | null,
@@ -118,7 +119,7 @@ vi.mock("../../state/entities", () => ({
       [
         "environment",
         {
-          environment: { platform: { os: "linux" }, capabilities: {} },
+          environment: { platform: { os: "linux" }, capabilities: { projectSecondBrain: true } },
           newProjectsRoot: state.newProjectsRoot,
           settings: { addProjectBaseDirectory: state.baseDirectory },
         },
@@ -167,7 +168,10 @@ vi.mock("../../state/sourceControl", () => ({
 }));
 vi.mock("../../state/projects", () => ({
   projectEnvironment: {
-    createNew: () => state.createNewResult,
+    createNew: (args: unknown) => {
+      state.createNewInputs(args);
+      return state.createNewResult;
+    },
     create: ({ input }: { input: { workspaceRoot: string } }) => {
       if (!state.scopes.has(AuthOrchestrationOperateScope)) {
         return Promise.resolve(
@@ -626,73 +630,86 @@ describe("local project navigation", () => {
     expect(state.dispatch).not.toHaveBeenCalled();
   });
 
-  it("does not redirect a reopened flow when an earlier new project finishes", async () => {
-    const { projected } = setup();
-    state.newProjectsRoot = "/projects";
-    const created = Promise.withResolvers<unknown>();
-    const waitingForProject = Promise.withResolvers<void>();
-    state.createNewResult = created.promise;
-    state.waitForProject.mockImplementation(() => {
-      waitingForProject.resolve();
-      return projected.promise;
-    });
-    const navigation = mountProjectFlow(false, true, true, "AddProjectNew");
-    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    const root = createRoot(document.createElement("div"));
-    let screen: ReactNode;
-    function NewProjectObserver() {
-      screen = AddProjectNewScreen({ environmentId: "environment" });
-      return null;
-    }
-    function enterName(node: ReactNode): boolean {
-      if (Array.isArray(node)) return node.some(enterName);
-      if (
-        !isValidElement<{
-          placeholder?: string;
-          onChangeText?: (text: string) => void;
-          children?: ReactNode;
-        }>(node)
-      )
-        return false;
-      if (node.props.placeholder === "Project name") {
-        node.props.onChangeText!("new-project");
-        return true;
+  it.each([false, true])(
+    "sends the selected Second Brain option (%s) and preserves a reopened new project flow",
+    async (includeBrain) => {
+      const { projected } = setup();
+      state.newProjectsRoot = "/projects";
+      const created = Promise.withResolvers<unknown>();
+      const waitingForProject = Promise.withResolvers<void>();
+      state.createNewResult = created.promise;
+      state.waitForProject.mockImplementation(() => {
+        waitingForProject.resolve();
+        return projected.promise;
+      });
+      const navigation = mountProjectFlow(false, true, true, "AddProjectNew");
+      (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+      const root = createRoot(document.createElement("div"));
+      let screen: ReactNode;
+      function NewProjectObserver() {
+        screen = AddProjectNewScreen({ environmentId: "environment" });
+        return null;
       }
-      return enterName(node.props.children);
-    }
-    try {
-      await act(() => root.render(createElement(NewProjectObserver)));
-      await act(() => {
-        expect(enterName(screen)).toBe(true);
-      });
-      const submit = findAction(screen, "Create project");
-      if (!submit) throw new Error("Create project action missing");
-      await act(async () => {
-        submit();
-        created.resolve(
-          AsyncResult.success({
-            projectId: "project",
-            workspaceRoot: "/projects/new-project",
-          }),
-        );
-        await waitingForProject.promise;
-      });
-      navigation.back();
-      navigation.push("AddProjectNew");
-      const remaining = navigation.getState();
-      await act(async () => {
-        projected.resolve({ environmentId: "environment", id: "project" });
-        await projected.promise;
-      });
+      function enterName(node: ReactNode): boolean {
+        if (Array.isArray(node)) return node.some(enterName);
+        if (
+          !isValidElement<{
+            placeholder?: string;
+            onChangeText?: (text: string) => void;
+            children?: ReactNode;
+          }>(node)
+        )
+          return false;
+        if (node.props.placeholder === "Project name") {
+          node.props.onChangeText!("new-project");
+          return true;
+        }
+        return enterName(node.props.children);
+      }
+      try {
+        await act(() => root.render(createElement(NewProjectObserver)));
+        await act(() => {
+          expect(enterName(screen)).toBe(true);
+        });
+        const toggle = findAction(screen, "Save this project to Second Brain");
+        expect(toggle).toBeTypeOf("function");
+        if (includeBrain)
+          await act(() => {
+            toggle!();
+          });
+        const submit = findAction(screen, "Create project");
+        if (!submit) throw new Error("Create project action missing");
+        await act(async () => {
+          submit();
+          created.resolve(
+            AsyncResult.success({
+              projectId: "project",
+              workspaceRoot: "/projects/new-project",
+            }),
+          );
+          await waitingForProject.promise;
+        });
+        expect(state.createNewInputs).toHaveBeenLastCalledWith({
+          environmentId: "environment",
+          input: { name: "new-project", ...(includeBrain ? { secondBrainEnabled: true } : {}) },
+        });
+        navigation.back();
+        navigation.push("AddProjectNew");
+        const remaining = navigation.getState();
+        await act(async () => {
+          projected.resolve({ environmentId: "environment", id: "project" });
+          await projected.promise;
+        });
 
-      expect(navigation.getState()).toEqual(remaining);
-      expect(state.dispatch).not.toHaveBeenCalled();
-    } finally {
-      await act(() => root.unmount());
-      state.newProjectsRoot = null;
-      state.createNewResult = null;
-    }
-  });
+        expect(navigation.getState()).toEqual(remaining);
+        expect(state.dispatch).not.toHaveBeenCalled();
+      } finally {
+        await act(() => root.unmount());
+        state.newProjectsRoot = null;
+        state.createNewResult = null;
+      }
+    },
+  );
 
   it.each([
     { origin: "Thread", withDraft: true, withChooser: true },

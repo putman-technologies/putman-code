@@ -125,6 +125,12 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   threadSnooze: Schema.optionalKey(Schema.Boolean),
   /** Serves `orchestration.forceStopThread`; hide Force stop where it is absent. */
   threadForceStop: Schema.optionalKey(Schema.Boolean),
+  guardedSettledDeletion: Schema.optionalKey(Schema.Boolean),
+  projectCoordinator: Schema.optionalKey(Schema.Boolean),
+  coordinatorModelRouting: Schema.optionalKey(Schema.Boolean),
+  coordinatorBoard: Schema.optionalKey(Schema.Boolean),
+  coordinatorQueue: Schema.optionalKey(Schema.Boolean),
+  coordinatorStatus: Schema.optionalKey(Schema.Boolean),
   /** Every protocol-2 server sends this; older mobile builds still read it. */
   environmentThemes: Schema.optionalKey(Schema.Boolean),
   usageLimitSources: Schema.optionalKey(Schema.Boolean),
@@ -148,6 +154,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   localServerStop: Schema.optionalKey(Schema.Boolean),
   threadPullRequests: Schema.optionalKey(Schema.Boolean),
   threadPullRequestWatch: Schema.optionalKey(Schema.Boolean),
+  pullRequestWorkflowButton: Schema.optionalKey(Schema.Boolean),
   pullRequestStackActions: Schema.optionalKey(Schema.Boolean),
   serverSelfUpdate: Schema.optionalKey(ServerSelfUpdateCapability),
   /** Server answers server.getNpmRelease using its configured npm registry. */
@@ -161,6 +168,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   agentActivityPublishing: Schema.optionalKey(Schema.Boolean),
   projectCloneTracking: Schema.optionalKey(Schema.Boolean),
   /** Server keeps `pinned` and `archived` from project.update. Older servers drop them. */
+  projectSecondBrain: Schema.optionalKey(Schema.Boolean),
   projectOrganization: Schema.optionalKey(Schema.Boolean),
   /** Server answers projects.listIgnoredFiles. */
   ignoredFileListing: Schema.optionalKey(Schema.Boolean),

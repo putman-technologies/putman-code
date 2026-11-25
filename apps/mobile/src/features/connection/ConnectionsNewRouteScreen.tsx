@@ -1,3 +1,4 @@
+import { ProfileAddresses } from "../microsoft-account/MicrosoftAccountRows";
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import { T, useGT } from "gt-react-native";
 import { ListRow } from "../../components/ui/ListRow";
@@ -236,6 +237,7 @@ function PairingForm({
                 pairingConnectionError ? "border-danger-foreground" : "border-transparent",
               )}
             >
+              <ProfileAddresses select={handleHostChange} />
               <PairingInputRow
                 label={gt("Address")}
                 keyboardType="url"

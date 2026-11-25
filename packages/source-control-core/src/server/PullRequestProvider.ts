@@ -5,6 +5,10 @@ import type {
   PullRequestStackMembership,
   PullRequestAction,
   PullRequestStackHead,
+  CoordinatorStatus,
+  CoordinatorChange,
+  ShipRange,
+  ProductionDeployment,
   PullRequestActor,
   PullRequestReferenceCandidate,
   PullRequestReferenceSigil,
@@ -348,6 +352,11 @@ export interface ProviderRepositoryRef {
   readonly host: string;
 }
 
+export type WorkflowButtonHostInput = ProviderRepositoryRef & {
+  readonly number: number;
+  readonly request: import("@t3tools/contracts").RepoWorkflowButtonRequest;
+};
+
 export interface PullRequestProviderApi {
   readonly withVerifiedCredential?: <A, E, R>(
     /** `repository` lets a host pick the credential that can reach it. */
@@ -432,6 +441,34 @@ export interface PullRequestProviderApi {
       readonly number: number;
     }>;
   }) => Effect.Effect<ReadonlyArray<ProviderChangeRequestStat>, PullRequestProviderError>;
+
+  readonly dispatchCoordinatorRelease?: (
+    input: ProviderRepositoryRef & {
+      branch: string;
+      revision: string;
+      requestId: string;
+      pullNumbers: string;
+    },
+  ) => Effect.Effect<void, PullRequestProviderError>;
+  readonly coordinatorRange?: (
+    input: ProviderRepositoryRef & { base: string; head: string; branch: string },
+  ) => Effect.Effect<ShipRange | null, PullRequestProviderError>;
+  readonly coordinatorIncludes?: (input: {
+    cwd: string;
+    host: string;
+    repository: string;
+    base: string;
+    head: string;
+  }) => Effect.Effect<boolean | null, PullRequestProviderError>;
+  readonly coordinatorChange?: (
+    input: ProviderRepositoryRef & { readonly number: number },
+  ) => Effect.Effect<CoordinatorChange | null, PullRequestProviderError>;
+  readonly coordinatorProduction?: (
+    input: ProviderRepositoryRef,
+  ) => Effect.Effect<readonly ProductionDeployment[] | null, PullRequestProviderError>;
+  readonly coordinatorStatus?: (
+    input: ProviderRepositoryRef & { readonly number: number },
+  ) => Effect.Effect<CoordinatorStatus, PullRequestProviderError>;
 
   readonly getChangeRequestChecks?: (
     input: ProviderRepositoryRef & { readonly number: number },
@@ -579,6 +616,13 @@ export interface PullRequestProviderApi {
   ) => Effect.Effect<ReadonlyArray<ProviderCheckLog>, PullRequestProviderError>;
 
   /** Re-runs the named checks' jobs. A check the host cannot re-run gets a `detail`. */
+  readonly workflowButton?: (
+    input: WorkflowButtonHostInput,
+  ) => Effect.Effect<
+    import("@t3tools/contracts").RepoWorkflowButtonResult,
+    PullRequestProviderError
+  >;
+
   readonly rerunChecks?: (
     input: ProviderRepositoryRef & { readonly checks: ReadonlyArray<ProviderCheckReference> },
   ) => Effect.Effect<ReadonlyArray<ProviderCheckRerun>, PullRequestProviderError>;

@@ -641,6 +641,34 @@ function ProjectDetail({
               </div>
             }
           />
+          {group.memberProjects.map((member) =>
+            environmentById.get(member.environmentId)?.serverConfig?.environment.capabilities
+              .projectSecondBrain ? (
+              <SettingsRow
+                key={member.physicalProjectKey}
+                title={gt("Save this project to Second Brain")}
+                description={
+                  group.memberProjects.length > 1
+                    ? member.workspaceRoot
+                    : gt("Remember project chats and files in PutmanCode.")
+                }
+                control={
+                  <Switch
+                    checked={member.secondBrainEnabled === true}
+                    disabled={!editableIds.has(member.environmentId)}
+                    aria-label={gt("Save this project to Second Brain")}
+                    onCheckedChange={(checked) =>
+                      void updateProjectGroup(
+                        [member],
+                        { secondBrainEnabled: checked },
+                        gt("Failed to update project"),
+                      )
+                    }
+                  />
+                }
+              />
+            ) : null,
+          )}
           {canOrganize ? (
             <>
               <SettingsRow

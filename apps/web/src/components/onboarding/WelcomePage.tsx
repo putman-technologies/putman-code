@@ -47,7 +47,6 @@ import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { usePersistEnvironmentProviderInstanceMutation } from "../../hooks/useSettings";
 import { useCloudLinkState } from "../../cloud/cloudLinkState";
 import { hasCloudPublicConfig } from "../../cloud/publicConfig";
-import { PRIVACY_POLICY_URL } from "../../legalLinks";
 import { workspaceAreaProps } from "../../lib/workspaceFocus";
 import { retryClerkLoad, useClerkLoadFailed } from "../clerk/clerkLoadFailure";
 import { useT3ConnectAuthPrompt } from "../clerk/useT3ConnectAuthPrompt";
@@ -85,7 +84,7 @@ import { newProjectId, randomUUID } from "../../lib/utils";
 import { agentSessionImport } from "../../state/agentSessions";
 import { readProjects, useProjects, waitForProject } from "../../state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
-import { managedTelemetryOffMessage, useManagedPolicy } from "../../state/managedPolicy";
+import { useManagedPolicy } from "../../state/managedPolicy";
 import { useProjectScans } from "../../onboarding/useProjectScans";
 import { projectEnvironment } from "../../state/projects";
 import { serverEnvironment } from "../../state/server";
@@ -129,7 +128,9 @@ const SCAN_LIMIT_MESSAGE = msg(
 export function WelcomePage({
   environmentId,
   onDone,
+  onBack,
 }: {
+  readonly onBack?: () => void;
   readonly environmentId: EnvironmentId;
   readonly onDone: (projectRef?: ScopedProjectRef) => void | Promise<void>;
 }) {
@@ -279,8 +280,15 @@ export function WelcomePage({
         {isElectron ? <WorkspacePageHeader electron /> : null}
         <div className="min-h-0 flex-1 overflow-y-auto scrollbar-gutter-both">
           <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-6 pt-12 pb-8 sm:pt-20">
+            {onBack && (
+              <div className="mb-3">
+                <Button size="sm" variant="ghost-muted" disabled={isImporting} onClick={onBack}>
+                  {gt("Back")}
+                </Button>
+              </div>
+            )}
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              <T>Welcome to T3 Code</T>
+              {gt("Set up agents and projects")}
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
               <T>
@@ -335,50 +343,10 @@ export function WelcomePage({
                 </Button>
               </div>
             </div>
-            <TelemetryNotice environmentId={environmentId} />
           </div>
         </div>
       </div>
     </SidebarInset>
-  );
-}
-
-function TelemetryNotice({ environmentId }: { readonly environmentId: EnvironmentId }) {
-  const messages = useMessages();
-  const telemetryOff = managedTelemetryOffMessage(useManagedPolicy(environmentId), messages);
-  return (
-    <p className="mt-auto pt-12 text-2xs leading-relaxed text-muted-foreground/70">
-      {telemetryOff === undefined ? (
-        <T>
-          T3 Code collects anonymous usage data to improve the app. To opt out, see the{" "}
-          <a
-            className="underline decoration-current/40 underline-offset-2 hover:text-muted-foreground"
-            href={PRIVACY_POLICY_URL}
-            target="_blank"
-            rel="noreferrer noopener"
-          >
-            privacy policy
-          </a>
-          .
-        </T>
-      ) : (
-        <>
-          {telemetryOff}{" "}
-          <T>
-            See the{" "}
-            <a
-              className="underline decoration-current/40 underline-offset-2 hover:text-muted-foreground"
-              href={PRIVACY_POLICY_URL}
-              target="_blank"
-              rel="noreferrer noopener"
-            >
-              privacy policy
-            </a>
-            .
-          </T>
-        </>
-      )}
-    </p>
   );
 }
 
@@ -855,7 +823,15 @@ function ProjectsSection({
           {m(SCAN_LIMIT_MESSAGE)}
         </p>
       </WelcomeSection>
-    ) : null;
+    ) : (
+      <WelcomeSection title={gt("Projects")}>
+        <p className="py-2 text-sm text-muted-foreground">
+          {gt(
+            "No project history found. After setup, choose Add project to open a folder or clone a repository.",
+          )}
+        </p>
+      </WelcomeSection>
+    );
   }
 
   const allKeys = candidates.map((candidate) => candidate.key);
@@ -989,7 +965,7 @@ function PhoneSection({ environmentId }: { readonly environmentId: EnvironmentId
             <SmartphoneIcon className="size-4" />
           </RowIcon>
           <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
-            <T>Use T3 Code on your phone</T>
+            <T>Use the mobile companion</T>
           </span>
           <CollapsibleTrigger render={<Button variant="ghost-muted" size="xs" />}>
             {open ? gt("Hide") : gt("Set up")}
@@ -1015,7 +991,7 @@ function PhoneSection({ environmentId }: { readonly environmentId: EnvironmentId
                 size={124}
                 level="M"
                 marginSize={2}
-                title={gt("T3 Code app for iPhone and Android")}
+                title={gt("Mobile companion for iPhone and Android")}
               />
             </div>
           </div>

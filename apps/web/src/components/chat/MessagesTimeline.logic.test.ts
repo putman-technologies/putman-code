@@ -289,7 +289,7 @@ describe("deriveMessagesTimelineRows", () => {
       toolSource: { key: "mcp:node_repl", name: "node repl", kind: "integration" as const },
       input: {
         title: "Restrict the breakpoint to Git actions",
-        code: "await sky.type_text({app:'T3 Code (Nightly)',text:'debug(ga.run)'});",
+        code: "await sky.type_text({app:'PutmanCode (Nightly)',text:'debug(ga.run)'});",
       },
     };
     const entries = deriveTimelineEntriesFromVisibleTurnItems({
@@ -1632,7 +1632,7 @@ describe("deriveMessagesTimelineRows", () => {
     ]);
   });
 
-  it("stacks back-to-back steers as one burst with a single steer label", () => {
+  it("stacks back-to-back steers as consecutive user messages", () => {
     const runId = RunId.make("double-steer-run");
     const time = (second: number) => new Date(Date.UTC(2026, 0, 1, 0, 0, second)).toISOString();
     const message = (
@@ -1693,12 +1693,10 @@ describe("deriveMessagesTimelineRows", () => {
     expect(byId.get("first-steer")).toMatchObject({
       groupedWithNext: true,
       groupedWithPrevious: false,
-      continuesSteer: false,
     });
     expect(byId.get("second-steer")).toMatchObject({
       groupedWithNext: false,
       groupedWithPrevious: true,
-      continuesSteer: true,
     });
   });
 

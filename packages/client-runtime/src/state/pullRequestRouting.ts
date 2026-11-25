@@ -50,6 +50,7 @@ const reads = new Set<string>([
 // Review guides are not routed: each server keeps its own, so another server answering would
 // report none, or start a run nobody on the pull request's own server can see.
 const writes = new Set<string>([
+  WS_METHODS.pullRequestsWorkflowButton,
   WS_METHODS.pullRequestsSetFilesViewed,
   WS_METHODS.pullRequestsRunAction,
   WS_METHODS.pullRequestsUpdate,

@@ -38,7 +38,7 @@ export class ScratchUnavailableError extends Schema.TaggedError<ScratchUnavailab
     if (this.repositoryRoot === undefined) {
       return "Threads without a project are not available on this environment.";
     }
-    return `Threads without a project are off because the T3 home ${this.baseDir} is inside the Git repository ${this.repositoryRoot}. If that repository was created by mistake, move ${this.repositoryRoot}/.git out of the way; otherwise point T3CODE_HOME (or --base-dir) at a folder outside it. Then restart T3 Code.`;
+    return `Threads without a project are off because the T3 home ${this.baseDir} is inside the Git repository ${this.repositoryRoot}. If that repository was created by mistake, move ${this.repositoryRoot}/.git out of the way; otherwise point PUTMANCODE_HOME (or --base-dir) at a folder outside it. Then restart PutmanCode.`;
   }
 }
 
@@ -121,7 +121,10 @@ export class ManagedProjectFolders extends Context.Service<
     }) => Effect.Effect<Option.Option<string>, ScratchFolderError>;
     readonly namedProjectsRoot: string;
     /** Removes failed/cancelled creations' folders only while no project owns them. */
-    readonly createNamedProject: (input: { readonly name: string }) => Effect.Effect<
+    readonly createNamedProject: (input: {
+      readonly name: string;
+      readonly secondBrainEnabled?: boolean | undefined;
+    }) => Effect.Effect<
       {
         readonly projectId: ProjectId;
         readonly workspaceRoot: string;
@@ -199,7 +202,7 @@ function namedProjectReadme(name: string): string {
     "",
     `# ${name}`,
     "",
-    "Created in [T3 Code](https://t3.codes).",
+    "Created in [PutmanCode](https://github.com/putman-technologies/putman-code).",
     "",
   ].join("\n");
 }
@@ -486,6 +489,9 @@ const make = Effect.gen(function* () {
       .create({
         commandId: CommandId.make(`named-project:${id}`),
         projectId: ProjectId.make(id),
+        ...(input.secondBrainEnabled === undefined
+          ? {}
+          : { secondBrainEnabled: input.secondBrainEnabled }),
         title: input.name,
         workspaceRoot,
       })

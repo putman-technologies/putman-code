@@ -36,6 +36,7 @@ export const ProjectRow = Schema.Struct({
   workspaceRoot: Schema.String,
   defaultModelSelection: Schema.NullOr(ModelSelection),
   defaultThreadEnvMode: Schema.NullOr(ThreadEnvMode),
+  secondBrainEnabled: Schema.optional(Schema.Boolean),
   autoPull: Schema.Boolean,
   faviconPath: Schema.NullOr(Schema.String),
   projectIcon: Schema.NullOr(StoredProjectIcon),
@@ -52,6 +53,7 @@ const ProjectDbRow = Schema.Struct({
   ...ProjectRow.fields,
   defaultModelSelection: Schema.NullOr(Schema.fromJsonString(ModelSelection)),
   hasCustomTitle: Schema.BooleanFromBit,
+  secondBrainEnabled: Schema.BooleanFromBit,
   autoPull: Schema.BooleanFromBit,
   projectIcon: Schema.NullOr(Schema.fromJsonString(StoredProjectIcon)),
   scripts: Schema.fromJsonString(Schema.Array(ProjectScript)),
@@ -66,6 +68,7 @@ function toShell(row: ProjectRow): OrchestrationProjectShell {
     repositoryIdentity: null,
     defaultModelSelection: row.defaultModelSelection,
     defaultThreadEnvMode: row.defaultThreadEnvMode,
+    secondBrainEnabled: row.secondBrainEnabled ?? false,
     autoPull: row.autoPull,
     faviconPath: row.faviconPath,
     projectIcon: row.projectIcon,
@@ -124,6 +127,7 @@ export const make = Effect.gen(function* () {
         workspace_root AS "workspaceRoot",
         default_model_selection_json AS "defaultModelSelection",
         default_thread_env_mode AS "defaultThreadEnvMode",
+        second_brain_enabled AS "secondBrainEnabled",
         auto_pull AS "autoPull",
         favicon_path AS "faviconPath",
         project_icon_json AS "projectIcon",
@@ -147,7 +151,7 @@ export const make = Effect.gen(function* () {
   });
 
   const upsertRow = (row: ProjectRow) =>
-    encodeRow(row).pipe(
+    encodeRow({ ...row, secondBrainEnabled: row.secondBrainEnabled ?? false }).pipe(
       Effect.flatMap(
         (encoded) => sql`
           INSERT INTO projection_projects (
@@ -157,6 +161,7 @@ export const make = Effect.gen(function* () {
             workspace_root,
             default_model_selection_json,
             default_thread_env_mode,
+            second_brain_enabled,
             auto_pull,
             favicon_path,
             project_icon_json,
@@ -174,6 +179,7 @@ export const make = Effect.gen(function* () {
             ${encoded.workspaceRoot},
             ${encoded.defaultModelSelection},
             ${encoded.defaultThreadEnvMode},
+            ${encoded.secondBrainEnabled},
             ${encoded.autoPull},
             ${encoded.faviconPath},
             ${encoded.projectIcon},
@@ -195,6 +201,7 @@ export const make = Effect.gen(function* () {
             workspace_root = excluded.workspace_root,
             default_model_selection_json = excluded.default_model_selection_json,
             default_thread_env_mode = excluded.default_thread_env_mode,
+            second_brain_enabled = excluded.second_brain_enabled,
             auto_pull = excluded.auto_pull,
             favicon_path = excluded.favicon_path,
             project_icon_json = excluded.project_icon_json,
@@ -246,6 +253,7 @@ export const make = Effect.gen(function* () {
           workspaceRoot: payload.workspaceRoot,
           defaultModelSelection: payload.defaultModelSelection,
           defaultThreadEnvMode: payload.defaultThreadEnvMode ?? null,
+          secondBrainEnabled: payload.secondBrainEnabled ?? false,
           autoPull: false,
           faviconPath: payload.faviconPath ?? null,
           projectIcon: payload.projectIcon ?? null,
@@ -278,6 +286,9 @@ export const make = Effect.gen(function* () {
         ...(payload.defaultThreadEnvMode === undefined
           ? {}
           : { defaultThreadEnvMode: payload.defaultThreadEnvMode }),
+        ...(payload.secondBrainEnabled === undefined
+          ? {}
+          : { secondBrainEnabled: payload.secondBrainEnabled }),
         ...(payload.autoPull === undefined ? {} : { autoPull: payload.autoPull }),
         ...(payload.faviconPath === undefined ? {} : { faviconPath: payload.faviconPath }),
         ...(payload.projectIcon === undefined ? {} : { projectIcon: payload.projectIcon }),

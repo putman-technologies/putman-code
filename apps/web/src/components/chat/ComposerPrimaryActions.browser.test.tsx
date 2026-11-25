@@ -35,6 +35,24 @@ function setup() {
   } satisfies ComponentProps<typeof ComposerPrimaryActions>;
 }
 
+it("shows what sending will do during a turn and falls back to Queue when steering is unavailable", async () => {
+  const props = { ...setup(), hasSendableContent: true };
+  await using screen = await render(<ComposerPrimaryActions {...props} />);
+  await expect
+    .element(screen.getByRole("button", { name: "Queue message" }))
+    .toHaveTextContent("Queue");
+  await screen.rerender(<ComposerPrimaryActions {...props} followUpBehavior="steer" />);
+  await expect
+    .element(screen.getByRole("button", { name: "Steer message" }))
+    .toHaveTextContent("Steer");
+  await screen.rerender(
+    <ComposerPrimaryActions {...props} followUpBehavior="steer" canSteer={false} />,
+  );
+  await expect
+    .element(screen.getByRole("button", { name: "Queue message" }))
+    .toHaveTextContent("Queue");
+});
+
 it.each(["resume", "draft", "question"] as const)(
   "keeps repeat Stop clicks from reaching the action that replaces it (%s)",
   async (mode) => {

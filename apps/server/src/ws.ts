@@ -1,3 +1,4 @@
+import { actorFromSession } from "./orchestration-v2/CoordinatorTeam.ts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- A synchronous digest inside the pure provider mapping.
 import * as NodeCrypto from "node:crypto";
@@ -117,6 +118,16 @@ import * as ServerConfig from "./config.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
+import {
+  readCoordinatorBoard,
+  readCoordinatorOverlaps,
+  actOnCoordinatorBoard,
+  reconcileCoordinatorQueues,
+  saveBoardHandoff,
+  retryCoordinatorChecks,
+} from "./orchestration-v2/CoordinatorBoard.ts";
+import { readCoordinatorStatus } from "./orchestration-v2/CoordinatorStatus.ts";
+import { runProjectCoordinator } from "./orchestration-v2/ProjectCoordinator.ts";
 import * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
 import * as CommandOutputHub from "./orchestration-v2/CommandOutputHub.ts";
 import * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
@@ -244,7 +255,6 @@ import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import { commandFeatureUsage, featureUsage } from "./telemetry/FeatureUsage.ts";
-import type { TelemetryOwner } from "./telemetry/Identify.ts";
 import * as UsageService from "./usage/UsageService.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as TriageService from "./triage/TriageService.ts";
@@ -255,6 +265,7 @@ import * as IssueTrackerConnections from "./issue/IssueTrackerConnections.ts";
 import * as PullRequestReviewGuideService from "./pullRequest/PullRequestReviewGuideService.ts";
 import { listLinkedPullRequestThreads } from "./pullRequest/linkedThreads.ts";
 import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
+import * as CoordinatorSchedule from "effect/Schedule";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
@@ -277,7 +288,6 @@ import {
   SOCKET_FRAME_PARTS_QUERY_PARAM,
   splitLargeSocketFrames,
 } from "@t3tools/shared/socketFrameParts";
-import { isTelemetryIdHash } from "@t3tools/shared/telemetryId";
 import {
   sameUsageLimitCommandCoverage,
   withUsageLimitsCommands,
@@ -855,28 +865,6 @@ function readClientAnalyticsProps(request: HttpServerRequest.HttpServerRequest) 
   };
 }
 
-/**
- * Owners a connecting client reports: its hashed T3 Connect account and its
- * hashed device id. Only hashes are accepted, so a raw id never reaches analytics.
- */
-function readClientOwners(
-  request: HttpServerRequest.HttpServerRequest,
-): ReadonlyArray<TelemetryOwner> {
-  const url = requestUrl(request);
-  if (Option.isNone(url)) {
-    return [];
-  }
-  const params = url.value.searchParams;
-  return (
-    [
-      ["connect", params.get("clientOwner")],
-      ["device", params.get("clientDevice")],
-    ] as const
-  ).flatMap(([source, ownerId]) =>
-    ownerId !== null && isTelemetryIdHash(ownerId) ? [{ source, ownerId }] : [],
-  );
-}
-
 const enrichProjectShells = Effect.fn("ws.orchestrationV2.enrichProjectShells")(
   (projects: ReadonlyArray<OrchestrationProjectShell>) =>
     Effect.flatMap(ProjectEnrichmentService.ProjectEnrichmentService, (projectEnrichment) =>
@@ -1438,6 +1426,10 @@ export const layerWsRpc = (
   Layer.effectContext(
     Effect.gen(function* () {
       const currentSessionId = currentSession.sessionId;
+      const boardActor = actorFromSession(
+        currentSession,
+        "Device " + currentSession.sessionId.slice(-8),
+      );
       const sql = yield* SqlClient.SqlClient;
       const threadManagement = yield* ThreadManagementService.ThreadManagementService;
       const intakeContext = yield* Effect.context<
@@ -2038,6 +2030,57 @@ export const layerWsRpc = (
                   }),
                 ),
             ),
+          ),
+        [ORCHESTRATION_V2_WS_METHODS.coordinatorBoard]: ({ projectId, github }) =>
+          readCoordinatorBoard(
+            projectId,
+            sql,
+            projectService,
+            threadManagement,
+            pullRequests,
+            vcsStatusBroadcaster.refreshLocalStatus,
+            boardActor,
+            github,
+          ),
+        [ORCHESTRATION_V2_WS_METHODS.coordinatorOverlaps]: ({ projectId }) =>
+          readCoordinatorOverlaps(
+            projectId,
+            sql,
+            projectService,
+            threadManagement,
+            vcsStatusBroadcaster.refreshLocalStatus,
+          ),
+        [ORCHESTRATION_V2_WS_METHODS.coordinatorBoardAction]: (input) =>
+          actOnCoordinatorBoard(
+            input,
+            sql,
+            projectService,
+            threadManagement,
+            pullRequests,
+            boardActor,
+          ),
+        [ORCHESTRATION_V2_WS_METHODS.coordinatorRetry]: (input) =>
+          retryCoordinatorChecks(input, pullRequests),
+        [ORCHESTRATION_V2_WS_METHODS.coordinatorStatus]: ({ projectId }) =>
+          readCoordinatorStatus(projectId, sql, threadManagement, pullRequests.coordinatorStatus),
+        [ORCHESTRATION_V2_WS_METHODS.projectCoordinator]: (input) =>
+          runProjectCoordinator(
+            input,
+            projectService,
+            threadManagement,
+            (cwd) =>
+              vcsStatusBroadcaster
+                .refreshLocalStatus(cwd)
+                .pipe(Effect.timeout("3 seconds"), Effect.option, Effect.map(Option.getOrNull)),
+            (id) =>
+              providerInstances
+                .getInstance(id)
+                .pipe(
+                  Effect.flatMap((instance) =>
+                    instance?.enabled ? instance.snapshot.getSnapshot : Effect.undefined,
+                  ),
+                ),
+            saveBoardHandoff(sql, usage.estimateCoordinatorTurn),
           ),
         [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: (input) => threadManagement.stopWorkflow(input),
         [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: (input) =>
@@ -2821,6 +2864,8 @@ export const layerWsRpc = (
           withPullRequestViewer(input, pullRequests.changeBreakdown(input)),
         [WS_METHODS.pullRequestsSetFilesViewed]: (input) =>
           withPullRequestViewer(input, pullRequests.setFilesViewed(input)),
+        [WS_METHODS.pullRequestsWorkflowButton]: (input) =>
+          withPullRequestViewer(input, pullRequests.workflowButton(input)),
         [WS_METHODS.pullRequestsRunAction]: (input) =>
           withPullRequestViewer(input, pullRequests.runAction(input)).pipe(
             Effect.tap(() =>
@@ -3610,6 +3655,18 @@ export const layer = Layer.unwrap(
     const peerLinks = yield* PeerLinks.PeerLinks;
     const peerLinkRequests = yield* PeerLinkRequests.PeerLinkRequests;
     const sql = yield* SqlClient.SqlClient;
+    const coordinatorProjects = yield* ProjectService.ProjectService;
+    const coordinatorThreads = yield* ThreadManagementService.ThreadManagementService;
+    yield* reconcileCoordinatorQueues(
+      sql,
+      coordinatorProjects,
+      coordinatorThreads,
+      pullRequests,
+    ).pipe(
+      Effect.ignore,
+      Effect.repeat({ schedule: CoordinatorSchedule.spaced("90 seconds") }),
+      Effect.forkScoped,
+    );
     return HttpRouter.add(
       "GET",
       "/ws",
@@ -3647,7 +3704,6 @@ export const layer = Layer.unwrap(
           ];
         }
         const clientAnalyticsProps = readClientAnalyticsProps(request);
-        yield* analytics.recordOwners(readClientOwners(request), "client");
         const reportProfiles = yield* serverBrowser.profileReporter;
         const rpcWebSocketHttpEffect = yield* Effect.gen(function* () {
           const { protocol, httpEffect } = yield* RpcServer.makeProtocolWithHttpEffectWebsocket;

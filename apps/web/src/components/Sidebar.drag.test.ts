@@ -632,7 +632,7 @@ describe("sidebar drag projection", () => {
     expect(result.get("route")?.y).toBe(83);
   });
 
-  it("keeps the dropped route thread visible in a collapsed settled shelf", () => {
+  it("hides even the open thread when it drops into a collapsed settled shelf", () => {
     const items = [
       pinnedHeader,
       thread("p", "pinned"),
@@ -652,7 +652,7 @@ describe("sidebar drag projection", () => {
       "a",
       sidebarMarkerId("settled-placeholder"),
     );
-    expect(result.get(sidebarMarkerId("settled-placeholder"))?.scaleY).toBe(0);
+    expect(result.get(sidebarMarkerId("settled-placeholder"))?.scaleY).toBe(1);
     expect(result.get(sidebarMarkerId("settled-header"))?.y).toBe(-46);
   });
 

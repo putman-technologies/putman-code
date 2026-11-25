@@ -159,7 +159,7 @@ it.effect("stops a daemon left for its owner when starting without agent tools",
     yield* Effect.promise(async () => {
       const home = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-ssh-start-"));
       try {
-        const state = NodePath.join(home, ".t3/device/hosts/owner");
+        const state = NodePath.join(home, ".putman-code/device/hosts/owner");
         const daemonFile = NodePath.join(state, "daemon.json");
         const calls = NodePath.join(home, "calls");
         const failMarker = NodePath.join(home, "fail-stop");
@@ -184,12 +184,17 @@ if (fs.existsSync(${JSON.stringify(failMarker)})) process.exitCode = 1;`,
             env: { HOME: home, PATH: NodePath.join(home, "bin") },
             encoding: "utf8",
           });
+        const upstreamState = NodePath.join(home, ".t3/device/hosts/owner");
+        await NodeFSP.mkdir(upstreamState, { recursive: true });
+        const upstreamRecord = NodePath.join(upstreamState, "daemon.json");
+        await NodeFSP.writeFile(upstreamRecord, '{"pid":1}');
         await NodeFSP.writeFile(failMarker, "");
         expect(start().stderr).toContain("Could not stop the agent-device daemon");
         expect(await NodeFSP.readFile(daemonFile, "utf8")).toContain("claims");
         await NodeFSP.rm(failMarker);
         expect(start().stderr).toContain("Android SDK was not found");
         await expect(NodeFSP.access(daemonFile)).rejects.toThrow();
+        expect(await NodeFSP.readFile(upstreamRecord, "utf8")).toBe('{"pid":1}');
         expect(await NodeFSP.readFile(calls, "utf8")).toBe(
           `daemon stop --state-dir ${state}\ndaemon stop --state-dir ${state}\n`,
         );
@@ -206,7 +211,7 @@ it.effect("keeps a daemon record its missing agent CLI cannot stop", () =>
     yield* Effect.promise(async () => {
       const home = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-ssh-start-"));
       try {
-        const state = NodePath.join(home, ".t3/device/hosts/owner");
+        const state = NodePath.join(home, ".putman-code/device/hosts/owner");
         const daemonFile = NodePath.join(state, "daemon.json");
         await NodeFSP.mkdir(NodePath.join(home, "bin"));
         await NodeFSP.mkdir(state, { recursive: true });

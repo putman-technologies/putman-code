@@ -1,3 +1,4 @@
+import { useLocation } from "@tanstack/react-router";
 import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
@@ -9,6 +10,7 @@ import { SETTINGS_NAV_GROUPS, SETTINGS_SECTION_LABELS } from "./settingsSearch";
 vi.mock("./useAvailableSettingsSearchItems", () => ({
   useAvailableSettingsSearchItems: () => [
     { id: "theme", title: "Theme", to: "/settings/appearance" },
+    { id: "scheduled-tasks", title: "Scheduled tasks", to: "/settings/scheduled-tasks" },
   ],
 }));
 
@@ -44,12 +46,17 @@ it("ignores composing keys in the search", async () => {
   );
 });
 
-function renderNav() {
+function RoutedSettingsNav() {
+  const pathname = useLocation({ select: (location) => location.pathname });
+  return <SettingsSidebarNav pathname={pathname} />;
+}
+
+function renderNav(pathname = "/settings/general") {
   return render(
     <SidebarProvider defaultOpen>
-      <SettingsSidebarNav pathname="/settings/general" />
+      <RoutedSettingsNav />
     </SidebarProvider>,
-    { router: "/settings/general" },
+    { router: pathname },
   );
 }
 
@@ -110,4 +117,39 @@ it.each([1280, 390])("names each group by a heading outside it at %ipx wide", as
     expect(heading?.tagName, `the group starting at ${first} has no heading`).toBe("H3");
   }
   expect(page.getByRole("tree").query()).toBeNull();
+});
+
+it("keeps everyday settings visible and opens an advanced search result directly", async () => {
+  await page.viewport(1280, 800);
+  await using screen = await renderNav();
+  const advanced = page.getByRole("button", { name: "Advanced", exact: true });
+  const scheduled = page.getByRole("button", { name: "Scheduled tasks", exact: true });
+  await expect.element(advanced).toHaveAttribute("aria-expanded", "false");
+  expect(scheduled.query()).toBeNull();
+  for (const name of ["Projects", "Providers", "About", "Sharing & access"]) {
+    await expect.element(page.getByRole("button", { name, exact: true })).toBeVisible();
+  }
+  await advanced.click();
+  await expect.element(scheduled).toBeVisible();
+  await advanced.click();
+  expect(scheduled.query()).toBeNull();
+  const search = page.getByRole("combobox", { name: "Search settings" });
+  await search.fill("scheduled");
+  await userEvent.keyboard("{Enter}");
+  await vi.waitFor(() =>
+    expect(screen.router?.state.location.pathname).toBe("/settings/scheduled-tasks"),
+  );
+  await expect.element(advanced).toHaveAttribute("aria-expanded", "true");
+  await expect.element(scheduled).toHaveAttribute("aria-current", "page");
+});
+
+it("opens Advanced for a direct diagnostic link and highlights Maintenance", async () => {
+  await page.viewport(390, 800);
+  await using _screen = await renderNav("/settings/diagnostics");
+  await expect
+    .element(page.getByRole("button", { name: "Advanced", exact: true }))
+    .toHaveAttribute("aria-expanded", "true");
+  await expect
+    .element(page.getByRole("button", { name: "Maintenance", exact: true }))
+    .toHaveAttribute("aria-current", "page");
 });

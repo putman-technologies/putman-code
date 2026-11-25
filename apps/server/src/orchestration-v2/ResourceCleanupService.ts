@@ -5,6 +5,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
+import * as SecondBrain from "../project/SecondBrain.ts";
 import { resolveAttachmentRelativePath } from "../attachmentPaths.ts";
 import { parseAttachmentFileExtension, resolveAttachmentPathById } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
@@ -45,6 +46,7 @@ export class ResourceCleanupService extends Context.Reference<{
 export const layer = Layer.effect(
   ResourceCleanupService,
   Effect.gen(function* () {
+    const brain = yield* SecondBrain.PreserveSources;
     const terminals = yield* TerminalManager.TerminalManager;
     const previews = yield* PreviewManager.PreviewManager;
     const devices = yield* DeviceService.DeviceService;
@@ -101,10 +103,17 @@ export const layer = Layer.effect(
         if (failure !== undefined)
           return yield* new ResourceCleanupError({ operation: "device", threadId, cause: failure });
       }),
-      cleanupAttachments: Effect.fn("ResourceCleanupService.cleanupAttachments")(function (
+      cleanupAttachments: Effect.fn("ResourceCleanupService.cleanupAttachments")(function* (
         attachmentIds: ReadonlyArray<string>,
       ) {
-        return Effect.forEach(
+        yield* brain
+          .beforeRemoval("attachment", attachmentIds)
+          .pipe(
+            Effect.mapError(
+              (cause) => new ResourceCleanupError({ operation: "attachment", cause }),
+            ),
+          );
+        return yield* Effect.forEach(
           attachmentIds,
           (attachmentId) => {
             const extension = parseAttachmentFileExtension(attachmentId);

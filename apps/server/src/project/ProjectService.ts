@@ -204,6 +204,7 @@ export const make = Effect.gen(function* () {
     faviconPath: row.faviconPath ?? enrichment?.faviconPath ?? null,
     defaultModelSelection: row.defaultModelSelection,
     defaultThreadEnvMode: row.defaultThreadEnvMode,
+    secondBrainEnabled: row.secondBrainEnabled ?? false,
     autoPull: row.autoPull,
     projectIcon: row.projectIcon,
     scripts: row.scripts,
@@ -423,6 +424,9 @@ export const make = Effect.gen(function* () {
         projectId: input.projectId,
         title: input.title,
         workspaceRoot,
+        ...(input.secondBrainEnabled === undefined
+          ? {}
+          : { secondBrainEnabled: input.secondBrainEnabled }),
         ...(input.scripts === undefined ? {} : { scripts: input.scripts }),
       });
       yield* projectEnrichment.invalidate([workspaceRoot]);
@@ -459,6 +463,9 @@ export const make = Effect.gen(function* () {
         ...(input.defaultModelSelection === undefined
           ? {}
           : { defaultModelSelection: input.defaultModelSelection }),
+        ...(input.secondBrainEnabled === undefined
+          ? {}
+          : { secondBrainEnabled: input.secondBrainEnabled }),
         ...(input.autoPull === undefined ? {} : { autoPull: input.autoPull }),
         ...(input.projectIcon === undefined ? {} : { projectIcon: input.projectIcon }),
         ...(input.faviconPath === undefined ? {} : { faviconPath: input.faviconPath }),

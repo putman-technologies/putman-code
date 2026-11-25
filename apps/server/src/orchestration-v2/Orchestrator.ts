@@ -13,6 +13,11 @@ import {
   runRanAfter,
   usageLimitBlockedRun,
 } from "@t3tools/shared/orchestrationV2ThreadError";
+import { answerBoardQuestion, boardQuestion } from "./CoordinatorBoard.ts";
+import { PullRequestService as BoardPulls } from "../pullRequest/PullRequestService.ts";
+import * as BoardSql from "effect/sql/SqlClient";
+import { coordinatorQuickModel, isRoutineCoordinatorMessage } from "./coordinatorRouting.ts";
+import { canHandOffRun, unfinishedHandoffRunStatuses } from "./projectCoordinatorState.ts";
 import { threadIssueKeysEqual } from "@t3tools/contracts";
 import { canonicalizeGitCafePullRequestUrl } from "@t3tools/source-control-definitions/registry";
 import { threadPullRequestsOf } from "../sourceControl/threadPullRequests.ts";
@@ -771,7 +776,7 @@ function delegatedTasksStopEffect(command: {
 
 const WORKSPACE_PREPARATION_INPUT = "Preparing workspace";
 const RUNTIME_REQUEST_DELIVERY_FAILED_MESSAGE =
-  "T3 Code could not confirm that your answer reached the agent. If the run stays stuck, stop it and try again.";
+  "PutmanCode could not confirm that your answer reached the agent. If the run stays stuck, stop it and try again.";
 
 function withoutPreparationResult(
   item: Extract<OrchestrationV2TurnItem, { readonly type: "command_execution" }>,
@@ -1051,14 +1056,13 @@ function queuedRunModelSelection(
 function queueTailModelSelection(
   projection: Pick<OrchestrationV2ThreadProjection, "thread" | "runs" | "messages">,
 ): ModelSelection {
-  return (
-    queuedRunsInDeliveryOrder(projection).findLast(
-      (run) =>
-        !followsCurrentConversation(
-          projection.messages.find((message) => message.id === run.userMessageId),
-        ),
-    )?.modelSelection ?? projection.thread.modelSelection
+  const last = queuedRunsInDeliveryOrder(projection).findLast(
+    (run) =>
+      !followsCurrentConversation(
+        projection.messages.find((message) => message.id === run.userMessageId),
+      ),
   );
+  return last?.coordinatorWorkModel ?? last?.modelSelection ?? projection.thread.modelSelection;
 }
 
 /**
@@ -1547,6 +1551,8 @@ const hasRunningDelegatedTasks = (subagents: ReadonlyArray<OrchestrationV2Subage
   );
 
 const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(function* () {
+  const boardDb = Option.getOrUndefined(yield* Effect.serviceOption(BoardSql.SqlClient));
+  const boardPulls = Option.getOrUndefined(yield* Effect.serviceOption(BoardPulls));
   const checkpointService = yield* CheckpointServiceV2;
   const commandPolicy = yield* CommandPolicyV2;
   const contextHandoffService = yield* ContextHandoffServiceV2;
@@ -2459,9 +2465,20 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const queuedMessage = projection.messages.find(
         (candidate) => candidate.id === storedQueuedRun.userMessageId,
       );
-      const modelSelection = queuedRunModelSelection(projection, storedQueuedRun);
+      const workModel = storedQueuedRun.coordinatorWorkModel;
+      const quickModel =
+        workModel && providerAdapters.getModelCatalog
+          ? coordinatorQuickModel(
+              yield* providerAdapters.getModelCatalog(workModel.instanceId),
+              workModel,
+              projection.thread.worktreePath,
+            )
+          : undefined;
+      const modelSelection =
+        quickModel ?? workModel ?? queuedRunModelSelection(projection, storedQueuedRun);
       const queuedRun = {
         ...storedQueuedRun,
+        ...(workModel && !quickModel ? { coordinatorWorkModel: undefined } : {}),
         modelSelection,
         providerInstanceId: modelSelection.instanceId,
       };
@@ -3116,7 +3133,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         : "Provider or model selection changed.";
       yield* writeSystemEvents(
         [
-          ...(selectionChanged
+          ...(!modelSelectionsEqual(
+            projection.thread.modelSelection,
+            queuedRun.coordinatorWorkModel ?? queuedRun.modelSelection,
+          )
             ? [
                 {
                   type:
@@ -3129,7 +3149,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                   payload: {
                     ...projection.thread,
                     providerInstanceId: queuedRun.providerInstanceId,
-                    modelSelection: queuedRun.modelSelection,
+                    modelSelection: queuedRun.coordinatorWorkModel ?? queuedRun.modelSelection,
                     updatedAt: now,
                   },
                 },
@@ -7468,6 +7488,18 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         taskIds: delivery.taskIds,
       };
     }
+    // A follow-up to a lightweight response gets its own routing decision and cannot steer work into the smaller model.
+    if (
+      (dispatchMode.type === "steer_active" || dispatchMode.type === "restart_active") &&
+      command.createdBy === "user" &&
+      !command.notification &&
+      !command.delegatedCompletion
+    ) {
+      const targetId = dispatchMode.targetRunId;
+      if (projection.runs.find((run) => run.id === targetId)?.coordinatorWorkModel) {
+        dispatchMode = { type: "queue_after_active" };
+      }
+    }
     // A steer that switches provider needs a new turn. A provider that cannot restart its
     // turn for new input takes it after the turn, like a provider that cannot steer at all.
     // An explicit steer that Stop reached still fails below.
@@ -7738,6 +7770,124 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     ) {
       modelSelection = queueTailModelSelection(projection);
     }
+    const directQuestion = boardQuestion(command.text);
+    if (
+      directQuestion &&
+      boardDb &&
+      boardPulls &&
+      isRoutineCoordinatorMessage(projection.thread.projectId, command) &&
+      projection.thread.interactionMode === "default" &&
+      !shouldQueue &&
+      !activeRun &&
+      dispatchMode.type === "start_immediately" &&
+      !pendingMergeBackTransfers.length &&
+      !projection.runtimeRequests.some((r) => r.status === "pending") &&
+      !projection.providerThreads.some((t) => t.goal?.status === "active")
+    ) {
+      const answer = yield* answerBoardQuestion(
+        directQuestion,
+        projection.thread.projectId,
+        boardDb,
+        boardPulls,
+      ).pipe(
+        Effect.orElseSucceed(
+          () => "Coordinator status is unavailable. Refresh the release board to try again.",
+        ),
+      );
+      const now = yield* DateTime.now;
+      const ordinal = yield* nextTurnItemOrdinal(projection);
+      const common = {
+        threadId: command.threadId,
+        runId: null,
+        nodeId: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const turn = {
+        threadId: command.threadId,
+        runId: null,
+        nodeId: null,
+        providerThreadId: null,
+        providerTurnId: null,
+        nativeItemRef: null,
+        parentItemId: null,
+        title: null,
+        startedAt: now,
+        completedAt: now,
+        updatedAt: now,
+        status: "completed" as const,
+      };
+      for (const role of ["user", "assistant"] as const) {
+        const user = role === "user";
+        const id = user ? command.messageId : MessageId.make("board-answer:" + command.messageId);
+        const text = user
+          ? command.text
+          : answer + "\n\nSource: project release board · No model used.";
+        const createdBy = user ? ("user" as const) : ("system" as const);
+        yield* emit(
+          events,
+          command,
+        )({
+          type: "message.updated",
+          threadId: command.threadId,
+          occurredAt: now,
+          payload: {
+            ...common,
+            id,
+            role,
+            text,
+            attachments: [],
+            streaming: false,
+            createdBy,
+            creationSource: user ? command.creationSource : "server",
+          },
+        });
+        const base = {
+          ...turn,
+          id: user
+            ? idAllocator.derive.userTurnItem({ messageId: id })
+            : TurnItemId.make("board-answer:" + id),
+          messageId: id,
+          text,
+          ordinal: ordinal + (user ? 0 : 1),
+          attachments: [],
+        };
+        yield* emit(
+          events,
+          command,
+        )({
+          type: "turn-item.updated",
+          threadId: command.threadId,
+          occurredAt: now,
+          payload: user
+            ? {
+                ...base,
+                type: "user_message",
+                inputIntent: "turn_start",
+                createdBy: "user",
+                creationSource: command.creationSource,
+              }
+            : { ...base, type: "assistant_message", streaming: false },
+        });
+      }
+      return;
+    }
+    const workModel = modelSelection;
+    if (
+      isRoutineCoordinatorMessage(projection.thread.projectId, command) &&
+      projection.thread.interactionMode === "default" &&
+      !projection.runtimeRequests.some((request) => request.status === "pending") &&
+      !projection.providerThreads.some((thread) => thread.goal?.status === "active") &&
+      !pendingMergeBackTransfers.length &&
+      !steerWhenReadyRunId &&
+      providerAdapters.getModelCatalog
+    ) {
+      const catalog = yield* providerAdapters.getModelCatalog(workModel.instanceId);
+      modelSelection =
+        coordinatorQuickModel(catalog, workModel, projection.thread.worktreePath) ?? workModel;
+    }
+    const coordinatorRoute =
+      modelSelection === workModel ? {} : { coordinatorWorkModel: workModel };
     yield* ensureGoalCommandSupported(command, command, modelSelection.instanceId);
     // Client messages resume held queues; server continuations and scheduled tasks do not.
     // Provider failure or usage limits re-hold the queue.
@@ -7910,6 +8060,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ordinal,
         providerInstanceId: modelSelection.instanceId,
         modelSelection,
+        ...coordinatorRoute,
         providerThreadId: queuedProviderThread.id,
         userMessageId: command.messageId,
         rootNodeId,
@@ -8144,7 +8295,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     );
     const now = yield* DateTime.now;
     if (
-      !modelSelectionsEqual(projection.thread.modelSelection, modelSelection) ||
+      !modelSelectionsEqual(projection.thread.modelSelection, workModel) ||
       projection.thread.providerInstanceId !== modelSelection.instanceId
     ) {
       yield* emit(
@@ -8161,7 +8312,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         payload: {
           ...projection.thread,
           providerInstanceId: modelSelection.instanceId,
-          modelSelection,
+          modelSelection: workModel,
           updatedAt: now,
         },
       });
@@ -8349,6 +8500,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ordinal,
         providerInstanceId: modelSelection.instanceId,
         modelSelection,
+        ...coordinatorRoute,
         providerThreadId,
         userMessageId: command.messageId,
         rootNodeId,
@@ -15321,6 +15473,36 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             }),
           );
         });
+        if (command.settledInProject !== undefined) {
+          const shell = yield* projectionStore
+            .getThreadShell(command.threadId)
+            .pipe(mapDispatchError(command));
+          const pending = yield* projectionStore
+            .getThreadRecords(command.threadId, ["runs"], {
+              runStatuses: unfinishedHandoffRunStatuses,
+            })
+            .pipe(mapDispatchError(command));
+          // A bulk cleanup never cascades into a side chat or interrupts new work.
+          if (
+            !shell ||
+            shell.projectId !== command.settledInProject ||
+            shell.archivedAt !== null ||
+            shell.settledOverride !== "settled" ||
+            shell.activeRunId !== null ||
+            shell.pendingRuntimeRequest !== null ||
+            (shell.pendingBackgroundTasks?.length ?? 0) > 0 ||
+            (shell.pendingGuestMessageCount ?? 0) > 0 ||
+            (shell.snoozedUntil != null && DateTime.isGreaterThan(shell.snoozedUntil, now)) ||
+            pending.runs.length > 0 ||
+            sideChatIds.length > 0
+          ) {
+            return yield* new OrchestratorDispatchError({
+              commandId: command.commandId,
+              commandType: command.type,
+              cause: "Chat has side chats, moved, or is no longer settled and idle.",
+            });
+          }
+        }
         // Checked under the thread lock: a message sent since the client looked keeps the thread.
         if (command.onlyIfUnused === true) {
           const usage = yield* projectionStore
@@ -15352,8 +15534,26 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       }
       case "thread.archive":
       case "thread.unarchive": {
+        if (command.type === "thread.archive" && command.handoffRunId !== undefined) {
+          const shell = yield* projectionStore
+            .getThreadShell(command.threadId)
+            .pipe(mapDispatchError(command));
+          const pending = yield* projectionStore
+            .getThreadRecords(command.threadId, ["runs"], {
+              runStatuses: unfinishedHandoffRunStatuses,
+            })
+            .pipe(mapDispatchError(command));
+          if (pending.runs.length > 0 || !canHandOffRun(shell, command.handoffRunId)) {
+            return yield* new OrchestratorDispatchError({
+              commandId: command.commandId,
+              commandType: command.type,
+              cause: "The feature chat changed during handoff. Its new work is still open.",
+            });
+          }
+        }
         const parentArchivedAt = (yield* findThread(command.threadId))?.archivedAt ?? null;
         yield* dispatchThreadMutation(command, events, effects);
+        if (command.type === "thread.archive" && command.handoffRunId !== undefined) break;
         // Unarchive restores the side chats this parent's archive took, not ones archived before it.
         for (const threadId of sideChatIds) {
           const sideChatArchivedAt = (yield* findThread(threadId))?.archivedAt ?? null;

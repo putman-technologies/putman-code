@@ -1,3 +1,5 @@
+import { diagnoseCi } from "./coordinatorCi.ts";
+import { reviewCriteria, reviewScreenshots } from "./reviewScreenshots.ts";
 import { isCommitSha, normalizeHost } from "@t3tools/source-control-core/server/pullRequestUtils";
 import {
   diffFileSection,
@@ -25,6 +27,11 @@ import {
   resolvePullRequestAuthorFilter,
   PositiveInt,
   TrimmedNonEmptyString,
+  type CoordinatorStatus,
+  type CoordinatorChange,
+  type ShipRange,
+  type ProductionDeployment,
+  coordinatorWebUrl,
   type PullRequestAction,
   type PullRequestStackHead,
   type PullRequestActor,
@@ -50,10 +57,12 @@ import {
 } from "@t3tools/contracts";
 
 import * as GitHubAppAccess from "./GitHubAppAccess.ts";
+import { repoWorkflowButton, RepoWorkflowError } from "./repoWorkflowButton.ts";
 import * as GitHubRest from "./GitHubRest.ts";
 import * as GitHubPullRequestEvents from "./gitHubPullRequestEvents.ts";
 import * as GitHubRequestPolicy from "./GitHubRequestPolicy.ts";
 import * as GitHubGraphQlClient from "./gitHubGraphQlClient.ts";
+import { coordinatorReleaseState } from "./coordinatorReleaseState.ts";
 import { PullRequestBatchesGraphQLGroup } from "./pullRequestBatches.graphql.ts";
 import {
   PullRequestMutationsGraphQLGroup,
@@ -315,6 +324,7 @@ export class GitHubBranchDeletionRefusedError extends Schema.TaggedError<GitHubB
 }
 
 export type GitHubPullRequestApiError =
+  | RepoWorkflowError
   | GitHubBranchDeletionRefusedError
   | GitHubStackActionError
   | GitHubRequestPolicy.GitHubApiError
@@ -559,6 +569,46 @@ export class GitHubPullRequestApi extends Context.Service<
       }>;
     }) => Effect.Effect<ReadonlyArray<GitHubPullRequestStat>, GitHubPullRequestApiError>;
 
+    readonly dispatchCoordinatorRelease: (input: {
+      host: string;
+      repository: string;
+      branch: string;
+      revision: string;
+      requestId: string;
+      pullNumbers: string;
+    }) => Effect.Effect<void, GitHubPullRequestApiError>;
+    readonly coordinatorChange: (input: {
+      cwd: string;
+      host: string;
+      repository: string;
+      number: number;
+    }) => Effect.Effect<CoordinatorChange | null, GitHubPullRequestApiError>;
+    readonly coordinatorRange: (input: {
+      cwd: string;
+      host: string;
+      repository: string;
+      base: string;
+      head: string;
+      branch: string;
+    }) => Effect.Effect<ShipRange | null, GitHubPullRequestApiError>;
+    readonly coordinatorIncludes: (input: {
+      cwd: string;
+      host: string;
+      repository: string;
+      base: string;
+      head: string;
+    }) => Effect.Effect<boolean | null, GitHubPullRequestApiError>;
+    readonly coordinatorProduction: (input: {
+      cwd: string;
+      host: string;
+      repository: string;
+    }) => Effect.Effect<readonly ProductionDeployment[] | null, GitHubPullRequestApiError>;
+    readonly coordinatorStatus: (input: {
+      readonly cwd: string;
+      readonly repository: string;
+      readonly host: string;
+      readonly number: number;
+    }) => Effect.Effect<CoordinatorStatus, GitHubPullRequestApiError>;
     readonly getPullRequestSummary: (input: {
       readonly cwd: string;
       readonly repository: string;
@@ -776,6 +826,12 @@ export class GitHubPullRequestApi extends Context.Service<
       readonly checks: ReadonlyArray<ProviderCheckReference>;
       readonly tailLines: number;
     }) => Effect.Effect<ReadonlyArray<ProviderCheckLog>, GitHubPullRequestApiError>;
+    readonly workflowButton: (
+      input: import("@t3tools/source-control-core/server/PullRequestProvider").WorkflowButtonHostInput,
+    ) => Effect.Effect<
+      import("@t3tools/contracts").RepoWorkflowButtonResult,
+      GitHubPullRequestApiError
+    >;
     readonly rerunChecks: (input: {
       readonly host: string;
       readonly repository: string;
@@ -1008,6 +1064,49 @@ function searchQuery(input: {
   ].join(" ");
 }
 
+const encodeRangeKey = Schema.encodeSync(Schema.fromJsonString(Schema.Array(Schema.String)));
+const decodeRepositoryBranch = Schema.decodeUnknownResult(
+  Schema.fromJsonString(Schema.Struct({ default_branch: Schema.String })),
+);
+const decodeBranchTip = Schema.decodeUnknownResult(
+  Schema.fromJsonString(Schema.Struct({ object: Schema.Struct({ sha: Schema.String }) })),
+);
+const decodeReleaseRange = Schema.decodeUnknownResult(
+  Schema.fromJsonString(
+    Schema.Struct({
+      status: Schema.String,
+      total_commits: Schema.Int,
+      commits: Schema.Array(
+        Schema.Struct({ sha: Schema.String, commit: Schema.Struct({ message: Schema.String }) }),
+      ),
+      files: Schema.optional(
+        Schema.Array(
+          Schema.Struct({
+            filename: Schema.String,
+            previous_filename: Schema.optional(Schema.String),
+          }),
+        ),
+      ),
+    }),
+  ),
+);
+const decodeCommitPulls = Schema.decodeUnknownResult(
+  Schema.fromJsonString(
+    Schema.Array(
+      Schema.Struct({
+        number: Schema.Int,
+        merged_at: Schema.NullOr(Schema.String),
+        base: Schema.Struct({
+          ref: Schema.String,
+          repo: Schema.Struct({ full_name: Schema.String }),
+        }),
+      }),
+    ),
+  ),
+);
+const decodeCompareStatus = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.Struct({ status: Schema.String })),
+);
 const decodeRevisionRefs = Schema.decodeUnknownOption(
   Schema.fromJsonString(
     Schema.Struct({
@@ -1910,7 +2009,284 @@ export const make = Effect.gen(function* () {
     batchKey: GitHubGraphQlClient.batchKey,
   }).pipe(RequestResolver.batchN(FILES_VIEWED_PER_REQUEST));
 
+  const coordinatorIncludes: GitHubPullRequestApi["Service"]["coordinatorIncludes"] = Effect.fn(
+    "GitHubPullRequestApi.coordinatorIncludes",
+  )(function* (input) {
+    if (!isCommitSha(input.base) || !isCommitSha(input.head)) return null;
+    if (input.base === input.head) return true;
+    const { owner, name } = parseRepositorySelector(input.repository);
+    const response = yield* api.rest({
+      host: input.host,
+      operation: "coordinatorIncludes",
+      path: `repos/${owner}/${name}/compare/${input.base}...${input.head}?per_page=1`,
+    });
+    const decoded = decodeCompareStatus(response.body);
+    return Option.isSome(decoded) ? ["identical", "ahead"].includes(decoded.value.status) : null;
+  });
+  const coordinatorProduction: GitHubPullRequestApi["Service"]["coordinatorProduction"] = Effect.fn(
+    "GitHubPullRequestApi.coordinatorProduction",
+  )((input) => {
+    const { owner, name } = parseRepositorySelector(input.repository);
+    return client.CoordinatorProduction({ owner, name }).pipe(
+      graphql({ ...input, operation: "coordinatorProduction" }),
+      Effect.map((result) =>
+        result.repository
+          ? (result.repository.deployments.nodes ?? [])
+              .flatMap((d) =>
+                d
+                  ? [
+                      {
+                        repository: input.repository,
+                        host: input.host,
+                        revision: d.commitOid,
+                        environment: d.environment ?? "Production",
+                        state: d.latestStatus?.state ?? "PENDING",
+                        at: d.latestStatus?.createdAt ?? d.createdAt,
+                        url: coordinatorWebUrl(d.latestStatus?.environmentUrl),
+                      },
+                    ]
+                  : [],
+              )
+              .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+          : null,
+      ),
+    );
+  });
+
+  const displayedRanges = yield* Cache.make({
+    capacity: 32,
+    timeToLive: "5 minutes",
+    lookup: (_key: string) => Effect.succeed(Option.none<ShipRange>()),
+  });
   return GitHubPullRequestApi.of({
+    dispatchCoordinatorRelease: Effect.fn("GitHubPullRequestApi.dispatchCoordinatorRelease")(
+      function* (input) {
+        const { owner, name } = parseRepositorySelector(input.repository);
+        yield* api.rest({
+          host: input.host,
+          operation: "dispatchCoordinatorRelease",
+          method: "POST",
+          path: `repos/${owner}/${name}/actions/workflows/putmancode-release.yml/dispatches`,
+          body: {
+            ref: input.branch,
+            inputs: {
+              revision: input.revision,
+              request_id: input.requestId,
+              pull_requests: input.pullNumbers,
+            },
+          },
+        });
+      },
+    ),
+    coordinatorChange: Effect.fn("GitHubPullRequestApi.coordinatorChange")((input) => {
+      const { owner, name } = parseRepositorySelector(input.repository);
+      return client.CoordinatorChange({ owner, name, number: input.number }).pipe(
+        graphql({ ...input, operation: "coordinatorChange" }),
+        Effect.map((result) => {
+          const pull = result.repository?.pullRequest;
+          if (!pull) return null;
+          const head = pull.commits.nodes?.[0]?.commit;
+          const deployment = pull.mergeCommit?.deployments?.nodes?.[0]?.latestStatus;
+          const preview = head?.deployments?.nodes?.find(
+            (d) => d && /(?:^|[ _/-])(?:preview|pr[- ]?\d+)(?:$|[ _/-])/i.test(d.environment ?? ""),
+          );
+          return {
+            ...(result.repository?.defaultBranchRef?.target
+              ? {
+                  defaultBranch: result.repository.defaultBranchRef.name,
+                  defaultRevision: result.repository.defaultBranchRef.target.oid,
+                }
+              : {}),
+            title: pull.title,
+            headChecksComplete: head?.statusCheckRollup?.contexts.pageInfo.hasNextPage === false,
+            headChecks: (head?.statusCheckRollup?.contexts.nodes ?? []).flatMap((c) => {
+              if (!c || !("name" in c || "context" in c)) return [];
+              const check = c.__typename === "CheckRun";
+              const status = check ? (c.conclusion ?? c.status) : c.state;
+              const outcome =
+                status === "SUCCESS"
+                  ? "success"
+                  : status === "SKIPPED"
+                    ? "skipped"
+                    : status === "NEUTRAL"
+                      ? "neutral"
+                      : status === "CANCELLED"
+                        ? "cancelled"
+                        : [
+                              "FAILURE",
+                              "ERROR",
+                              "TIMED_OUT",
+                              "ACTION_REQUIRED",
+                              "STALE",
+                              "STARTUP_FAILURE",
+                            ].includes(status)
+                          ? "failure"
+                          : "pending";
+              return [
+                {
+                  name: check ? c.name : c.context,
+                  status: outcome as
+                    | "success"
+                    | "skipped"
+                    | "neutral"
+                    | "cancelled"
+                    | "failure"
+                    | "pending",
+                  description: null,
+                  url: coordinatorWebUrl(check ? c.detailsUrl : c.targetUrl),
+                },
+              ];
+            }),
+            ciDiagnosis: diagnoseCi(
+              head?.statusCheckRollup?.contexts,
+              pull.baseRef?.target && "statusCheckRollup" in pull.baseRef.target
+                ? pull.baseRef.target.statusCheckRollup?.contexts
+                : null,
+              pull.baseRef?.target && "oid" in pull.baseRef.target ? pull.baseRef.target.oid : null,
+            ),
+            criteria: reviewCriteria(pull.body),
+            ...reviewScreenshots(pull.body),
+            state: pull.state,
+            head: pull.headRefOid,
+            merge: pull.mergeCommit?.oid ?? null,
+            checks: head?.statusCheckRollup?.state ?? null,
+            draft: pull.isDraft,
+            changesRequested:
+              pull.reviewDecision === "CHANGES_REQUESTED" ||
+              pull.reviewDecision === "REVIEW_REQUIRED",
+            conflict: pull.mergeable === "CONFLICTING",
+            preview:
+              preview?.latestStatus?.state === "SUCCESS"
+                ? coordinatorWebUrl(preview.latestStatus.environmentUrl)
+                : null,
+            deployedAt: deployment?.state === "SUCCESS" ? deployment.createdAt : null,
+            deploymentFailed: deployment?.state === "FAILURE" || deployment?.state === "ERROR",
+          };
+        }),
+      );
+    }),
+    coordinatorRange: Effect.fn("GitHubPullRequestApi.coordinatorRange")(function* (input) {
+      const repo = "repos/" + input.repository;
+      let { head, branch } = input;
+      if (head === "HEAD") {
+        const info = yield* revalidatedRestRead({
+          ...input,
+          operation: "coordinatorDefaultBranch",
+          path: repo,
+          decode: decodeRepositoryBranch,
+        });
+        branch = info.default_branch;
+        const tip = yield* revalidatedRestRead({
+          ...input,
+          operation: "coordinatorDefaultRevision",
+          path: repo + "/git/ref/heads/" + branch.split("/").map(encodeURIComponent).join("/"),
+          decode: decodeBranchTip,
+        });
+        head = tip.object.sha;
+      }
+      if (![input.base, head].every((x) => /^[a-f0-9]{40}$/i.test(x))) return null;
+      if (head === input.base) return { head, commits: [], files: [] };
+      const displayKey =
+        input.head === "HEAD"
+          ? encodeRangeKey([
+              (yield* api.credential(input.host)).fingerprint,
+              input.host,
+              input.repository,
+              branch,
+              input.base,
+              head,
+            ])
+          : null;
+      if (displayKey) {
+        const cached = yield* Cache.get(displayedRanges, displayKey);
+        if (Option.isSome(cached)) return cached.value;
+      }
+      const path = repo + "/compare/" + input.base + "..." + head + "?per_page=100&page=";
+      const first = yield* restRead({
+        ...input,
+        operation: "coordinatorRange",
+        path: path + "1",
+        decode: decodeReleaseRange,
+      });
+      if (
+        !["ahead", "identical"].includes(first.status) ||
+        !first.files ||
+        first.files.length >= 300 ||
+        first.total_commits > 1000
+      )
+        return null;
+      const commits = [...first.commits];
+      for (let page = 2; commits.length < first.total_commits; page++) {
+        const next = yield* restRead({
+          ...input,
+          operation: "coordinatorRange",
+          path: path + page,
+          decode: decodeReleaseRange,
+        });
+        if (!next.commits.length || next.total_commits !== first.total_commits) return null;
+        commits.push(...next.commits);
+      }
+      if (new Set(commits.map((c) => c.sha)).size !== first.total_commits) return null;
+      const rows = yield* Effect.forEach(
+        commits,
+        Effect.fnUntraced(function* (c) {
+          const prs = yield* restRead({
+            ...input,
+            operation: "coordinatorCommitPulls",
+            path: repo + "/commits/" + c.sha + "/pulls?per_page=100",
+            decode: decodeCommitPulls,
+          });
+          if (prs.length >= 100) return null;
+          return {
+            sha: c.sha,
+            title: c.commit.message.split("\n")[0] ?? "",
+            pulls: prs
+              .filter(
+                (p) =>
+                  p.merged_at &&
+                  p.base.ref === branch &&
+                  p.base.repo.full_name.toLowerCase() === input.repository.toLowerCase(),
+              )
+              .map((p) => p.number),
+          };
+        }),
+        { concurrency: 4 },
+      );
+      if (rows.some((c) => !c)) return null;
+      const range = {
+        head,
+        commits: rows.flatMap((c) => (c ? [c] : [])),
+        files: [
+          ...new Set(
+            first.files.flatMap((f) =>
+              f.previous_filename ? [f.previous_filename, f.filename] : [f.filename],
+            ),
+          ),
+        ],
+      };
+      if (displayKey) yield* Cache.set(displayedRanges, displayKey, Option.some(range));
+      return range;
+    }),
+    coordinatorIncludes,
+    coordinatorProduction,
+    coordinatorStatus: Effect.fn("GitHubPullRequestApi.coordinatorStatus")(function* (input) {
+      const { owner, name } = parseRepositorySelector(input.repository);
+      const result = yield* client
+        .CoordinatorRelease({ owner, name, number: input.number })
+        .pipe(graphql({ ...input, operation: "coordinatorStatus" }));
+      const pull = result.repository?.pullRequest;
+      if (pull?.state !== "MERGED" || !pull.mergeCommit) return coordinatorReleaseState(pull);
+      const production = yield* coordinatorProduction(input);
+      const lastSuccessful = production?.find((deployment) => deployment.state === "SUCCESS");
+      const included = lastSuccessful
+        ? yield* coordinatorIncludes({
+            ...input,
+            base: pull.mergeCommit.oid,
+            head: lastSuccessful.revision,
+          })
+        : null;
+      return coordinatorReleaseState(pull, included);
+    }),
     withVerifiedCredential,
     revalidateChecks,
     getRoutingIdentity,
@@ -2958,6 +3334,9 @@ export const make = Effect.gen(function* () {
       );
     }),
 
+    workflowButton: Effect.fn("GitHubPullRequestApi.workflowButton")((input) =>
+      repoWorkflowButton(api, input),
+    ),
     rerunChecks: Effect.fn("GitHubPullRequestApi.rerunChecks")(function* (input) {
       const { owner, name } = parseRepositorySelector(input.repository);
       const root = `repos/${owner}/${name}/actions`;

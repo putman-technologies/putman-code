@@ -207,7 +207,7 @@ export const EnvironmentIdentificationMode = Schema.Literals([
   "none",
 ]);
 export type EnvironmentIdentificationMode = typeof EnvironmentIdentificationMode.Type;
-export const DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE: EnvironmentIdentificationMode = "artwork";
+export const DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE: EnvironmentIdentificationMode = "none";
 
 export const SnapShotKeyChord = KeybindingShortcut.check(
   Schema.makeFilter(
@@ -402,6 +402,11 @@ export const VoiceTranscriptionDestination = Schema.Union([
 ]);
 export type VoiceTranscriptionDestination = typeof VoiceTranscriptionDestination.Type;
 
+const EnvironmentDisplayNames = Schema.Record(
+  EnvironmentId,
+  TrimmedNonEmptyString.check(Schema.isMaxLength(80)),
+);
+
 export const ClientSettingsSchema = Schema.Struct({
   notificationMode: NotificationMode.pipe(
     Schema.withDecodingDefault(Effect.succeed("off" as const)),
@@ -475,6 +480,9 @@ export const ClientSettingsSchema = Schema.Struct({
   diffFilesCollapsed: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   diffIgnoreWhitespace: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   diffLayout: DiffLayout.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_DIFF_LAYOUT))),
+  environmentDisplayNames: EnvironmentDisplayNames.pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
   environmentIdentificationMode: EnvironmentIdentificationMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE)),
   ),
@@ -522,8 +530,10 @@ export const ClientSettingsSchema = Schema.Struct({
   sendShortcut: Schema.Literals(["enter", "mod-enter-multiline", "mod-enter"]).pipe(
     Schema.withDecodingDefault(Effect.succeed("enter")),
   ),
-  followUpBehavior: Schema.Literals(["queue", "steer"]).pipe(
-    Schema.withDecodingDefault(Effect.succeed("steer")),
+  // Pre-1.0 clients saved the entire settings object, including the implicit steer default.
+  // A new key lets upgrades start in Queue and preserves subsequent explicit choices.
+  runningTurnSendAction: Schema.Literals(["queue", "steer"]).pipe(
+    Schema.withDecodingDefault(Effect.succeed("queue")),
   ),
   proactivePanelsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   showSkillsInSlashMenu: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
@@ -2076,6 +2086,7 @@ export const ClientSettingsPatch = Schema.Struct({
   diffFilesCollapsed: Schema.optionalKey(Schema.Boolean),
   diffIgnoreWhitespace: Schema.optionalKey(Schema.Boolean),
   diffLayout: Schema.optionalKey(DiffLayout),
+  environmentDisplayNames: Schema.optionalKey(EnvironmentDisplayNames),
   environmentIdentificationMode: Schema.optionalKey(EnvironmentIdentificationMode),
   glassOpacity: Schema.optionalKey(GlassOpacity),
   onboardingCompletedAt: Schema.optionalKey(Schema.NullOr(Schema.String)),
@@ -2097,7 +2108,7 @@ export const ClientSettingsPatch = Schema.Struct({
   pullRequestLinksOpenInApp: Schema.optionalKey(Schema.Boolean),
   composerRichTextEnabled: Schema.optionalKey(Schema.Boolean),
   sendShortcut: Schema.optionalKey(Schema.Literals(["enter", "mod-enter-multiline", "mod-enter"])),
-  followUpBehavior: Schema.optionalKey(Schema.Literals(["queue", "steer"])),
+  runningTurnSendAction: Schema.optionalKey(Schema.Literals(["queue", "steer"])),
   proactivePanelsEnabled: Schema.optionalKey(Schema.Boolean),
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
   boringSidebarEnabled: Schema.optionalKey(Schema.Boolean),

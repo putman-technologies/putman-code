@@ -1,6 +1,7 @@
 import { Atom, AsyncResult } from "effect/reactivity";
 import * as Cause from "effect/Cause";
 import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
+import { EnvironmentId } from "@t3tools/contracts";
 import { useState } from "react";
 import { page, userEvent } from "vite-plus/test/browser";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -9,8 +10,8 @@ import { render, stubGlobal } from "../../../test/render";
 import { AppAtomRegistryProvider } from "../../rpc/atomRegistry";
 
 const mocks = vi.hoisted(() => ({
-  connectSshEnvironment: vi.fn<() => Promise<AtomCommandResult<void, Error>>>(async () =>
-    AsyncResult.success(undefined),
+  connectSshEnvironment: vi.fn<() => Promise<AtomCommandResult<EnvironmentId, Error>>>(async () =>
+    AsyncResult.success(EnvironmentId.make("new-server")),
   ),
   refresh: () => {},
 }));
@@ -43,7 +44,7 @@ vi.mock(import("~/state/server"), async (original) => ({
 
 import { AddEnvironmentDialog } from "./AddEnvironmentDialog";
 
-function Owner() {
+function Owner({ onConnected }: { onConnected?: (id: EnvironmentId) => void }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
@@ -53,6 +54,7 @@ function Owner() {
         routeTarget={null}
         error={error}
         savedEnvironments={[]}
+        {...(onConnected ? { onConnected } : {})}
         onOpenChange={setOpen}
         onErrorChange={setError}
       />
@@ -85,7 +87,8 @@ async function expectDefaultModeAfterReopen() {
 describe("AddEnvironmentDialog", () => {
   it("reopens on Remote link after adding an SSH environment", async () => {
     using _bridge = setup();
-    await using _screen = await render(<Owner />);
+    const selected = vi.fn();
+    await using _screen = await render(<Owner onConnected={selected} />);
 
     await openDialogOnSsh();
     await userEvent.fill(page.getByPlaceholder("Search hosts or type devbox"), "devbox");
@@ -93,6 +96,7 @@ describe("AddEnvironmentDialog", () => {
       page.getByRole("dialog").getByRole("button", { name: "Add environment" }),
     );
     expect(mocks.connectSshEnvironment).toHaveBeenCalledOnce();
+    expect(selected).toHaveBeenCalledWith("new-server");
 
     await expectDefaultModeAfterReopen();
   });
@@ -110,9 +114,13 @@ describe("AddEnvironmentDialog", () => {
       page.getByRole("dialog").getByRole("button", { name: "Add environment" }),
     );
     await expect.element(page.getByText(/connection refused/)).toBeInTheDocument();
+    await expect.element(page.getByText(/ssh alex@devbox/)).toBeVisible();
+    await expect.element(page.getByText(/t3 pair/)).not.toBeInTheDocument();
 
     await userEvent.click(remoteCard());
     await expect.element(page.getByText(/connection refused/)).not.toBeInTheDocument();
+    await expect.element(page.getByText(/t3 pair/)).toBeVisible();
+    await expect.element(page.getByText(/ssh alex@devbox/)).not.toBeInTheDocument();
   });
 
   it("clears the form after dismissing it on SSH", async () => {
@@ -125,7 +133,7 @@ describe("AddEnvironmentDialog", () => {
     await userEvent.fill(page.getByPlaceholder("PAIRCODE"), "PAIRCODE");
     await userEvent.click(sshCard());
     await userEvent.fill(page.getByPlaceholder("Search hosts or type devbox"), "devbox");
-    await userEvent.fill(page.getByPlaceholder("root"), "maria");
+    await userEvent.fill(page.getByRole("textbox", { name: "Username" }), "maria");
     await userEvent.fill(page.getByPlaceholder("22"), "2222");
     await userEvent.keyboard("{Escape}");
 
@@ -134,11 +142,11 @@ describe("AddEnvironmentDialog", () => {
     await expect.element(page.getByPlaceholder("PAIRCODE")).toHaveValue("");
     await userEvent.click(sshCard());
     await expect.element(page.getByPlaceholder("Search hosts or type devbox")).toHaveValue("");
-    await expect.element(page.getByPlaceholder("root")).toHaveValue("");
+    await expect.element(page.getByRole("textbox", { name: "Username" })).toHaveValue("");
     await expect.element(page.getByPlaceholder("22")).toHaveValue("");
 
-    let finishConnection!: (result: AtomCommandResult<void, Error>) => void;
-    const pending = new Promise<AtomCommandResult<void, Error>>((resolve) => {
+    let finishConnection!: (result: AtomCommandResult<EnvironmentId, Error>) => void;
+    const pending = new Promise<AtomCommandResult<EnvironmentId, Error>>((resolve) => {
       finishConnection = resolve;
     });
     mocks.connectSshEnvironment.mockImplementationOnce(() => pending);

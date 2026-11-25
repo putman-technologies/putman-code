@@ -204,6 +204,18 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
       label: "environment-data:orchestration:stop-workflow",
       tag: ORCHESTRATION_V2_WS_METHODS.stopWorkflow,
     }),
+    coordinatorRetry: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:coordinator-retry",
+      tag: ORCHESTRATION_V2_WS_METHODS.coordinatorRetry,
+    }),
+    coordinatorBoardAction: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:coordinator-board-action",
+      tag: ORCHESTRATION_V2_WS_METHODS.coordinatorBoardAction,
+    }),
+    projectCoordinator: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:orchestration:project-coordinator",
+      tag: ORCHESTRATION_V2_WS_METHODS.projectCoordinator,
+    }),
     forceStopThread: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:orchestration:force-stop-thread",
       tag: ORCHESTRATION_V2_WS_METHODS.forceStopThread,

@@ -1,5 +1,6 @@
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
-import { createFileRoute } from "@tanstack/react-router";
+import { ProjectGitHubTab } from "../components/pullRequest/ProjectGitHubTab";
+import { createFileRoute, Link } from "@tanstack/react-router";
 
 import { type PullRequestListSort } from "../components/pullRequest/pullRequestListPreferences";
 import { SORT_OPTIONS } from "../components/pullRequest/pullRequestListOptions";
@@ -29,6 +30,14 @@ function pullRequestSearchLabels(raw: unknown): PullRequestsSearch["labels"] {
 
 export const Route = createFileRoute("/_chat/pull-requests")({
   validateSearch: (raw: Record<string, unknown>): PullRequestsSearch => ({
+    projectTab:
+      raw.projectTab === "github" &&
+      typeof raw.projectId === "string" &&
+      raw.projectId.trim() &&
+      typeof raw.environmentId === "string" &&
+      raw.environmentId.trim()
+        ? "github"
+        : undefined,
     ...(typeof raw.selectedUrl === "string" ? { selectedUrl: raw.selectedUrl.slice(0, 4096) } : {}),
     involvement:
       raw.involvement === "reviewing" || raw.involvement === "authored" ? raw.involvement : "all",
@@ -75,5 +84,34 @@ export const Route = createFileRoute("/_chat/pull-requests")({
         : undefined,
     labels: pullRequestSearchLabels(raw.labels),
   }),
-  component: PullRequestsPage,
+  component: ScopedPullRequests,
 });
+
+function ScopedPullRequests() {
+  const search = Route.useSearch();
+  if (!search.environmentId || !search.projectId) return <PullRequestsPage />;
+  if (search.projectTab === "github")
+    return <ProjectGitHubTab environmentId={search.environmentId} projectId={search.projectId} />;
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <nav className="border-b px-4 py-1.5 text-sm">
+        <Link
+          to="/pull-requests"
+          search={{
+            environmentId: search.environmentId,
+            projectId: search.projectId,
+            projectTab: "github",
+            involvement: "all",
+            state: "open",
+          }}
+          className="text-primary hover:underline"
+        >
+          GitHub
+        </Link>
+      </nav>
+      <div className="min-h-0 flex-1">
+        <PullRequestsPage />
+      </div>
+    </div>
+  );
+}

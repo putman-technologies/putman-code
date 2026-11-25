@@ -239,7 +239,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   isRunning,
   canInterrupt,
   runId = null,
-  followUpBehavior = "steer",
+  followUpBehavior = "queue",
   canSteer = true,
   alternateShortcutLabel = null,
   voiceInputActive = false,
@@ -430,11 +430,14 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
         ? dispatchTooltip
         : submitLabel);
 
+  const showFollowUpAction =
+    isRunning && !showResume && !isEditingQueuedMessage && !compactsBeforeSend;
   const sendButton = (
     <button
       type={showResume ? "button" : "submit"}
       className={cn(
         "relative isolate flex h-9 w-9 items-center justify-center overflow-hidden rounded-full shadow-xs transition-all duration-150 enabled:cursor-pointer enabled:inset-shadow-control-highlight hover:scale-105 active:inset-shadow-control-pressed active:shadow-none disabled:pointer-events-none disabled:shadow-none disabled:hover:scale-100 sm:h-8 sm:w-8 [&_svg]:pointer-events-none",
+        showFollowUpAction && "w-auto gap-1.5 px-3 text-sm font-medium sm:w-auto",
         stageBackdropVariant
           ? "bg-transparent text-white enabled:shadow-black/24 enabled:hover:brightness-110 disabled:opacity-64"
           : "bg-message-action text-message-action-foreground enabled:shadow-message-action/24 hover:bg-message-action-hover disabled:bg-foreground/12 disabled:text-muted-foreground",
@@ -482,6 +485,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           />
         </svg>
       )}
+      {showFollowUpAction ? <span>{isQueuing ? gt("Queue") : gt("Steer")}</span> : null}
     </button>
   );
 

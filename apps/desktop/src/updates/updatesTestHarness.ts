@@ -53,6 +53,8 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
   let allowDowngrade = false;
   const checkAllowedDowngrade: boolean[] = [];
   let fullChangelog = false;
+  let feedChannel = "";
+  let allowPrerelease = false;
   const feedUrls: ElectronUpdater.ElectronUpdaterFeedUrl[] = [];
   const listeners = new Map<string, Set<(...args: readonly unknown[]) => void>>();
   const sentStates: DesktopUpdateState[] = [];
@@ -82,8 +84,14 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
       }),
     setAutoDownload: () => Effect.void,
     setAutoInstallOnAppQuit: () => Effect.void,
-    setChannel: () => Effect.void,
-    setAllowPrerelease: () => Effect.void,
+    setChannel: (value) =>
+      Effect.sync(() => {
+        feedChannel = value;
+      }),
+    setAllowPrerelease: (value) =>
+      Effect.sync(() => {
+        allowPrerelease = value;
+      }),
     allowDowngrade: Effect.sync(() => allowDowngrade),
     setAllowDowngrade: (value) =>
       Effect.sync(() => {
@@ -194,7 +202,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
       Layer.mergeAll(
         NodeServices.layer,
         DesktopConfig.layerTest({
-          T3CODE_HOME: `/tmp/t3-desktop-updates-test-${process.pid}`,
+          PUTMANCODE_HOME: `/tmp/t3-desktop-updates-test-${process.pid}`,
           T3CODE_DESKTOP_MOCK_UPDATES: "true",
           T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT: "4141",
           ...options.env,
@@ -301,7 +309,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     Layer.provideMerge(layerSettings),
     Layer.provideMerge(
       DesktopConfig.layerTest({
-        T3CODE_HOME: `/tmp/t3-desktop-updates-test-${process.pid}`,
+        PUTMANCODE_HOME: `/tmp/t3-desktop-updates-test-${process.pid}`,
         T3CODE_DESKTOP_MOCK_UPDATES: "true",
         T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT: "4141",
         ...options.env,
@@ -324,6 +332,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     downloadCount: () => downloadCount,
     feedUrls: (): ElectronUpdater.ElectronUpdaterFeedUrl[] => feedUrls,
     fullChangelog: () => fullChangelog,
+    feedSettings: () => ({ channel: feedChannel, allowPrerelease }),
     /** Whether each feed check could offer an older release, and the flag now. */
     checkAllowedDowngrade,
     allowDowngrade: () => allowDowngrade,

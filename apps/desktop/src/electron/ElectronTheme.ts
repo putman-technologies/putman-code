@@ -38,13 +38,15 @@ type WatchSystemColorScheme = (onChange: (scheme: LinuxColorScheme) => void) => 
 export const makeWith = Effect.fn("ElectronTheme.make")(function* (
   watchSystemColorScheme: WatchSystemColorScheme | undefined,
 ) {
-  let source: DesktopTheme = Electron.nativeTheme.themeSource;
+  let source: DesktopTheme = "light";
   let systemScheme: LinuxColorScheme = null;
   // On Linux, Electron reads the desktop color scheme once and then ignores the settings
   // portal (electron/electron#48736), so "system" is resolved from the portal directly.
   const apply = () => {
     Electron.nativeTheme.themeSource = source === "system" ? (systemScheme ?? source) : source;
   };
+
+  apply();
 
   if (watchSystemColorScheme) {
     yield* Effect.acquireRelease(

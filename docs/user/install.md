@@ -3,6 +3,14 @@
 T3 Code runs coding agents on your computer and lets you control them from its
 desktop, web, or mobile app. Set up the machine where the agents will work first.
 
+## First launch on Mac or Windows
+
+Open PutmanCode and choose the computer where your agent will run. For a VPS, choose **Add environment** and connect by SSH or pairing link. If you already have a PutmanCode profile, **Sign in with Microsoft 365** restores your supported preferences and saved server addresses from OneDrive.
+
+Choose **Continue** to see the agents on the selected computer. Sign in to an agent, review the projects and chat history you want to import, then choose **Start**. If there’s no history to import, choose **Add project** in the workspace to open a folder or clone a repository.
+
+Choose **Skip setup** to go straight to the workspace. You can reopen the guide from **Settings → General → Open setup guide**.
+
 ## Requirements
 
 You need an installed, authenticated provider before starting a thread. You can

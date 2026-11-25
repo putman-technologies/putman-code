@@ -55,6 +55,16 @@ it("drops theme defaults from a client's settings patch", () => {
   ).toEqual({ newWorktreesStartFromOrigin: false });
 });
 
+describe("running-turn send preference", () => {
+  it("defaults new and upgraded clients to Queue and retains an explicit 1.0 preference", () => {
+    expect(decodeClientSettings({}).runningTurnSendAction).toBe("queue");
+    expect(decodeClientSettings({ followUpBehavior: "steer" }).runningTurnSendAction).toBe("queue");
+    expect(decodeClientSettings({ runningTurnSendAction: "steer" }).runningTurnSendAction).toBe(
+      "steer",
+    );
+  });
+});
+
 describe("storage cleanup settings", () => {
   it("keeps cleanup disabled for existing installations", () => {
     expect(decodeServerSettings({}).worktreeCleanup).toBeNull();

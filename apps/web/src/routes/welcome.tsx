@@ -5,6 +5,7 @@ import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
 
 import { NoProjectsHero } from "../components/NoProjectsHero";
+import { WelcomeStart } from "../components/onboarding/WelcomeStart";
 import { WelcomePage } from "../components/onboarding/WelcomePage";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
@@ -30,23 +31,40 @@ function WelcomeRouteView() {
     : undefined;
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const { environments, isReady } = useEnvironments();
-  // Trust the id only once the catalog has it; an unknown computer falls back to this one.
-  const waitingForCatalog =
-    !isReady && (resumeEnvironmentId !== undefined || primaryEnvironmentId === null);
+  const [selectedId, setSelectedId] = useState<EnvironmentId | null>(null);
   const resumeKnown =
     resumeEnvironmentId !== undefined &&
     environments.some((environment) => environment.environmentId === resumeEnvironmentId);
-  const environmentId = (resumeKnown ? resumeEnvironmentId : undefined) ?? primaryEnvironmentId;
-  // The root can remount this pending outlet after navigation; do not reopen setup.
   const isWelcomeRoute = useLocation({ select: (location) => location.pathname === "/welcome" });
   const [dismissed, setDismissed] = useState(false);
   const openNewThread = useNewThreadHandler();
-  if (waitingForCatalog) return null;
-  if (environmentId === null || !isWelcomeRoute || dismissed) return <NoProjectsHero />;
+
+  if (!isWelcomeRoute || dismissed) return <NoProjectsHero />;
+  if (!isReady && resumeEnvironmentId !== undefined) return null;
+  if (!resumeKnown || resumeEnvironmentId === undefined) {
+    return (
+      <WelcomeStart
+        environments={environments}
+        catalogReady={isReady}
+        primaryId={primaryEnvironmentId}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        onContinue={(id) => {
+          setSelectedId(id);
+          void navigate({ to: "/welcome", hash: `agents:${id}`, replace: true });
+        }}
+        onSkip={() => navigate({ to: "/", replace: true })}
+      />
+    );
+  }
   return (
     <WelcomePage
-      key={environmentId}
-      environmentId={environmentId}
+      key={resumeEnvironmentId}
+      environmentId={resumeEnvironmentId}
+      onBack={() => {
+        setSelectedId(resumeEnvironmentId);
+        void navigate({ to: "/welcome", hash: "", replace: true });
+      }}
       onDone={async (projectRef) => {
         setDismissed(true);
         if (projectRef !== undefined) {

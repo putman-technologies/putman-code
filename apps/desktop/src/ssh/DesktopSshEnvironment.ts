@@ -92,8 +92,16 @@ export const resolveDesktopSshCliRunner = (
   }
   const releaseBaseUrl = env[CLI_RELEASE_BASE_URL_ENV]?.trim() || undefined;
   return {
-    archiveVersion: environment.appVersion,
-    ...(releaseBaseUrl === undefined ? {} : { releaseBaseUrl }),
+    // Darwin, musl, and explicitly configured upstream mirrors use the existing companion.
+    archiveVersion: "0.1.10",
+    ...(releaseBaseUrl
+      ? { releaseBaseUrl }
+      : {
+          linuxArchive: {
+            version: serverPackageJson.version,
+            releaseBaseUrl: "https://github.com/putman-technologies/putman-code/releases/download",
+          },
+        }),
   };
 };
 
@@ -147,7 +155,7 @@ function toSshPasswordPromptError(
       break;
     case "DesktopSshPromptWindowUnavailableError":
     case "DesktopSshPromptPresentationError":
-      message = "T3 Code window is not available for SSH authentication.";
+      message = "PutmanCode window is not available for SSH authentication.";
       break;
     case "DesktopSshPromptTimedOutError":
       message = `SSH authentication timed out for ${cause.destination}.`;

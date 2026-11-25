@@ -75,12 +75,16 @@ export function useNewProject() {
 
   return async (input: {
     readonly environmentId: EnvironmentId;
+    readonly secondBrainEnabled: boolean;
     readonly name: string;
     readonly publishTo: NewProjectPublishTarget | null;
   }): Promise<boolean> => {
     const result = await createNew({
       environmentId: input.environmentId,
-      input: { name: input.name },
+      input: {
+        name: input.name,
+        ...(input.secondBrainEnabled ? { secondBrainEnabled: true } : {}),
+      },
     });
     if (result._tag === "Failure") {
       if (!isAtomCommandInterrupted(result)) {

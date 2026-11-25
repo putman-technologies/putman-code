@@ -117,6 +117,7 @@ interface EnvironmentOption {
   readonly platform: string;
   readonly machine: EnvironmentMachineKind;
   readonly baseDirectory: string | null;
+  readonly supportsProjectBrain: boolean;
   readonly newProjectsRoot: string | null;
   readonly connectionState: EnvironmentConnectionPhase;
   readonly connectionError: string | null;
@@ -462,6 +463,7 @@ function useEnvironmentOptions(
         platform: platformFromOs(config?.environment.platform.os ?? null),
         machine: resolveEnvironmentMachineKind(config ?? null),
         baseDirectory: config?.settings.addProjectBaseDirectory ?? null,
+        supportsProjectBrain: config?.environment.capabilities.projectSecondBrain === true,
         newProjectsRoot: config?.newProjectsRoot ?? null,
         connectionState: runtime?.connectionState ?? "available",
         connectionError: runtime?.connectionError ?? null,
@@ -1188,6 +1190,7 @@ export function AddProjectNewScreen(props: { readonly environmentId?: string | s
     environment?.offeredSourceControlProviders,
   );
   const [name, setName] = useState("");
+  const [secondBrainEnabled, setSecondBrainEnabled] = useState(false);
   const [publishes, setPublishes] = useState(false);
   const [publishKind, setPublishKind] = useState<SourceControlProviderKind | null>(null);
   const publishTarget = getNewProjectPublishTarget(publishTargets, publishKind);
@@ -1247,7 +1250,12 @@ export function AddProjectNewScreen(props: { readonly environmentId?: string | s
     setIsSubmitting(true);
     const result = await createNew({
       environmentId: environment.environmentId,
-      input: { name: trimmedName },
+      input: {
+        name: trimmedName,
+        ...(environment.supportsProjectBrain && secondBrainEnabled
+          ? { secondBrainEnabled: true }
+          : {}),
+      },
     });
     if (AsyncResult.isFailure(result)) {
       submittingRef.current = false;
@@ -1349,6 +1357,26 @@ export function AddProjectNewScreen(props: { readonly environmentId?: string | s
             </Text>
           ) : null}
           {machineRows}
+          {environment.supportsProjectBrain && (
+            <ListSection>
+              <ListRow
+                isFirst
+                title={gt("Save this project to Second Brain")}
+                subtitle={gt("Remember project chats and files in PutmanCode.")}
+                icon={<SymbolView name="folder" size={20} tintColorClassName="accent-icon" />}
+                right={
+                  <ThemedSwitch
+                    accessibilityLabel={gt("Save this project to Second Brain")}
+                    disabled={isSubmitting}
+                    value={secondBrainEnabled}
+                    onValueChange={setSecondBrainEnabled}
+                  />
+                }
+                disabled={isSubmitting}
+                onPress={() => setSecondBrainEnabled((enabled) => !enabled)}
+              />
+            </ListSection>
+          )}
           {publishTarget !== null ? (
             <ListSection>
               <ListRow

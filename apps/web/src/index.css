@@ -1389,6 +1389,50 @@ html[data-theme-id]:not([data-theme-id=""]) {
   --terminal-selection-background: var(--app-theme-terminal-selection-background);
 }
 
+/* The standard PutmanCode workspace keeps navigation distinct from the editor.
+   Custom palettes supply their own navigation and workspace colors. */
+html:not(.dark):not([data-theme-id]) {
+  --background: #f5f8fc;
+  --foreground: #17283e;
+  --primary: #245db8;
+  --border: #d5dfeb;
+  --muted: #edf2f8;
+  --muted-foreground: #53677f;
+  --surface-raised: #fff;
+  --message-surface: #e7eef8;
+}
+
+html:not([data-theme-id]) [data-app-sidebar] {
+  --sidebar: #172d49;
+  --sidebar-foreground: #f2f6fc;
+  --sidebar-muted-foreground: #b7cbe2;
+  --sidebar-control-surface: #263f5c;
+  --sidebar-row-hover: #213a57;
+  --sidebar-row-active: #2d5079;
+  --sidebar-row-selected: #2d5079;
+  --sidebar-border: #36506d;
+  --sidebar-stage-fade: var(--sidebar);
+  --background: var(--sidebar);
+  --card: var(--sidebar-control-surface);
+  --card-foreground: var(--sidebar-foreground);
+  --secondary: var(--sidebar-control-surface);
+  --secondary-foreground: var(--sidebar-foreground);
+  --foreground: var(--sidebar-foreground);
+  --border: var(--sidebar-border);
+  --input: var(--sidebar-border);
+  --muted: var(--sidebar);
+  --muted-foreground: var(--sidebar-muted-foreground);
+  --placeholder: var(--sidebar-muted-foreground);
+  --secondary-label: var(--sidebar-muted-foreground);
+  --icon-muted: var(--sidebar-muted-foreground);
+  --accent: var(--sidebar-row-hover);
+  --accent-foreground: var(--sidebar-foreground);
+  --info-foreground: #b5dcff;
+  --ring: #8abaff;
+  background-color: var(--sidebar);
+  color: var(--sidebar-foreground);
+}
+
 /* Theme-token dependency probes are restored synchronously, before paint. Keep
    transitions from observing the temporary sentinel color in between. */
 html[data-theme-token-probe],

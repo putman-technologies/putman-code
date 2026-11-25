@@ -17,6 +17,7 @@ import type { UnsequencedProjectEvent } from "../persistence/OrchestrationEventS
 import type { ProjectRow } from "./ProjectStore.ts";
 
 export interface ProjectCreateCommand {
+  readonly secondBrainEnabled?: boolean;
   readonly type: "project.create";
   readonly commandId: CommandId;
   readonly projectId: ProjectId;
@@ -26,6 +27,7 @@ export interface ProjectCreateCommand {
 }
 
 export interface ProjectMetaUpdateCommand {
+  readonly secondBrainEnabled?: boolean;
   readonly type: "project.meta.update";
   readonly commandId: CommandId;
   readonly projectId: ProjectId;
@@ -157,6 +159,9 @@ export function planProjectCommand(input: {
         type: "project.created",
         payload: {
           projectId: command.projectId,
+          ...(command.secondBrainEnabled === undefined
+            ? {}
+            : { secondBrainEnabled: command.secondBrainEnabled }),
           title: command.title,
           workspaceRoot: command.workspaceRoot,
           defaultModelSelection: null,
@@ -198,6 +203,9 @@ export function planProjectCommand(input: {
         type: "project.meta-updated",
         payload: {
           projectId: command.projectId,
+          ...(command.secondBrainEnabled === undefined
+            ? {}
+            : { secondBrainEnabled: command.secondBrainEnabled }),
           ...(command.title === undefined ? {} : { title: command.title }),
           ...(command.workspaceRoot === undefined ? {} : { workspaceRoot: command.workspaceRoot }),
           ...(command.defaultModelSelection === undefined

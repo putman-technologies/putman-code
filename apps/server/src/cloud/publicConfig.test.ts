@@ -71,12 +71,29 @@ it("product opt-out disables relay tracing with either built-in or runtime crede
     resolveRelayClientTracingConfig(
       {
         ...env,
-        T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: "https://runtime.example.test/v1/traces",
-        T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: "runtime-dataset",
-        T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: "runtime-token",
+        PUTMANCODE_RELAY_CLIENT_OTLP_TRACES_URL: "https://runtime.example.test/v1/traces",
+        PUTMANCODE_RELAY_CLIENT_OTLP_TRACES_DATASET: "runtime-dataset",
+        PUTMANCODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: "runtime-token",
       },
       fallback,
     ),
+    null,
+  );
+});
+
+it("ignores inherited upstream relay analytics settings", () => {
+  const configured = {
+    T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: "https://example.test/v1/traces",
+    T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: "upstream",
+    T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: "upstream-token",
+    T3CODE_TELEMETRY_ENABLED: "true",
+  };
+  assert.equal(
+    resolveRelayClientTracingConfig(configured, {
+      tracesUrl: "",
+      tracesDataset: "",
+      tracesToken: "",
+    }),
     null,
   );
 });

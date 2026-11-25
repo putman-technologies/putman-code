@@ -1,3 +1,4 @@
+import { PhoneProfileSync } from "./features/microsoft-account/PhoneProfileSync";
 import { installPermissionUpdateNotice } from "./features/connection/permissionUpdateNotice";
 import { installComposerAttachmentUploads } from "./state/composer-attachment-uploads";
 import { installThreadOutboxDelivery } from "./state/threadOutboxDelivery";
@@ -301,6 +302,7 @@ function AppContent() {
     <>
       <SplashScreenCoordinator />
       <QuickActionsLanguage />
+      {Platform.OS === "android" && <PhoneProfileSync />}
       <SubscriptionUsageCoordinator />
       <ConnectDeviceApprovalCoordinator />
       <GestureHandlerRootView className="flex-1">

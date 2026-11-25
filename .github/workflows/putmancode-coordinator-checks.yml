@@ -1,0 +1,78 @@
+name: PutmanCode coordinator checks
+
+on:
+  push:
+    branches: [feature/project-coordinator]
+    paths:
+      - ".gitmodules"
+      - ".github/workflows/putmancode-coordinator-checks.yml"
+      - "apps/web/src/components/settings/**"
+      - "apps/web/src/components/Sidebar.tsx"
+      - "apps/web/src/components/ChatView.tsx"
+      - "apps/web/src/components/chat/ChatOverlapNotice.tsx"
+      - "apps/web/src/components/chat/ChatHeader.tsx"
+      - "apps/web/src/components/pullRequest/ProjectGitHubTab*"
+      - "apps/web/src/components/sidebar/CoordinatorStatusBadge.tsx"
+      - "apps/web/src/components/sidebar/SidebarProjectList.tsx"
+      - "apps/web/src/routes/_chat.pull-requests.tsx"
+      - "apps/server/src/persistence/Migrations/102_CoordinatorTeam.ts"
+      - "scripts/*putmancode-worker.py"
+      - "apps/web/src/components/pullRequest/PullRequest*"
+      - "apps/server/src/mcp/OrchestratorMcpService.ts"
+      - "apps/server/src/persistence/Migrations/101_CoordinatorQueue.ts"
+      - "docs/examples/putmancode-*.yml"
+      - "apps/server/src/orchestration-v2/**"
+      - "apps/server/src/device/**"
+      - "apps/server/src/project/AgentSessionScanner*"
+      - "apps/server/src/pullRequest/**"
+      - "packages/source-control-github/**"
+      - "packages/contracts/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: putmancode-coordinator-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coordinator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
+          sparse-checkout-cone-mode: false
+      - uses: ./.github/actions/setup-ci-deps
+      - name: Verify isolated worker scheduling, budgets and Docker execution
+        run: |
+          docker pull alpine:3.22
+          PUTMANCODE_TEST_IMAGE=$(docker inspect --format '{{index .RepoDigests 0}}' alpine:3.22) python3 scripts/test-putmancode-worker.py -v
+      - name: Install Chromium
+        run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
+      - name: Test chat and pull request controls in Chromium
+        working-directory: apps/web
+        run: vp test run --project browser src/components/chat/ChatHeader.browser.test.tsx src/components/pullRequest/PullRequestActionsMenu.browser.test.tsx src/components/pullRequest/ProjectGitHubTab.browser.test.tsx src/components/pullRequest/RepoWorkflowAction.browser.test.tsx
+      - name: Test settings navigation and search
+        working-directory: apps/web
+        run: |
+          vp test run --project browser src/components/settings/SettingsSidebarNav.composition.browser.test.tsx src/components/settings/AddEnvironmentDialog.browser.test.tsx
+          vp test run --project unit src/components/settings/settingsSearch.test.ts src/components/pullRequest/pullRequestsRouteSearch.test.ts
+      - name: Test coordinator handoffs and local storage isolation
+        working-directory: apps/server
+        run: >-
+          vp test run
+          src/orchestration-v2/ThreadStop.test.ts
+          src/orchestration-v2/coordinatorBoardState.test.ts
+          src/orchestration-v2/coordinatorRouting.test.ts
+          src/device/sshDeviceScript.test.ts
+          src/project/AgentSessionScanner.test.ts
+      - name: Check review evidence parsing
+        working-directory: packages/source-control-github
+        run: vp test run src/server/reviewScreenshots.test.ts src/server/coordinatorReleaseState.test.ts src/server/coordinatorCi.test.ts

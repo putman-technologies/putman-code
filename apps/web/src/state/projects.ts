@@ -1,7 +1,7 @@
 import { createEnvironmentProjectAtoms } from "@t3tools/client-runtime/state/projects";
 import { createProjectEnvironmentAtoms } from "@t3tools/client-runtime/state/projects";
 import { createEnvironmentRpcQueryAtomFamily } from "@t3tools/client-runtime/state/runtime";
-import { WS_METHODS } from "@t3tools/contracts";
+import { ORCHESTRATION_V2_WS_METHODS, WS_METHODS } from "@t3tools/contracts";
 
 import { environmentCatalog } from "../connection/catalog";
 import { connectionAtomRuntime } from "../connection/runtime";
@@ -53,3 +53,17 @@ export const defaultProjectFallbackReadyAtom = Atom.family((projectKey: string |
     );
   }).pipe(Atom.withLabel(`web-default-project-fallback-ready:${projectKey}`)),
 );
+
+export const coordinatorBoardQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
+  label: "environment-data:coordinator-board",
+  tag: ORCHESTRATION_V2_WS_METHODS.coordinatorBoard,
+  refreshIntervalMs: 60_000,
+  idleTtlMs: 0,
+});
+
+export const coordinatorOverlapsQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
+  label: "environment-data:coordinator-overlaps",
+  tag: ORCHESTRATION_V2_WS_METHODS.coordinatorOverlaps,
+  refreshIntervalMs: 15_000,
+  idleTtlMs: 0,
+});

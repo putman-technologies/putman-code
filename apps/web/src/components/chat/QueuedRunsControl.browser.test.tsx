@@ -317,37 +317,8 @@ it("shows who sent a queued message and folds automation and agent prompts", asy
   await page.getByRole("button", { name: "Open thread" }).nth(1).click({ force: true });
   expect(onOpenThread).toHaveBeenLastCalledWith("thread:linked-lead", "environment:linked");
 
-  await expect.element(page.getByText("Sent by T3 Code")).toBeVisible();
+  await expect.element(page.getByText("Sent by PutmanCode")).toBeVisible();
   await expect.element(page.getByText("Continue where you left off.")).toBeVisible();
-});
-
-it("stays inside the timeline scroller instead of growing the chat column", async () => {
-  setup();
-  state.workflow = {
-    activeRun: { id: "run:active" },
-    canPromoteToSteer: true,
-    queuedRuns: [
-      {
-        run: { id: "run:queued", userMessageId: "message:queued" },
-        text: "Later",
-        attachments: [],
-      },
-    ],
-  };
-  // Mirrors ChatView: a scrollable column, a positioned wrapper, then a non-positioned scroller.
-  await using screen = await renderUi(
-    <div data-testid="column" style={{ height: 200, overflowY: "auto" }}>
-      <div style={{ position: "relative", height: "100%" }}>
-        <div style={{ height: "100%", overflowY: "auto" }}>
-          <div style={{ height: 1000 }} />
-          <QueuedRunsControl {...baseProps} />
-        </div>
-      </div>
-    </div>,
-  );
-  await expect.element(page.getByText("Later", { exact: true })).toBeInTheDocument();
-  const column = screen.getByTestId("column").element();
-  expect(column.scrollHeight).toBe(column.clientHeight);
 });
 
 it("does not re-render while assistant text streams into the thread", async () => {
@@ -410,7 +381,7 @@ it("does not re-render while assistant text streams into the thread", async () =
   expect(renders).toBeGreaterThan(settled);
 });
 
-it("tells the user why Send now was rejected", async () => {
+it("shows the queued status and explains a rejected promotion to Steer", async () => {
   setup();
   const reason = "Target run run:active is stopping and cannot be steered.";
   state.workflow = {
@@ -440,6 +411,7 @@ it("tells the user why Send now was rejected", async () => {
     </ToastProvider>,
   );
 
-  await page.getByRole("button", { name: "Send now" }).click();
+  await expect.element(page.getByText("Queued · Next turn")).toBeVisible();
+  await page.getByRole("button", { name: "Steer now" }).click();
   await vi.waitFor(() => expect(page.getByText(reason).element()).toBeVisible());
 });

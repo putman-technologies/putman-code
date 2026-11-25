@@ -232,6 +232,7 @@ interface MessagesTimelineProps {
     citation: AssistantCitation,
     sourceAnchor: AssistantCitationSourceAnchor,
   ) => boolean;
+  onAnswerApprovalQuestion?: TimelineRowSharedState["onAnswerApprovalQuestion"];
   onReplyToResponse?: TimelineRowSharedState["onReplyToResponse"];
   isWorking: boolean;
   /** The thread is catching up from a cached copy, whose working state may be stale. */
@@ -353,6 +354,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   citationRequest = null,
   citationHistory = CITED_HISTORY_LOADING,
   onCiteAssistantText,
+  onAnswerApprovalQuestion,
   onReplyToResponse,
   isWorking,
   syncing = false,
@@ -1103,7 +1105,32 @@ const ConversationTimeline = memo(function ConversationTimeline({
       .filter(isVisiblePendingApproval)
       .map((approval) => [approval.requestId, approval]),
   );
+  const latestMessage =
+    onAnswerApprovalQuestion &&
+    canOperateThread &&
+    !isWorking &&
+    !syncing &&
+    !detailBehindShell &&
+    !awaitingUser &&
+    pendingApprovals.length === 0 &&
+    latestRun?.status === "completed"
+      ? timelineEntries.findLast((entry) => entry.kind === "message")
+      : undefined;
+  const approvalQuestionMessageId =
+    latestMessage?.message.role === "assistant" &&
+    !latestMessage.message.streaming &&
+    latestMessage.message.runId === latestRun?.runId &&
+    (!latestMessage.projectedItem ||
+      (latestMessage.projectedItem.sourceThreadId === citationThreadRef?.threadId &&
+        latestMessage.projectedItem.item.type === "assistant_message" &&
+        latestMessage.projectedItem.item.status === "completed" &&
+        (latestMessage.projectedItem.item.phase === undefined ||
+          latestMessage.projectedItem.item.phase === "final_answer")))
+      ? latestMessage.message.id
+      : undefined;
   const sharedState: TimelineRowSharedState = {
+    approvalQuestionMessageId,
+    onAnswerApprovalQuestion,
     pendingApprovals: pendingApprovalsByRequestId,
     respondingRequestIds,
     canOperateThread,

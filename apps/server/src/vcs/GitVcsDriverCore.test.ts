@@ -1645,13 +1645,13 @@ describe("pullCurrentBranch", () => {
   );
 });
 
-it.effect("retries an in-flight ref snapshot invalidated by a mutation", () =>
+it.effect("finishes a slow shared ref scan and retries it when a mutation invalidates it", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;
       const firstWorktreeScanStarted = yield* Deferred.make<void>();
-      const firstRefScanCompleted = yield* Deferred.make<void>();
-      const releaseFirstWorktreeScan = yield* Deferred.make<void>();
+      const firstRefOutputReady = yield* Deferred.make<void>();
+      const releaseScans = yield* Deferred.make<void>();
       const delayFirstWorktreeScan = yield* Ref.make(true);
       const refScans = yield* Ref.make(0);
       const coordinatingSpawner = ChildProcessSpawner.make((command) =>
@@ -1663,7 +1663,7 @@ it.effect("retries an in-flight ref snapshot invalidated by a mutation", () =>
             command.args.includes("worktree") && command.args.includes("--porcelain");
           if (isWorktreeScan && (yield* Ref.getAndSet(delayFirstWorktreeScan, false))) {
             yield* Deferred.succeed(firstWorktreeScanStarted, undefined);
-            yield* Deferred.await(releaseFirstWorktreeScan);
+            yield* Deferred.await(releaseScans);
           }
           const handle = yield* delegate.spawn(command);
           const isRefScan =
@@ -1676,7 +1676,8 @@ it.effect("retries an in-flight ref snapshot invalidated by a mutation", () =>
             ? ChildProcessSpawner.makeHandle({
                 ...handle,
                 exitCode: handle.exitCode.pipe(
-                  Effect.tap(() => Deferred.succeed(firstRefScanCompleted, undefined)),
+                  Effect.tap(() => Deferred.succeed(firstRefOutputReady, undefined)),
+                  Effect.tap(() => Deferred.await(releaseScans)),
                 ),
               })
             : handle;
@@ -1692,10 +1693,11 @@ it.effect("retries an in-flight ref snapshot invalidated by a mutation", () =>
         .listRefs({ cwd, refresh: true, limit: 100 })
         .pipe(Effect.forkChild({ startImmediately: true }));
       yield* Deferred.await(firstWorktreeScanStarted);
-      yield* Deferred.await(firstRefScanCompleted);
+      yield* Deferred.await(firstRefOutputReady);
+      yield* TestClock.adjust("45 seconds");
 
       yield* driver.createRef({ cwd, refName: "feature/during-refresh" });
-      yield* Deferred.succeed(releaseFirstWorktreeScan, undefined);
+      yield* Deferred.succeed(releaseScans, undefined);
 
       const refs = yield* Fiber.join(inFlight);
       assert.isTrue(refs.refs.some((ref) => ref.name === "feature/during-refresh"));
@@ -5912,6 +5914,93 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
       }),
     );
 
+    it.effect.each(["slow", "moved", "unmoved", "partial-config"] as const)(
+      "reports the observed worktree branch after a %s rename",
+      (outcome) =>
+        Effect.gen(function* () {
+          const repo = yield* makeTmpDir();
+          const { initialBranch } = yield* initRepoWithCommit(repo);
+          const cwd = NodePath.join(yield* makeTmpDir(), "worktree");
+          const oldBranch = "t3/abcd1234";
+          const target = "fix/invoices";
+          yield* git(repo, ["worktree", "add", "-b", oldBranch, "--", cwd, initialBranch]);
+          yield* git(cwd, ["config", `branch.${oldBranch}.description`, "keep this"]);
+          const started = yield* Deferred.make<void>();
+          const release = yield* Deferred.make<void>();
+          let attempts = 0;
+          const realGit = yield* GitVcsDriver.GitVcsDriver;
+          const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;
+          const spawner = ChildProcessSpawner.make((command) =>
+            Effect.gen(function* () {
+              if (
+                !ChildProcess.isStandardCommand(command) ||
+                command.args[0] !== "branch" ||
+                command.args[1] !== "-m"
+              ) {
+                return yield* delegate.spawn(command);
+              }
+              attempts++;
+              const handle =
+                outcome === "unmoved" ? makeSuccessfulHandle("") : yield* delegate.spawn(command);
+              return ChildProcessSpawner.makeHandle({
+                ...handle,
+                exitCode: handle.exitCode.pipe(
+                  Effect.tap(() =>
+                    Effect.gen(function* () {
+                      if (outcome === "partial-config") {
+                        yield* realGit
+                          .execute({
+                            cwd,
+                            operation: "test.partialBranchConfig",
+                            args: ["config", `branch.${oldBranch}.description`, "left behind"],
+                          })
+                          .pipe(Effect.orDie);
+                      }
+                      yield* Deferred.succeed(started, undefined);
+                      yield* Deferred.await(release);
+                    }),
+                  ),
+                ),
+              });
+            }),
+          );
+          const driver = yield* makeGitVcsDriverCore().pipe(
+            Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+            Effect.provide(layerServerConfig),
+          );
+          const renaming = yield* driver
+            .renameBranch({ cwd, oldBranch, newBranch: target })
+            .pipe(Effect.result, Effect.forkChild({ startImmediately: true }));
+          yield* Deferred.await(started);
+          yield* TestClock.adjust(outcome === "slow" ? "11 seconds" : "31 seconds");
+          if (outcome === "slow") {
+            assert.isUndefined(renaming.pollUnsafe());
+            yield* Deferred.succeed(release, undefined);
+          }
+          const result = yield* Fiber.join(renaming);
+          if (outcome === "unmoved") {
+            assert.isTrue(Result.isFailure(result));
+            if (Result.isFailure(result))
+              assert.equal(result.failure.detail, "Git command timed out.");
+          } else {
+            assert.deepEqual(
+              Result.getSuccess(result),
+              Option.some(
+                outcome === "partial-config"
+                  ? { branch: target, configUnconfirmed: true }
+                  : { branch: target },
+              ),
+            );
+            assert.equal(yield* git(cwd, ["config", `branch.${target}.description`]), "keep this");
+          }
+          assert.equal(
+            yield* git(cwd, ["branch", "--show-current"]),
+            outcome === "unmoved" ? oldBranch : target,
+          );
+          assert.equal(attempts, 1);
+        }),
+    );
+
     it.effect("preserves exact custom names and refuses collisions without a suffix", () =>
       Effect.gen(function* () {
         const cwd = yield* makeTmpDir();
@@ -8951,6 +9040,14 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
           commitSha: remoteHead,
           remoteRefName: "upstream/release",
         });
+        const fs = yield* FileSystem.FileSystem;
+        const fetchHeadPath = NodePath.join(cwd, ".git", "FETCH_HEAD");
+        yield* fs.remove(fetchHeadPath);
+        assert.deepEqual(
+          yield* driver.fetchWorktreeBaseCommit({ cwd, refName: "stable" }),
+          fetched,
+        );
+        assert.isFalse(yield* fs.exists(fetchHeadPath));
         yield* git(cwd, ["update-ref", "-d", "refs/remotes/upstream/release"]);
         assert.deepEqual(
           yield* driver.fetchWorktreeBaseCommit({ cwd, refName: "upstream/release" }),

@@ -174,6 +174,8 @@ than** on the task.
 
 ## Defaults and inheritance
 
+On desktop and web, **Projects**, **Providers**, **Threads** and **Source control & issues** are in the main settings list. Use **About** to see the installed version and check for desktop updates. Expand **Advanced** for scheduled tasks, worktrees, browser and device tools, the archive, and maintenance. Settings search opens the matching control directly, including controls inside an Advanced section.
+
 Threads contains the model and workspace for new threads. Browser controls agent browser
 access. Source control & issues contains automatic pull, the default pull request merge method and text
 generation. The same rows edit environment defaults or project overrides depending on the
@@ -294,3 +296,19 @@ On mobile, use **Settings → Source control & issues** to change selected envir
 T3 Code only pulls when it can fast-forward and the checkout has no changed files, untracked files,
 or local commits. It skips checkouts on another branch or without an upstream. If a checkout has
 local work, resolve it yourself before automatic pulls can resume.
+
+## Project GitHub tab
+
+Select **GitHub** in a project chat header or the status badge beside the project in the sidebar. **Needs your attention** explains failed checks and review requests. **What changed** shows the handoff or PR description. **Review changes** opens the file comparison and existing GitHub review and merge controls. **Ask coordinator** sends your question with the PR and its current commit. **What’s live?** shows the last successful production deployment and the PRs and direct commits on the default branch since then. The tab reports when GitHub cannot verify that comparison.
+
+## PutmanCode coordinator releases
+
+The Putman Hub review form accepts a PR number for a project on its connected PutmanCode environment. Projects with a saved coordinator playbook can also submit an open PR by applying the GitHub label `coordinator`. The server checks every 90 seconds.
+
+For a workflow attached to a pull request, use **Configure workflow button** in the PR menu. See the [coordinator workflow and worker setup](../operations/putmancode-coordinator.md) for managed projects.
+
+## Project Second Brain
+
+In **Create project**, select **Save this project to Second Brain** to remember this project's chats and files on its PutmanCode environment. The option starts off. In **Project settings** you can include an existing project's history, or turn off capture and recall for that checkout. Turning it back on includes the project's available history.
+
+Ask a chat in the project to “search Second Brain” for a phrase or file name. A result identifies the original conversation and any saved file copies. Uploaded files retain their original bytes. New documents and media captured in a turn's Git checkpoint are copied into Second Brain. Code changes, existing repository documents and pasted OneDrive links remain references. To keep a full copy of an existing file, attach the file itself to a project message. A link alone does not connect a OneDrive account.

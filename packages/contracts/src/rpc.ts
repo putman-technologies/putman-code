@@ -202,6 +202,8 @@ import {
 } from "./guestShare.ts";
 import { PullRequestReviewGuideResult } from "./pullRequestReviewGuide.ts";
 import {
+  RepoWorkflowButtonInput,
+  RepoWorkflowButtonResult,
   PullRequestActionInput,
   PullRequestActivity,
   PullRequestChangeBreakdown,
@@ -255,6 +257,7 @@ import {
   OrchestrationV2GetNativeChildWorkError,
   OrchestrationV2StopWorkflowError,
   OrchestrationV2ForceStopThreadError,
+  ProjectCoordinatorError,
   OrchestrationV2DispatchCommandError,
   OrchestrationV2GetShellSnapshotError,
   OrchestrationV2CommandOutputError,
@@ -611,6 +614,7 @@ export const WS_METHODS = {
   pullRequestsFilesViewed: "pullRequests.filesViewed",
   pullRequestsChangeBreakdown: "pullRequests.changeBreakdown",
   pullRequestsSetFilesViewed: "pullRequests.setFilesViewed",
+  pullRequestsWorkflowButton: "pullRequests.workflowButton",
   pullRequestsRunAction: "pullRequests.runAction",
   pullRequestsUpdate: "pullRequests.update",
   pullRequestsComment: "pullRequests.comment",
@@ -1221,6 +1225,11 @@ const WsPullRequestsSetFilesViewedRpc = Rpc.make(WS_METHODS.pullRequestsSetFiles
   error: PullRequestRpcError,
 });
 
+const WsPullRequestsWorkflowButtonRpc = Rpc.make(WS_METHODS.pullRequestsWorkflowButton, {
+  payload: RepoWorkflowButtonInput,
+  success: RepoWorkflowButtonResult,
+  error: PullRequestRpcError,
+});
 const WsPullRequestsRunActionRpc = Rpc.make(WS_METHODS.pullRequestsRunAction, {
   payload: PullRequestActionInput,
   // Undefined unless asked for with replyWithSummary, or when the host's reply lacked it.
@@ -2058,6 +2067,42 @@ const WsOrchestrationV2StopWorkflowRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.st
   error: Schema.Union([OrchestrationV2StopWorkflowError, EnvironmentAuthorizationError]),
 });
 
+const WsCoordinatorBoardRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.coordinatorBoard, {
+  payload: OrchestrationV2RpcSchemas.coordinatorBoard.input,
+  success: OrchestrationV2RpcSchemas.coordinatorBoard.output,
+  error: Schema.Union([ProjectCoordinatorError, EnvironmentAuthorizationError]),
+});
+
+const WsCoordinatorRetryRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.coordinatorRetry, {
+  payload: OrchestrationV2RpcSchemas.coordinatorRetry.input,
+  success: OrchestrationV2RpcSchemas.coordinatorRetry.output,
+  error: Schema.Union([ProjectCoordinatorError, EnvironmentAuthorizationError]),
+});
+
+const WsCoordinatorBoardActionRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.coordinatorBoardAction, {
+  payload: OrchestrationV2RpcSchemas.coordinatorBoardAction.input,
+  success: OrchestrationV2RpcSchemas.coordinatorBoardAction.output,
+  error: Schema.Union([ProjectCoordinatorError, EnvironmentAuthorizationError]),
+});
+
+const WsCoordinatorOverlapsRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.coordinatorOverlaps, {
+  payload: OrchestrationV2RpcSchemas.coordinatorOverlaps.input,
+  success: OrchestrationV2RpcSchemas.coordinatorOverlaps.output,
+  error: Schema.Union([ProjectCoordinatorError, EnvironmentAuthorizationError]),
+});
+
+const WsCoordinatorStatusRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.coordinatorStatus, {
+  payload: OrchestrationV2RpcSchemas.coordinatorStatus.input,
+  success: OrchestrationV2RpcSchemas.coordinatorStatus.output,
+  error: Schema.Union([ProjectCoordinatorError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectCoordinatorRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.projectCoordinator, {
+  payload: OrchestrationV2RpcSchemas.projectCoordinator.input,
+  success: OrchestrationV2RpcSchemas.projectCoordinator.output,
+  error: Schema.Union([ProjectCoordinatorError, EnvironmentAuthorizationError]),
+});
+
 const WsOrchestrationV2ForceStopThreadRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.forceStopThread, {
   payload: OrchestrationV2RpcSchemas.forceStopThread.input,
   success: OrchestrationV2RpcSchemas.forceStopThread.output,
@@ -2361,6 +2406,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsPullRequestsFilesViewedRpc,
   WsPullRequestsChangeBreakdownRpc,
   WsPullRequestsSetFilesViewedRpc,
+  WsPullRequestsWorkflowButtonRpc,
   WsPullRequestsRunActionRpc,
   WsPullRequestsUpdateRpc,
   WsPullRequestsCommentRpc,
@@ -2472,6 +2518,12 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2GetNativeChildWorkRpc,
   WsOrchestrationV2StopWorkflowRpc,
   WsOrchestrationV2ForceStopThreadRpc,
+  WsProjectCoordinatorRpc,
+  WsCoordinatorRetryRpc,
+  WsCoordinatorBoardRpc,
+  WsCoordinatorBoardActionRpc,
+  WsCoordinatorOverlapsRpc,
+  WsCoordinatorStatusRpc,
   WsOrchestrationV2GetTurnItemRpc,
   WsOrchestrationV2GetTurnDiffRpc,
   WsOrchestrationV2GetFullThreadDiffRpc,

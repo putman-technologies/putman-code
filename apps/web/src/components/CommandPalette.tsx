@@ -560,6 +560,7 @@ function OpenCommandPaletteDialog(props: {
     readonly environmentId: EnvironmentId;
     readonly sourcesEnvironmentId: EnvironmentId | null;
   } | null>(null);
+  const [newProjectBrain, setNewProjectBrain] = useState(false);
   const [newProjectPublishes, setNewProjectPublishes] = useState(false);
   const [newProjectPublishKind, setNewProjectPublishKind] =
     useState<SourceControlProviderKind | null>(null);
@@ -1066,6 +1067,7 @@ function OpenCommandPaletteDialog(props: {
     setAddProjectEnvironmentId(environmentId);
     setAddProjectCloneFlow(null);
     setNewProjectFlow({ environmentId, sourcesEnvironmentId });
+    setNewProjectBrain(false);
     setNewProjectPublishes(false);
     setNewProjectPublishKind(null);
     pushPaletteView({
@@ -1391,7 +1393,7 @@ function OpenCommandPaletteDialog(props: {
       value: "action:triage",
       searchTerms: ["triage", "bug", "issue", "report", "broken", "debug", "help", "support"],
       title: gt("Triage an issue"),
-      description: gt("An agent investigates a T3 Code problem and helps file an issue"),
+      description: gt("An agent investigates a PutmanCode problem and helps file an issue"),
       icon: <BugIcon className={ITEM_ICON_CLASS} />,
       run: () => startTriage(triageEnvironmentId),
     });
@@ -1727,7 +1729,7 @@ function OpenCommandPaletteDialog(props: {
       "openclaw",
       "hermes",
     ],
-    title: gt("Use T3 Code in another app (MCP)"),
+    title: gt("Use PutmanCode in another app (MCP)"),
     icon: <PlugIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
       openUseInAnotherApp(
@@ -2117,6 +2119,9 @@ function OpenCommandPaletteDialog(props: {
     newProjectPublishTargets,
     newProjectPublishKind,
   );
+  const supportsProjectBrain =
+    environments.find((environment) => environment.environmentId === newProjectFlow?.environmentId)
+      ?.serverConfig?.environment.capabilities.projectSecondBrain === true;
   const newProjectName = query.trim();
   const canSubmitNewProject =
     newProjectFlow !== null &&
@@ -2134,6 +2139,7 @@ function OpenCommandPaletteDialog(props: {
       createNewProject({
         environmentId: newProjectFlow.environmentId,
         name: newProjectName,
+        secondBrainEnabled: supportsProjectBrain && newProjectBrain,
         publishTo: newProjectPublishes ? newProjectPublishTarget : null,
       }),
     );
@@ -2550,11 +2556,39 @@ function OpenCommandPaletteDialog(props: {
           },
         ];
 
+  const brainOptions: CommandPaletteView["groups"] = supportsProjectBrain
+    ? [
+        {
+          value: "new-project-memory",
+          label: gt("Second Brain"),
+          items: [
+            {
+              kind: "action",
+              value: "new-project:second-brain",
+              searchTerms: [],
+              icon: <FolderGit2Icon className={ITEM_ICON_CLASS} />,
+              title: gt("Save this project to Second Brain"),
+              description: gt("Remember project chats and files in PutmanCode."),
+              titleTrailingContent: (
+                <span className="pointer-events-none ms-auto flex">
+                  <Checkbox checked={newProjectBrain} tabIndex={-1} aria-hidden />
+                </span>
+              ),
+              checked: newProjectBrain,
+              keepOpen: true,
+              disabled: isCreatingNewProject,
+              run: async () => setNewProjectBrain((enabled) => !enabled),
+            },
+          ],
+        },
+      ]
+    : [];
   let displayedGroups: CommandPaletteView["groups"] = filteredGroups;
   if (newProjectFlow !== null) {
     displayedGroups = [
       ...(newProjectMachineGroup ? [newProjectMachineGroup] : []),
       ...newProjectOptionGroups,
+      ...brainOptions,
       ...(newProjectExistingGroup ? [newProjectExistingGroup] : []),
     ];
   } else if (addProjectCloneFlow?.step === "repository") {
@@ -3034,7 +3068,8 @@ function OpenCommandPaletteDialog(props: {
     newProjectFlow !== null
       ? highlightedItemValue === null
         ? gt("Create")
-        : highlightedItemValue === newProjectPublishToggleValue
+        : highlightedItemValue === newProjectPublishToggleValue ||
+            highlightedItemValue === "new-project:second-brain"
           ? gt("Toggle")
           : gt("Select")
       : addProjectCloneFlow?.step === "repository"

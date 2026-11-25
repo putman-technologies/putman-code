@@ -1,31 +1,31 @@
 {
   "id": "/",
-  "name": "T3 Code",
-  "short_name": "T3 Code",
+  "name": "PutmanCode",
+  "short_name": "PutmanCode",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#161616",
-  "theme_color": "#161616",
+  "background_color": "#f5f8fc",
+  "theme_color": "#f5f8fc",
   "icons": [
     {
-      "src": "/favicon-32x32.png",
+      "src": "/putman-32.png",
       "sizes": "32x32",
       "type": "image/png"
     },
     {
-      "src": "/apple-touch-icon.png",
+      "src": "/putman-code.png",
       "sizes": "180x180",
       "type": "image/png"
     },
     {
-      "src": "/icon-192x192.png",
+      "src": "/putman-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-512x512.png",
+      "src": "/putman-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"

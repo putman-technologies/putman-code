@@ -194,6 +194,7 @@ import { welcomeImportSelectionKey } from "../../onboarding/welcomeState";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { toastManager } from "../ui/toast";
 import { WelcomePage } from "./WelcomePage";
+import { WelcomeStart } from "./WelcomeStart";
 
 const primaryId = EnvironmentId.make("primary");
 const readyClaude: ServerProvider = {
@@ -370,6 +371,32 @@ function setup() {
   localStorage.removeItem(welcomeImportSelectionKey(primaryId));
   return now;
 }
+
+it("can skip setup without a server, and keeps the guide open if saving fails", async () => {
+  using _now = setup();
+  state.completeOnboarding.mockRejectedValueOnce(new Error("settings unavailable"));
+  await using _screen = await render(
+    <RegistryContext.Provider value={appAtomRegistry}>
+      <WelcomeStart
+        environments={[]}
+        catalogReady={true}
+        primaryId={null}
+        selectedId={null}
+        onSelect={vi.fn()}
+        onContinue={vi.fn()}
+        onSkip={state.onDone}
+      />
+    </RegistryContext.Provider>,
+  );
+  expect(button("Continue").disabled).toBe(true);
+  await click("Skip setup");
+  await vi.waitFor(() => expect(pageText()).toContain("Your settings could not be saved"));
+  expect(state.onDone).not.toHaveBeenCalled();
+  await click("Skip setup");
+  await vi.waitFor(() => expect(state.onDone).toHaveBeenCalledOnce());
+  expect(state.createProject).not.toHaveBeenCalled();
+  expect(state.importThreads).not.toHaveBeenCalled();
+});
 
 it("rechecks after project creation and can retry its history without recreating the project", async () => {
   using _now = setup();
@@ -569,7 +596,7 @@ it("stays busy while setup saves after an import with nothing to open", async ()
   expect(state.createProject).toHaveBeenCalledOnce();
 });
 
-it("leaves projects already in T3 Code out of the default import, unless the box is checked", async () => {
+it("leaves projects already in PutmanCode out of the default import, unless the box is checked", async () => {
   using _now = setup();
   const existing = ProjectId.make("existing");
   const justAdded = ProjectId.make("just-added");

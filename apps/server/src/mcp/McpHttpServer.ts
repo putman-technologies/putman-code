@@ -59,7 +59,7 @@ import { EnvironmentToolkit } from "./toolkits/environment/tools.ts";
 import * as EnvironmentHandlers from "./toolkits/environment/handlers.ts";
 import { ThemeToolkit } from "./toolkits/theme/tools.ts";
 import * as ThemeHandlers from "./toolkits/theme/handlers.ts";
-import { ProjectToolkit } from "./toolkits/project/tools.ts";
+import { ProjectToolkit, ProjectReleaseToolkit } from "./toolkits/project/tools.ts";
 import * as ProjectHandlers from "./toolkits/project/handlers.ts";
 import { AttachmentToolkit } from "./toolkits/attachment/tools.ts";
 import * as AttachmentHandlers from "./toolkits/attachment/handlers.ts";
@@ -124,7 +124,7 @@ const unauthorized = (input: {
   return HttpServerResponse.jsonUnsafe(
     {
       error: "invalid_mcp_credential",
-      message: "A valid T3 Code MCP credential is required.",
+      message: "A valid PutmanCode MCP credential is required.",
     },
     {
       status: 401,
@@ -1392,7 +1392,7 @@ export const layerInProcessMcpServer = McpServer.middleware<{
 
 export const layerMcpTransport = <RA, RE, RR>(registrations: Layer.Layer<RA, RE, RR>) =>
   McpServer.layerHttp({
-    name: "T3 Code",
+    name: "PutmanCode",
     version: packageJson.version,
     path: MCP_HTTP_PATH,
     protocols: mcpProtocols,
@@ -1407,6 +1407,7 @@ export const layerTools = Layer.mergeAll(
   layerThreadToolkit,
   layerAttachmentToolkit,
   layerProjectRegistration,
+  toolkitRegistration(ProjectReleaseToolkit, ProjectHandlers.releaseBoardLayer),
   layerEnvironmentToolkit,
   layerThemeToolkit,
   layerPreviewControlsRegistration,

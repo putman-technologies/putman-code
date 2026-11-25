@@ -1193,7 +1193,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     (approval) => !heldRequestIds.has(approval.requestId),
   )
     ? "steer"
-    : settings.followUpBehavior;
+    : settings.runningTurnSendAction;
   const composerSuggestionsVisible = composerMenuOpen;
   const composerSuggestionListVisible = composerSuggestionsVisible && composerMenuItems.length > 0;
   const activePendingUserInput = pendingUserInputs[0] ?? null;
@@ -3742,7 +3742,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                             ? gt("Choose a project above to start a thread")
                             : showProviderUnavailable
                               ? gt("Enable a provider in Settings to send a message")
-                              : (offeredPromptSuggestion ?? m(DEFAULT_COMPOSER_PLACEHOLDER))
+                              : (offeredPromptSuggestion ??
+                                ((phase === "running" || phase === "connecting") &&
+                                !isEditingQueuedMessage
+                                  ? !canSteer || followUpBehavior === "queue"
+                                    ? gt("Queue a message for the next turn…")
+                                    : gt("Steer the current turn…")
+                                  : m(DEFAULT_COMPOSER_PLACEHOLDER)))
                     }
                     placeholderSuffix={
                       offeredPromptSuggestion !== null ? (

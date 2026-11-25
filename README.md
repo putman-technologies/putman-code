@@ -1,25 +1,33 @@
 # PutmanCode
 
-PutmanCode is a desktop workspace from Putman Technologies for working with coding agents. Each project has a coordinator chat where you can review work from individual feature chats and follow it through GitHub checks, merge, and deployment.
+PutmanCode is a desktop workspace for coding agents. Organize work into projects and chats, review pull requests, and run your configured GitHub workflows.
 
-## Working on a change
+## On a Mac
 
-1. Select your project and open a feature chat for the change.
-2. When the agent finishes, choose **Send to Coordinator**. PutmanCode saves the checkout, linked pull requests, and available script results in the project coordinator, then archives the feature chat.
-3. Open the coordinator to review the handoff. The project badge shows **Needs review** when a change needs attention and **CI running** while GitHub checks are pending. After a merge, **Awaiting deploy** changes to **Deployed** when GitHub records a successful production deployment for that commit.
+Open **PutmanCode.app**. The default workspace has a light editor and a navy project sidebar. Choose **Dark** or **System** in **Settings → Appearance** to change the appearance.
+
+Projects and thread history are stored under `~/.putman-code/userdata`. Your repository stays in the folder you chose when adding the project. Fresh installs keep Chromium preferences under `~/Library/Application Support/PutmanCode`. Upgrades from the earlier fork reuse its existing `Putman Code` profile. Set `PUTMANCODE_HOME` to choose another app data directory.
+
+PutmanCode discards product analytics and keeps project token and cost reports in your environment. See [PutmanCode telemetry](./docs/user/telemetry.md) for diagnostics and notification settings.
+
+The Projects list stays above the thread list. Select a project to filter its chats, or use its pencil button to start a chat there. The badge beside each project follows its latest coordinator handoff and refreshes every minute. **Needs review** covers unlinked work, approvals, and failed checks. **CI running** follows pending GitHub checks. After merge, **Awaiting deploy** changes to **Deployed** when GitHub records a successful deployment for that merge commit in the Production or Prod environment.
+
+## Sharing Mac updates
+
+For distributing signed releases to other Macs, follow the [PutmanCode Mac release guide](./docs/operations/putmancode-mac-releases.md).
 
 ## Running PutmanCode from source
 
-The [PutmanCode release branch](https://github.com/putman-technologies/putman-code/tree/release/1.0.0) contains the customized app. With [Vite+](https://viteplus.dev/guide/) installed, use these commands to start the desktop app.
+With [Vite+](https://viteplus.dev/guide/) installed, use these commands to start the desktop app.
 
 ```sh
-git clone --branch release/1.0.0 https://github.com/putman-technologies/putman-code.git
+git clone https://github.com/putman-technologies/putman-code.git
 cd putman-code
 vp i
 vp run dev:desktop
 ```
 
-For Mac distribution, see the [PutmanCode Mac release guide](https://github.com/putman-technologies/putman-code/blob/release/1.0.0/docs/operations/putmancode-mac-releases.md).
+Use `vp run build:desktop:bundle` to compile the desktop client and bundled server.
 
 ## Origins and license
 

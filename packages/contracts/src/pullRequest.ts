@@ -832,6 +832,47 @@ export const PullRequestStackHead = Schema.Struct({
 });
 export type PullRequestStackHead = typeof PullRequestStackHead.Type;
 
+export const RepoWorkflowField = Schema.Struct({
+  name: Schema.String,
+  description: Schema.String,
+  type: Schema.Literals(["string", "choice", "boolean", "number", "environment"]),
+  required: Schema.Boolean,
+  defaultValue: Schema.optional(Schema.String),
+  options: Schema.Array(Schema.String),
+});
+export type RepoWorkflowField = typeof RepoWorkflowField.Type;
+export const RepoWorkflow = Schema.Struct({
+  id: PositiveInt,
+  name: Schema.String,
+  file: Schema.String,
+  fields: Schema.Array(RepoWorkflowField),
+});
+export type RepoWorkflow = typeof RepoWorkflow.Type;
+export const RepoWorkflowButtonRequest = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("list") }),
+  Schema.Struct({
+    kind: Schema.Literal("run"),
+    workflowId: PositiveInt,
+    inputs: Schema.Record(Schema.String, Schema.String),
+  }),
+]);
+export type RepoWorkflowButtonRequest = typeof RepoWorkflowButtonRequest.Type;
+export const RepoWorkflowButtonInput = Schema.Struct({
+  ...PullRequestRef.fields,
+  request: RepoWorkflowButtonRequest,
+});
+export type RepoWorkflowButtonInput = typeof RepoWorkflowButtonInput.Type;
+export const RepoWorkflowButtonResult = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("list"),
+    workflows: Schema.Array(RepoWorkflow),
+    base: Schema.String,
+    mergeSha: Schema.NullOr(Schema.String),
+  }),
+  Schema.Struct({ kind: Schema.Literal("dispatched"), base: Schema.String, url: Schema.String }),
+]);
+export type RepoWorkflowButtonResult = typeof RepoWorkflowButtonResult.Type;
+
 export const PullRequestActionInput = Schema.Struct({
   /** Native stack scope; only send to environments advertising pullRequestStackActions. */
   stackNumber: Schema.optional(PositiveInt),
@@ -1035,9 +1076,9 @@ export class PullRequestUnavailableError extends Schema.TaggedError<PullRequestU
         return "Change requests cannot be browsed for this project's host yet.";
       case "repository-without-project":
         if (this.host !== undefined) {
-          return `No project in T3 Code is on ${this.host}. Add any ${this.host} project to read its change requests.`;
+          return `No project in PutmanCode is on ${this.host}. Add any ${this.host} project to read its change requests.`;
         }
-        return `${this.repository ?? "This repository"} is not a project in T3 Code. Add it as a project to read its change requests.`;
+        return `${this.repository ?? "This repository"} is not a project in PutmanCode. Add it as a project to read its change requests.`;
     }
   }
 }

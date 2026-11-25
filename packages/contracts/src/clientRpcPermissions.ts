@@ -29,6 +29,7 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   // Listing models spends the stored API key, so only those who can choose a model may.
   [WS_METHODS.serverListTextGeneratorModels]: AuthSettingsWriteScope,
   [WS_METHODS.serverRefreshProviders]: AuthOrchestrationReadScope,
+  [WS_METHODS.pullRequestsWorkflowButton]: AuthSourceControlWriteScope,
   [WS_METHODS.pullRequestsRunAction]: AuthSourceControlWriteScope,
   [WS_METHODS.pullRequestsUpdate]: AuthSourceControlWriteScope,
   [WS_METHODS.pullRequestsComment]: AuthSourceControlWriteScope,
@@ -80,6 +81,9 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: AuthOrchestrationOperateScope,
   // Force stop kills agent processes, as Stop on a terminal does.
   [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: AuthOrchestrationOperateScope,
+  [ORCHESTRATION_V2_WS_METHODS.coordinatorRetry]: AuthSourceControlWriteScope,
+  [ORCHESTRATION_V2_WS_METHODS.coordinatorBoardAction]: AuthOrchestrationOperateScope,
+  [ORCHESTRATION_V2_WS_METHODS.projectCoordinator]: AuthOrchestrationOperateScope,
   // A guest link hands thread access to someone outside, like a pairing link.
   [WS_METHODS.guestShareCreate]: AuthAccessWriteScope,
   [WS_METHODS.peerLinksLink]: AuthAccessWriteScope,

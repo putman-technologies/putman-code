@@ -644,8 +644,6 @@ type MessagesTimelineRowContent =
       groupedWithNext?: boolean;
       /** Another of your messages sits directly above, so the joined corners tighten. */
       groupedWithPrevious?: boolean;
-      /** Set when the message above is a steer too, so the label shows once. */
-      continuesSteer?: boolean;
     }
   | {
       kind: "assistant-meta";
@@ -2414,10 +2412,8 @@ export function deriveMessagesTimelineRows(
     const previous = result[index - 1];
     const groupedWithNext = timelineRowIsOwnUserMessage(result[index + 1]);
     const groupedWithPrevious = timelineRowIsOwnUserMessage(previous);
-    const continuesSteer =
-      groupedWithPrevious && messageIsSteer(row.message) && messageIsSteer(previous.message);
     if (!groupedWithNext && !groupedWithPrevious) return row;
-    return { ...row, groupedWithNext, groupedWithPrevious, continuesSteer };
+    return { ...row, groupedWithNext, groupedWithPrevious };
   });
 }
 
@@ -2429,10 +2425,6 @@ function timelineRowIsOwnUserMessage(
     row.message.role === "user" &&
     resolveUserMessagePresentation(row.message).attribution === null
   );
-}
-
-function messageIsSteer(message: ChatMessage): boolean {
-  return message.inputIntent === "steer" || message.inputIntent === "promoted_queued_to_steer";
 }
 
 function timelineRowIsWorkLog(row: MessagesTimelineRow | undefined): boolean {
@@ -2894,8 +2886,7 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
         a.assistantTurnDiffSummary === bm.assistantTurnDiffSummary &&
         a.revertTurnCount === bm.revertTurnCount &&
         a.groupedWithNext === bm.groupedWithNext &&
-        a.groupedWithPrevious === bm.groupedWithPrevious &&
-        a.continuesSteer === bm.continuesSteer
+        a.groupedWithPrevious === bm.groupedWithPrevious
       );
     }
   }

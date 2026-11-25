@@ -19,11 +19,9 @@ const runtimeVersionPolicy =
 const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 
-// Compiled into the native project. Without a relay, Observe's native side could dispatch to
-// Expo's own ingest before observe.ts turns it off; `.invalid` never resolves (RFC 6761).
-const observeEndpointUrl = repoEnv.T3CODE_RELAY_URL?.trim()
-  ? new URL("/v1/mobile/observe", repoEnv.T3CODE_RELAY_URL.trim()).toString()
-  : "https://observe.invalid";
+// An unconfigured native Observe client otherwise falls back to Expo's ingest.
+const diagnosticsUrl = repoEnv.PUTMANCODE_MOBILE_CRASH_REPORT_URL?.trim() || null;
+const observeEndpointUrl = diagnosticsUrl ?? "https://observe.invalid";
 
 const fromRepoRoot = (relativePath: string) => `../../${relativePath}`;
 const androidAdaptiveForeground = "./assets/android-icon-foreground.png";
@@ -79,7 +77,7 @@ const RELEASE_ASSETS = {
 
 const VARIANT_CONFIG = {
   development: {
-    appName: "T3 Code Dev",
+    appName: "PutmanCode Dev",
     scheme: "t3code-dev",
     iosBundleIdentifier: "com.t3tools.t3code.dev",
     androidPackage: "com.t3tools.t3code.dev",
@@ -87,7 +85,7 @@ const VARIANT_CONFIG = {
     assets: DEVELOPMENT_ASSETS,
   },
   preview: {
-    appName: "T3 Code Preview",
+    appName: "PutmanCode Preview",
     scheme: "t3code-preview",
     iosBundleIdentifier: "com.t3tools.t3code.preview",
     androidPackage: "com.t3tools.t3code.preview",
@@ -95,7 +93,7 @@ const VARIANT_CONFIG = {
     assets: PREVIEW_ASSETS,
   },
   production: {
-    appName: "T3 Code",
+    appName: "PutmanCode",
     scheme: "t3code",
     iosBundleIdentifier: "com.t3tools.t3code",
     androidPackage: "com.t3tools.t3code",
@@ -143,7 +141,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "SubscriptionUsage",
         displayName: "Subscription usage",
-        description: "Subscription quotas from your connected T3 Code environments.",
+        description: "Subscription quotas from your connected PutmanCode environments.",
         ios: {
           configuration: {
             title: "Subscription usage",
@@ -193,7 +191,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "AgentActivity",
         displayName: "Agent Activity",
-        description: "Shows the current state of active T3 Code agents.",
+        description: "Shows the current state of active PutmanCode agents.",
         android: null,
         ios: {
           supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"],
@@ -276,10 +274,10 @@ const config: ExpoConfig = {
         NSAllowsArbitraryLoads: true,
       },
       NSLocalNetworkUsageDescription:
-        "Allow T3 Code to connect to T3 Code servers on your local network or tailnet.",
+        "Allow PutmanCode to connect to PutmanCode servers on your local network or tailnet.",
       // Built with the iOS 27 SDK, only view controllers can hide or style the status bar.
       UIViewControllerBasedStatusBarAppearance: true,
-      NSPhotoLibraryAddUsageDescription: "Allow T3 Code to save images to your photo library.",
+      NSPhotoLibraryAddUsageDescription: "Allow PutmanCode to save images to your photo library.",
       // System picture in picture needs background audio to start and survive outside the app.
       UIBackgroundModes: ["audio"],
       ITSAppUsesNonExemptEncryption: false,
@@ -385,7 +383,7 @@ const config: ExpoConfig = {
     [
       "expo-audio",
       {
-        microphonePermission: "Allow T3 Code to use your microphone for voice input.",
+        microphonePermission: "Allow PutmanCode to use your microphone for voice input.",
         recordAudioAndroid: true,
         enableBackgroundPlayback: false,
         enableBackgroundRecording: false,
@@ -394,7 +392,8 @@ const config: ExpoConfig = {
     [
       "expo-camera",
       {
-        cameraPermission: "Allow T3 Code to access your camera so you can scan pairing QR codes.",
+        cameraPermission:
+          "Allow PutmanCode to access your camera so you can scan pairing QR codes.",
         microphonePermission: false,
         barcodeScannerEnabled: true,
         recordAudioAndroid: false,
@@ -405,7 +404,7 @@ const config: ExpoConfig = {
       {
         photosPermission: false,
         // `false` makes this plugin add RECORD_AUDIO to blockedPermissions, breaking Android dictation.
-        microphonePermission: "Allow T3 Code to use your microphone for voice input.",
+        microphonePermission: "Allow PutmanCode to use your microphone for voice input.",
       },
     ],
     [
@@ -482,10 +481,11 @@ const config: ExpoConfig = {
     EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID: repoEnv.EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID,
     EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID: repoEnv.EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID,
     EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME: repoEnv.EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME,
+    diagnosticsUrl,
     observability: {
-      tracesUrl: repoEnv.EXPO_PUBLIC_OTLP_TRACES_URL ?? "https://api.axiom.co/v1/traces",
-      tracesDataset: repoEnv.EXPO_PUBLIC_OTLP_TRACES_DATASET ?? null,
-      tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
+      tracesUrl: repoEnv.PUTMANCODE_MOBILE_TRACE_URL ?? null,
+      tracesDataset: repoEnv.PUTMANCODE_MOBILE_TRACE_DATASET ?? null,
+      tracesToken: repoEnv.PUTMANCODE_MOBILE_TRACE_TOKEN ?? null,
     },
     eas: {
       projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",

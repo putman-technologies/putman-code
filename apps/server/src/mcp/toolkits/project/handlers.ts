@@ -1,3 +1,8 @@
+import * as SecondBrain from "../../../project/SecondBrain.ts";
+import { ThreadManagementService } from "../../../orchestration-v2/ThreadManagementService.ts";
+import { readCoordinatorBoard } from "../../../orchestration-v2/CoordinatorBoard.ts";
+import * as SqlClient from "effect/sql/SqlClient";
+import { PullRequestService } from "../../../pullRequest/PullRequestService.ts";
 import {
   CommandId,
   MessageId,
@@ -38,7 +43,7 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import * as OrchestrationMcp from "../../OrchestratorMcpService.ts";
 import { newCommandId, readCaller, resolveProjectId, unavailable } from "../../threadAccess.ts";
-import { ProjectToolkit } from "./tools.ts";
+import { ProjectToolkit, ProjectReleaseToolkit } from "./tools.ts";
 
 const isAboveCeilingError = Schema.is(OrchestratorRuntimeModeAboveCeilingError);
 
@@ -537,5 +542,31 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
       }),
     // An existing destination is never adopted.
     { linkedCallers: "allowed" },
+  ),
+});
+
+export const releaseBoardLayer = McpToolAccess.toLayer(ProjectReleaseToolkit, {
+  t3_project_recall: McpToolAccess.readsAsCaller(({ query }) =>
+    Effect.gen(function* () {
+      const { caller, scope } = yield* readCaller();
+      if (!caller || scope.client !== undefined || caller.linkOrigin !== undefined)
+        return yield* new OrchestratorMcpFailure({
+          code: "capability_denied",
+          message: "Open a chat in this PutmanCode project to read its Second Brain.",
+        });
+      return yield* SecondBrain.recall(caller.projectId, query).pipe(Effect.mapError(unavailable));
+    }),
+  ),
+  t3_project_release_board: McpToolAccess.reads((input) =>
+    Effect.gen(function* () {
+      const projects = yield* access;
+      return yield* readCoordinatorBoard(
+        input.projectId,
+        yield* SqlClient.SqlClient,
+        projects,
+        yield* ThreadManagementService,
+        yield* PullRequestService,
+      ).pipe(Effect.mapError(unavailable));
+    }),
   ),
 });

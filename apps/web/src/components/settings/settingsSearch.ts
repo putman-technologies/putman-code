@@ -1,4 +1,3 @@
-import { HOSTED_APP_CHANNEL } from "~/branding";
 import { isElectron, isSecretsFeatureEnabled } from "~/env";
 import { isMacPlatform, isWindowsPlatform, normalizeSearchText } from "~/lib/utils";
 import { STATIC_KEYBINDING_COMMANDS, type KeybindingCommand } from "@t3tools/contracts";
@@ -60,14 +59,12 @@ export interface SettingsSearchItem {
   readonly desktopOnly?: boolean;
   readonly macOnly?: boolean;
   readonly windowsOnly?: boolean;
-  readonly releaseChannelOnly?: boolean;
   readonly secretsFeatureOnly?: boolean;
   readonly cloudOnly?: boolean;
   readonly environmentOnly?: boolean;
   readonly providerSettingsOnly?: boolean;
   readonly localBackendManagementOnly?: boolean;
   readonly localEnvironmentOnly?: boolean;
-  readonly primaryEnvironmentOnly?: boolean;
   readonly wslAvailableOnly?: boolean;
   readonly managedTunnelOnly?: boolean;
   readonly peerLinksOnly?: boolean;
@@ -90,7 +87,6 @@ export interface SettingsSearchAvailability {
   readonly hasFastWorktreeCheckoutEnvironment?: boolean;
   /** An environment without a provider allow-list, which hides text generators. */
   readonly hasTextGeneratorsEnvironment?: boolean;
-  readonly hasPrimaryEnvironment?: boolean;
 }
 
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
@@ -128,7 +124,21 @@ export const SETTINGS_NAV_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/access": msg("Sharing & access", { $context: "settings navigation item" }),
 };
 
-/** Sidebar order. A group with a hidden heading is set apart on screen by space alone. */
+/** The desktop and web share a short primary menu. Search also covers folded sections. */
+export const ADVANCED_SETTINGS_PATHS: ReadonlyArray<SettingsPath> = [
+  "/settings/archived",
+  "/settings/scheduled-tasks",
+  "/settings/worktrees",
+  "/settings/diffs",
+  "/settings/keybindings",
+  "/settings/browser",
+  "/settings/voice",
+  ...(isElectron ? (["/settings/snap-shot"] as const) : []),
+  "/settings/devices",
+  "/settings/maintenance",
+  "/settings/labs",
+];
+
 export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
   readonly heading: string;
   readonly headingHidden?: true;
@@ -137,29 +147,15 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
   {
     heading: msg("Preferences"),
     headingHidden: true,
-    paths: [
-      "/settings/general",
-      "/settings/appearance",
-      "/settings/chat",
-      "/settings/diffs",
-      "/settings/keybindings",
-      "/settings/voice",
-      "/settings/snap-shot",
-    ],
-  },
-  {
-    heading: msg("Agents"),
-    paths: [
-      "/settings/providers",
-      "/settings/threads",
-      "/settings/browser",
-      "/settings/devices",
-      "/settings/scheduled-tasks",
-    ],
+    paths: ["/settings/general", "/settings/appearance", "/settings/chat", "/settings/about"],
   },
   {
     heading: msg("Code"),
-    paths: ["/settings/projects", "/settings/source-control", "/settings/worktrees"],
+    paths: ["/settings/projects", "/settings/source-control"],
+  },
+  {
+    heading: msg("Agents"),
+    paths: ["/settings/providers", "/settings/threads"],
   },
   {
     heading: msg("Connections"),
@@ -168,11 +164,6 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
       "/settings/access",
       ...(isSecretsFeatureEnabled ? (["/settings/secrets"] as const) : []),
     ],
-  },
-  {
-    heading: msg("More"),
-    headingHidden: true,
-    paths: ["/settings/maintenance", "/settings/labs", "/settings/about", "/settings/archived"],
   },
 ];
 
@@ -727,6 +718,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("notification sound alert completion input approval desktop")],
   },
   {
+    id: "setup-guide",
+    title: msg("Setup guide"),
+    to: "/settings/general",
+    searchTerms: [msg("Welcome"), msg("Getting started"), msg("Onboarding")],
+  },
+  {
     id: "in-app-notifications",
     title: msg("In-app notifications"),
     to: "/settings/general",
@@ -930,37 +927,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("about check for updates download install upgrade release")],
   },
   {
-    id: "update-track",
-    title: msg("Update track"),
-    to: "/settings/about",
-    searchTerms: [msg("release channel stable latest nightly prerelease")],
-    releaseChannelOnly: true,
-  },
-  {
     id: "cli-command",
-    title: msg("t3 command"),
+    title: msg("putmancode command"),
     to: "/settings/about",
     searchTerms: [msg("cli terminal shell path install command line")],
     desktopOnly: true,
-  },
-  {
-    id: "mobile-app",
-    title: msg("Mobile app"),
-    to: "/settings/about",
-    searchTerms: [msg("phone tablet iPhone iPad iOS Android App Store Google Play QR")],
-  },
-  {
-    id: "welcome-page",
-    title: msg("Welcome page"),
-    to: "/settings/about",
-    primaryEnvironmentOnly: true,
-    searchTerms: [msg("onboarding setup first run getting started agents import projects")],
-  },
-  {
-    id: "privacy-policy",
-    title: msg("Privacy policy"),
-    to: "/settings/about",
-    searchTerms: [msg("telemetry analytics usage data tracking legal opt out")],
   },
   {
     id: "telemetry-export",
@@ -977,11 +948,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("logs traces processes resource history failures spans cpu memory")],
   },
   {
-    id: "open-source-licenses",
-    title: msg("Open source licenses"),
-    to: "/settings/about",
-  },
-  {
     id: "keybindings",
     title: msg("Keybindings"),
     to: "/settings/keybindings",
@@ -993,11 +959,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: msg("SnapShots"),
     searchTerms: [msg("window capture screenshot")],
     to: "/settings/snap-shot",
+    desktopOnly: true,
   },
   {
     id: "snap-shot-accessibility",
     title: msg("Include app text"),
     to: "/settings/snap-shot",
+    desktopOnly: true,
     targetId: "snap-shot-enabled",
     searchTerms: [
       msg("capture accessibility data text UI structure elements privacy omit agent context"),
@@ -1007,24 +975,28 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "snap-shot-shortcut",
     title: msg("Capture shortcut"),
     to: "/settings/snap-shot",
+    desktopOnly: true,
     targetId: "snap-shot-enabled",
   },
   {
     id: "snap-shot-sound",
     title: msg("Capture sound"),
     to: "/settings/snap-shot",
+    desktopOnly: true,
     targetId: "snap-shot-enabled",
   },
   {
     id: "snap-shot-flash",
     title: msg("Capture flash"),
     to: "/settings/snap-shot",
+    desktopOnly: true,
     targetId: "snap-shot-enabled",
   },
   {
     id: "snap-shot-animations",
     title: msg("Capture animations"),
     to: "/settings/snap-shot",
+    desktopOnly: true,
     targetId: "snap-shot-enabled",
   },
   {
@@ -1173,7 +1145,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "pull-request-links-open-in-app",
-    title: msg("Open pull requests in T3 Code"),
+    title: msg("Open pull requests in PutmanCode"),
     to: "/settings/diffs",
     searchTerms: [
       `pr commit links ${SOURCE_CONTROL_HOST_LABELS} browser external click default pull request view panel`,
@@ -1612,7 +1584,6 @@ export function filterAvailableSettingsSearchItems(
       (!item.providerSettingsOnly || availability.hasProviderSettingsEnvironment) &&
       (!item.localBackendManagementOnly || availability.canManageLocalBackend) &&
       (!item.localEnvironmentOnly || !availability.localEnvironmentDisabled) &&
-      (!item.primaryEnvironmentOnly || availability.hasPrimaryEnvironment === true) &&
       (!item.wslAvailableOnly || availability.isWslSettingsRowVisible) &&
       (!item.requiresThreadAutoSettlement || availability.hasThreadAutoSettlement) &&
       (!item.managedTunnelOnly || availability.managedTunnelActive === true) &&
@@ -1631,7 +1602,6 @@ export function settingsForThisPlatform(
   return items.filter(
     (item) =>
       (isElectron || item.desktopOnly !== true) &&
-      (!item.releaseChannelOnly || isElectron || HOSTED_APP_CHANNEL !== null) &&
       (!item.secretsFeatureOnly || isSecretsFeatureEnabled) &&
       (!item.macOnly || isMacPlatform(platform)) &&
       (!item.windowsOnly || isWindowsPlatform(platform)),

@@ -1,3 +1,4 @@
+import { MicrosoftProfileSync } from "../account/MicrosoftProfileSync";
 import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 
 import { ThreadRouteView } from "../components/ThreadRouteView";
@@ -25,6 +26,7 @@ function ChatRouteLayout() {
         <Outlet />
       )}
       {modalOpen ? <Outlet /> : null}
+      <MicrosoftProfileSync />
       <GlobalVoiceInputIndicator hidden={modalOpen} />
     </>
   );

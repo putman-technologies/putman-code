@@ -1180,6 +1180,70 @@ layer("GitHubPullRequestApi.layer", (it) => {
       }),
   );
 
+  it.effect.each([
+    { comparison: "ahead", expected: "deployed" },
+    { comparison: "behind", expected: "awaiting" },
+    { comparison: "diverged", expected: "awaiting" },
+  ] as const)(
+    "uses $comparison production ancestry for the coordinator badge",
+    ({ comparison, expected }) =>
+      Effect.gen(function* () {
+        const merge = "a".repeat(40);
+        const live = "b".repeat(40);
+        const respond = (value: unknown) => Effect.succeed(output(encodeJson(value)));
+        mockedExecute.mockReturnValueOnce(
+          respond({
+            data: {
+              repository: {
+                pullRequest: {
+                  state: "MERGED",
+                  reviewDecision: null,
+                  commits: { nodes: [] },
+                  mergeCommit: {
+                    oid: merge,
+                    statusCheckRollup: { state: "SUCCESS" },
+                    deployments: { nodes: [{ latestStatus: { state: "SUCCESS" } }] },
+                  },
+                },
+              },
+            },
+          }),
+        );
+        mockedExecute.mockReturnValueOnce(
+          respond({
+            data: {
+              repository: {
+                deployments: {
+                  nodes: [
+                    {
+                      commitOid: live,
+                      environment: "production",
+                      createdAt: "2026-01-01T00:00:00Z",
+                      latestStatus: {
+                        state: "SUCCESS",
+                        createdAt: "2026-01-01T00:00:00Z",
+                        environmentUrl: null,
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          }),
+        );
+        mockedExecute.mockReturnValueOnce(respond({ status: comparison }));
+        const api = yield* GitHubPullRequestApi.GitHubPullRequestApi;
+        expect(
+          yield* api.coordinatorStatus({
+            cwd: "/w",
+            host: "github.com",
+            repository: "acme/web",
+            number: 7,
+          }),
+        ).toBe(expected);
+      }),
+  );
+
   it.effect("reads linked pull requests on one host together, filed back by position", () =>
     Effect.gen(function* () {
       const node = (number: number) => ({

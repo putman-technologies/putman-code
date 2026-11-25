@@ -476,6 +476,20 @@ export const make = Effect.gen(function* () {
         })
         .pipe(Effect.mapError(fail("listChangeRequestStats"))),
 
+    coordinatorRange: (input) =>
+      cli.coordinatorRange(input).pipe(Effect.mapError(fail("coordinatorRange"))),
+    coordinatorIncludes: (input) =>
+      cli.coordinatorIncludes(input).pipe(Effect.mapError(fail("coordinatorIncludes"))),
+    dispatchCoordinatorRelease: (input) =>
+      cli
+        .dispatchCoordinatorRelease(input)
+        .pipe(Effect.mapError(fail("dispatchCoordinatorRelease"))),
+    coordinatorChange: (input) =>
+      cli.coordinatorChange(input).pipe(Effect.mapError(fail("coordinatorChange"))),
+    coordinatorProduction: (input) =>
+      cli.coordinatorProduction(input).pipe(Effect.mapError(fail("coordinatorProduction"))),
+    coordinatorStatus: (input) =>
+      cli.coordinatorStatus(input).pipe(Effect.mapError(fail("coordinatorStatus"))),
     getChangeRequestSummary: (input) =>
       cli.getPullRequestSummary(input).pipe(
         Effect.map((summary) => ({
@@ -746,6 +760,8 @@ export const make = Effect.gen(function* () {
         .pipe(Effect.mapError(fail("runAction"))),
 
     getCheckLogs: (input) => cli.readCheckLogs(input).pipe(Effect.mapError(fail("getCheckLogs"))),
+    workflowButton: (input) =>
+      cli.workflowButton(input).pipe(Effect.mapError(fail("workflowButton"))),
     rerunChecks: (input) => cli.rerunChecks(input).pipe(Effect.mapError(fail("rerunChecks"))),
 
     updateChangeRequest: (input) =>

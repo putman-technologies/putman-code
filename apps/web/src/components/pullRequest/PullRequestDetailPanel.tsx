@@ -95,6 +95,7 @@ import {
 import { PullRequestDetailGhost, PullRequestTimelineGhost } from "./PullRequestGhosts";
 import { PullRequestCopyableCode } from "./PullRequestCopyableCode";
 import { pullRequestRefKey, usePullRequestDetail } from "./usePullRequestDetail";
+import { RepoWorkflowAction, type RepoWorkflowActionHandle } from "./RepoWorkflowAction";
 import { PullRequestActionsMenu } from "./PullRequestActionsMenu";
 import {
   PullRequestApproveWorkflowsButton,
@@ -388,6 +389,7 @@ export function PullRequestDetailPanel({
   const gt = useGT();
   const resolve = useMessages();
   const environmentConfigs = useServerConfigs();
+  const workflowControl = useRef<RepoWorkflowActionHandle>(null);
   const projects = useProjects();
   const project = projects.find(
     (project) =>
@@ -1624,8 +1626,29 @@ export function PullRequestDetailPanel({
                 perform={perform}
                 resolveConflicts={resolveConflictsControl}
               />
+              {detail.provider === "github" &&
+                canWriteSourceControl &&
+                environmentConfigs.get(environmentId)?.environment.capabilities
+                  .pullRequestWorkflowButton && (
+                  <RepoWorkflowAction
+                    key={pullRequestKey}
+                    ref={workflowControl}
+                    environmentId={environmentId}
+                    reference={reference}
+                    repositoryUrl={repositoryUrl ?? detail.url}
+                    merged={detail.state === "merged"}
+                  />
+                )}
               {checkoutControl}
               <PullRequestActionsMenu
+                configureWorkflow={
+                  detail.provider === "github" &&
+                  canWriteSourceControl &&
+                  environmentConfigs.get(environmentId)?.environment.capabilities
+                    .pullRequestWorkflowButton
+                    ? () => workflowControl.current?.configure()
+                    : undefined
+                }
                 environmentId={environmentId}
                 reference={reference}
                 pullRequestKey={pullRequestKey}

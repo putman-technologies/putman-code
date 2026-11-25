@@ -2,6 +2,8 @@ import { OrchestrationMessageContext } from "./composerContext.ts";
 import { withRecordIdTable } from "./orchestrationV2IdTable.ts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import { ShipManifest } from "./coordinatorTeam.ts";
+import { CoordinatorBoard, CoordinatorBoardAction, FileOverlap } from "./coordinatorBoard.ts";
 import * as Schema from "effect/Schema";
 import * as SchemaAST from "effect/SchemaAST";
 import * as SchemaGetter from "effect/SchemaGetter";
@@ -735,6 +737,8 @@ export const OrchestrationV2Run = Schema.Struct({
   ordinal: PositiveInt,
   providerInstanceId: ProviderInstanceId,
   modelSelection: ModelSelection,
+  /** A routine coordinator run may use a lighter model while the thread keeps its work model. */
+  coordinatorWorkModel: Schema.optional(ModelSelection),
   providerThreadId: Schema.NullOr(ProviderThreadId),
   userMessageId: MessageId,
   rootNodeId: Schema.NullOr(NodeId),
@@ -3145,6 +3149,7 @@ export const OrchestrationV2Command = Schema.Union([
   }),
   Schema.Struct({
     type: Schema.Literal("thread.archive"),
+    handoffRunId: Schema.optional(RunId),
     commandId: CommandId,
     threadId: ThreadId,
   }),
@@ -3170,6 +3175,7 @@ export const OrchestrationV2Command = Schema.Union([
     threadId: ThreadId,
     /** Delete only a thread with no runs and no messages; otherwise succeed without a change. */
     onlyIfUnused: Schema.optional(Schema.Boolean),
+    settledInProject: Schema.optional(ProjectId),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.settle"),
@@ -3868,6 +3874,12 @@ export const ORCHESTRATION_V2_WS_METHODS = {
   getWorkflowScript: "orchestration.getWorkflowScript",
   getNativeChildWork: "orchestration.getNativeChildWork",
   stopWorkflow: "orchestration.stopWorkflow",
+  coordinatorRetry: "orchestration.coordinatorRetry",
+  coordinatorBoard: "orchestration.coordinatorBoard",
+  coordinatorOverlaps: "orchestration.coordinatorOverlaps",
+  coordinatorBoardAction: "orchestration.coordinatorBoardAction",
+  coordinatorStatus: "orchestration.coordinatorStatus",
+  projectCoordinator: "orchestration.projectCoordinator",
   forceStopThread: "orchestration.forceStopThread",
   getTurnItem: "orchestration.getTurnItem",
   launchThread: "orchestration.launchThread",
@@ -4225,6 +4237,36 @@ export const OrchestrationV2ThreadStreamItem = withRecordIdTable(
 );
 export type OrchestrationV2ThreadStreamItem = typeof OrchestrationV2ThreadStreamItem.Type;
 
+export function isProjectCoordinatorThread(projectId: ProjectId, threadId: ThreadId): boolean {
+  const prefix = `coordinator-${encodeURIComponent(projectId)}-`;
+  return threadId.startsWith(prefix) && /^\d+$/u.test(threadId.slice(prefix.length));
+}
+
+export const CoordinatorStatus = Schema.Literals([
+  "idle",
+  "review",
+  "ci",
+  "awaiting",
+  "deployed",
+  "unavailable",
+]);
+export type CoordinatorStatus = typeof CoordinatorStatus.Type;
+
+/** A grouped project or multi-PR handoff shows the first state needing attention. */
+export function summarizeCoordinatorStatuses(
+  states: readonly CoordinatorStatus[],
+): CoordinatorStatus {
+  for (const state of ["review", "unavailable", "ci", "awaiting", "deployed"] as const) {
+    if (states.includes(state)) return state;
+  }
+  return "idle";
+}
+
+export class ProjectCoordinatorError extends Schema.TaggedError<ProjectCoordinatorError>()(
+  "ProjectCoordinatorError",
+  { message: Schema.String },
+) {}
+
 export class OrchestrationV2DispatchCommandError extends Schema.TaggedError<OrchestrationV2DispatchCommandError>()(
   "OrchestrationV2DispatchCommandError",
   {
@@ -4567,6 +4609,45 @@ export const OrchestrationV2RpcSchemas = {
   stopWorkflow: {
     input: OrchestrationV2StopWorkflowInput,
     output: Schema.Void,
+  },
+  coordinatorRetry: {
+    input: Schema.Struct({
+      projectId: ProjectId,
+      host: TrimmedNonEmptyString,
+      repository: TrimmedNonEmptyString,
+      number: PositiveInt,
+      head: TrimmedNonEmptyString,
+    }),
+    output: Schema.Struct({ count: NonNegativeInt }),
+  },
+  coordinatorBoard: {
+    input: Schema.Struct({ projectId: ProjectId, github: Schema.optional(Schema.Boolean) }),
+    output: CoordinatorBoard,
+  },
+  coordinatorOverlaps: {
+    input: Schema.Struct({ projectId: ProjectId }),
+    output: Schema.Array(FileOverlap),
+  },
+  coordinatorBoardAction: {
+    input: CoordinatorBoardAction,
+    output: Schema.Struct({ threadId: ThreadId, manifest: Schema.optional(ShipManifest) }),
+  },
+  coordinatorStatus: { input: Schema.Struct({ projectId: ProjectId }), output: CoordinatorStatus },
+  projectCoordinator: {
+    input: Schema.Union([
+      Schema.Struct({
+        action: Schema.Literal("open"),
+        projectId: ProjectId,
+        modelSelection: ModelSelection,
+      }),
+      Schema.Struct({
+        action: Schema.Literal("handoff"),
+        projectId: ProjectId,
+        threadId: ThreadId,
+        runId: RunId,
+      }),
+    ]),
+    output: Schema.Struct({ threadId: ThreadId }),
   },
   forceStopThread: {
     input: OrchestrationV2ForceStopThreadInput,

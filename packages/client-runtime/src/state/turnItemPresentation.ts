@@ -10,6 +10,14 @@ const WORKSPACE_PREPARATION_INPUT = "Preparing workspace";
 
 export function turnItemIsWorkspacePreparation(item: OrchestrationV2TurnItem): boolean {
   return (
+    // An automatic branch name is optional. Older SSH servers can report a timeout even
+    // after Git moved the ref. The original event stays available in the run history.
+    (item.type === "system_notice" &&
+      item.status === "completed" &&
+      item.id.endsWith(":signal:branch-rename") &&
+      (item.title === "Branch not renamed" ||
+        item.title === "Worktree branch rename unconfirmed") &&
+      item.message.endsWith("Git command timed out.")) ||
     (item.type === "command_execution" && item.input === WORKSPACE_PREPARATION_INPUT) ||
     (item.type === "error" &&
       item.status === "cancelled" &&

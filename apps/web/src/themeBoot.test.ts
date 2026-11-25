@@ -112,7 +112,7 @@ function runtimeResolvedAppearance(
   invalidateCustomThemes();
   try {
     const raw = storage[THEME_STORAGE_KEY] ?? null;
-    const theme = raw !== null && isKnownThemePreference(raw) ? raw : "system";
+    const theme = raw !== null && isKnownThemePreference(raw) ? raw : "light";
     const followRaw = storage[THEME_FOLLOW_SYSTEM_STORAGE_KEY] ?? null;
     const appearanceRaw = storage[THEME_APPEARANCE_MODE_STORAGE_KEY] ?? null;
     const appearanceMode =
@@ -148,6 +148,16 @@ const CHARCOAL_DARK_ONLY = {
 };
 
 describe("index.html boot script", () => {
+  it("starts light on a dark OS and honors explicit dark or system mode", () => {
+    expect(runBootScript({ prefersDark: true }).isDark).toBe(false);
+    expect(runBootScript({ prefersDark: true, storageThrows: true }).isDark).toBe(false);
+    for (const theme of ["dark", "system"]) {
+      expect(
+        runBootScript({ prefersDark: true, storage: { [THEME_STORAGE_KEY]: theme } }).isDark,
+      ).toBe(true);
+    }
+  });
+
   const parityCases: ReadonlyArray<{
     name: string;
     storage: Record<string, string>;
@@ -225,7 +235,7 @@ describe("index.html boot script", () => {
       prefersDark: true,
     },
     {
-      name: "a removed custom theme falls back to system",
+      name: "a removed custom theme falls back to light",
       storage: { [THEME_STORAGE_KEY]: "gone-theme" },
       prefersDark: true,
     },
@@ -397,12 +407,12 @@ describe("index.html boot script", () => {
     expect(boot.metaContent).toBe(DEFAULT_DARK_CHROME);
   });
 
-  it("follows the OS appearance when storage is unavailable", () => {
+  it("uses light on either OS appearance when storage is unavailable", () => {
     const light = runBootScript({ storageThrows: true, prefersDark: false });
     expect(light.isDark).toBe(false);
     expect(light.themeId).toBeUndefined();
 
     const dark = runBootScript({ storageThrows: true, prefersDark: true });
-    expect(dark.isDark).toBe(true);
+    expect(dark.isDark).toBe(false);
   });
 });

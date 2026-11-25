@@ -465,7 +465,10 @@ export function useThreadActions() {
 
   const deleteThread = async (
     target: ScopedThreadRef,
-    opts: { deletedThreadKeys?: ReadonlySet<string> } = {},
+    opts: {
+      deletedThreadKeys?: ReadonlySet<string>;
+      settledInProject?: import("@t3tools/contracts").ProjectId;
+    } = {},
   ) => {
     const permissionFailure = threadOperationFailure(target);
     if (permissionFailure) return permissionFailure;
@@ -487,7 +490,10 @@ export function useThreadActions() {
       }
       const result = await deleteThreadMutation({
         environmentId: target.environmentId,
-        input: { threadId: target.threadId },
+        input: {
+          threadId: target.threadId,
+          ...(opts.settledInProject ? { settledInProject: opts.settledInProject } : {}),
+        },
       });
       if (result._tag === "Success") {
         for (const ref of [
@@ -540,10 +546,9 @@ export function useThreadActions() {
     const environmentConfig = appAtomRegistry
       .get(environmentServerConfigsAtom)
       .get(threadRef.environmentId);
-    let orphanedWorktreePath = getOrphanedWorktreePathForThread(
-      survivingThreads,
-      threadRef.threadId,
-    );
+    let orphanedWorktreePath = opts.settledInProject
+      ? null
+      : getOrphanedWorktreePathForThread(survivingThreads, threadRef.threadId);
     // A shell that leaves idle subagent children out cannot prove nobody else uses the worktree,
     // so the server's list decides. A failed read keeps the worktree.
     if (orphanedWorktreePath !== null && environmentConfig?.shellThreadFamilies === true) {
@@ -601,7 +606,7 @@ export function useThreadActions() {
       shouldDeleteWorktree = confirmationResult.value;
     }
 
-    if (thread.runtime !== null) {
+    if (!opts.settledInProject && thread.runtime !== null) {
       await stopThreadSession({
         environmentId: threadRef.environmentId,
         input: { threadId: threadRef.threadId },
@@ -629,7 +634,10 @@ export function useThreadActions() {
     });
     const deleteResult = await deleteThreadMutation({
       environmentId: threadRef.environmentId,
-      input: { threadId: threadRef.threadId },
+      input: {
+        threadId: threadRef.threadId,
+        ...(opts.settledInProject ? { settledInProject: opts.settledInProject } : {}),
+      },
     }).finally(stopWatchingHistory);
     if (deleteResult._tag === "Failure") {
       return deleteResult;

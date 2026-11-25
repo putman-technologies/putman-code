@@ -68,6 +68,21 @@ export const CheckStatusState = Schema.Literals(["COMPLETED", "IN_PROGRESS", "PE
 export type CheckStatusState = typeof CheckStatusState.Type
 
 /**
+ * The possible states for a deployment status.
+ *
+ * - `ERROR`: The deployment experienced an error.
+ * - `FAILURE`: The deployment has failed.
+ * - `INACTIVE`: The deployment is inactive.
+ * - `IN_PROGRESS`: The deployment is in progress.
+ * - `PENDING`: The deployment is pending.
+ * - `QUEUED`: The deployment is queued
+ * - `SUCCESS`: The deployment was successful.
+ * - `WAITING`: The deployment is waiting.
+ */
+export const DeploymentStatusState = Schema.Literals(["ERROR", "FAILURE", "INACTIVE", "IN_PROGRESS", "PENDING", "QUEUED", "SUCCESS", "WAITING"])
+export type DeploymentStatusState = typeof DeploymentStatusState.Type
+
+/**
  * The possible sides of a diff.
  *
  * - `LEFT`: The left side of the diff.

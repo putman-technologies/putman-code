@@ -185,6 +185,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   getConnectionCatalog: () => ipcRenderer.invoke(IpcChannels.GET_CONNECTION_CATALOG_CHANNEL),
   setConnectionCatalog: (catalog) =>
     ipcRenderer.invoke(IpcChannels.SET_CONNECTION_CATALOG_CHANNEL, catalog),
+  microsoftProfile: (action) => ipcRenderer.invoke(IpcChannels.MICROSOFT_PROFILE_CHANNEL, action),
+  personalAssistant: (input) => ipcRenderer.invoke(IpcChannels.PERSONAL_ASSISTANT_CHANNEL, input),
   discoverSshHosts: () => ipcRenderer.invoke(IpcChannels.DISCOVER_SSH_HOSTS_CHANNEL),
   resolveSshHost: (alias) => ipcRenderer.invoke(IpcChannels.RESOLVE_SSH_HOST_CHANNEL, alias),
   ensureSshEnvironment: async (target, options) =>

@@ -1,10 +1,12 @@
 import { managedCapabilityDenial } from "@t3tools/client-runtime/contract-labels";
+import { RenameEnvironmentDialog } from "./RenameEnvironmentDialog";
 import { SessionPermissions } from "./SessionPermissions";
 import {
   ChevronRightIcon,
   ChevronsLeftRightEllipsisIcon,
   EllipsisIcon,
   RouteIcon,
+  PencilIcon,
 } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useEffectEvent, useState } from "react";
@@ -131,6 +133,7 @@ export function SavedBackendListRow({
 }: SavedBackendListRowProps) {
   const messages = useMessages();
   const gt = useGT();
+  const [renaming, setRenaming] = useState(false);
   const [routesOpen, setRoutesOpen] = useState(false);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
   const [diagnosisOpen, setDiagnosisOpen] = useState(false);
@@ -443,6 +446,10 @@ export function SavedBackendListRow({
           <EllipsisIcon className="size-3.5" />
         </MenuTrigger>
         <MenuPopup align="end">
+          <MenuItem onClick={() => setRenaming(true)}>
+            <PencilIcon />
+            <T>Rename</T>
+          </MenuItem>
           <EnvironmentIconMenu
             environmentId={environmentId}
             serverConfig={environment.serverConfig}
@@ -467,6 +474,14 @@ export function SavedBackendListRow({
           </MenuItem>
         </MenuPopup>
       </Menu>
+      {renaming && (
+        <RenameEnvironmentDialog
+          environmentId={environmentId}
+          hostLabel={environment.entry.target.label}
+          displayName={environment.displayName}
+          onClose={() => setRenaming(false)}
+        />
+      )}
     </EnvironmentRow>
   );
 }
@@ -776,7 +791,7 @@ function ConfiguredCloudLinkRow({
       ) : (
         <SettingsRow
           title={setting("t3-connect").title}
-          description={gt("Run `t3 connect link` on the host, then restart T3 Code there.")}
+          description={gt("Run `t3 connect link` on the host, then restart PutmanCode there.")}
         />
       )}
       {signedOut && showSwitch ? null : (

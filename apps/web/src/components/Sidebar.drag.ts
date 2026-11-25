@@ -162,7 +162,12 @@ export function createSidebarSortingStrategy(input: {
       ? settledOrder.slice(0, input.settledVisibleCount ?? settledOrder.length)
       : [];
     const routeKey = input.routeThreadKey;
-    if (routeKey && settledOrder.includes(routeKey) && !visible.includes(routeKey)) {
+    if (
+      input.settledExpanded &&
+      routeKey &&
+      settledOrder.includes(routeKey) &&
+      !visible.includes(routeKey)
+    ) {
       visible.push(routeKey);
     }
     groups.settled = visible.map((key) => ({ kind: "thread", key, section: "settled" }));

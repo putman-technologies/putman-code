@@ -68,6 +68,7 @@ export interface UpdateProjectInput extends CommandMetadata {
   readonly title?: string;
   readonly workspaceRoot?: string;
   readonly defaultModelSelection?: ModelSelection | null;
+  readonly secondBrainEnabled?: boolean;
   readonly autoPull?: boolean;
   readonly projectIcon?: ProjectIconOverride | null;
   readonly faviconPath?: string | null;
@@ -100,6 +101,7 @@ export interface ThreadCommandInput extends CommandMetadata {
 export interface DeleteThreadInput extends ThreadCommandInput {
   /** The server deletes only a thread with no runs and no messages. */
   readonly onlyIfUnused?: boolean;
+  readonly settledInProject?: ProjectId;
 }
 export type ArchiveThreadInput = ThreadCommandInput;
 export type UnarchiveThreadInput = ThreadCommandInput;
@@ -448,6 +450,9 @@ export const updateProject = Effect.fn("EnvironmentCommands.updateProject")(func
     ...(input.defaultModelSelection === undefined
       ? {}
       : { defaultModelSelection: input.defaultModelSelection }),
+    ...(input.secondBrainEnabled === undefined
+      ? {}
+      : { secondBrainEnabled: input.secondBrainEnabled }),
     ...(input.autoPull === undefined ? {} : { autoPull: input.autoPull }),
     ...(input.projectIcon === undefined ? {} : { projectIcon: input.projectIcon }),
     ...(input.faviconPath === undefined ? {} : { faviconPath: input.faviconPath }),
@@ -512,6 +517,7 @@ export const deleteThread = Effect.fn("EnvironmentCommands.deleteThread")(functi
     type: "thread.delete",
     commandId: yield* allocateCommandId(input),
     threadId: input.threadId,
+    ...(input.settledInProject === undefined ? {} : { settledInProject: input.settledInProject }),
     ...(input.onlyIfUnused === undefined ? {} : { onlyIfUnused: input.onlyIfUnused }),
   });
 });

@@ -1,7 +1,7 @@
-import { ArrowLeftIcon, ArrowRightIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
+import { ArrowLeftIcon, ArrowRightIcon, MessageCircleIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { T, useGT } from "gt-react";
-import { memo } from "react";
+import { lazy, memo, Suspense, useState } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { useAtomValue } from "@effect/atom-react";
@@ -14,8 +14,7 @@ import {
 } from "../../navigationHistory";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { cn } from "../../lib/utils";
-import { useIssuesSupported, usePullRequestsSupported } from "../../state/environments";
-import { T3Wordmark } from "../T3Wordmark";
+import { PutmanCodeMark } from "../PutmanCodeMark";
 import {
   resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
@@ -33,21 +32,21 @@ import {
   useSidebar,
 } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { readPullRequestListPreferences } from "../pullRequest/pullRequestListPreferences";
-import { readIssueListPreferences } from "../issue/issueListPreferences";
-import { IssueGlyph } from "../issue/issuePresentation";
 import { isSidebarUtilityPage, useNavigateToMainApp } from "./mainAppLocation";
+import { SidebarUsageBar } from "./SidebarUsageBar";
 import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
-import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { observeResize } from "~/lib/observeResize";
+
+const AssistantDialog = lazy(() => import("../assistant/AssistantDialog"));
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
 }: {
   isElectron: boolean;
 }) {
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const stageLabel = useEnvironmentStageLabel();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const gt = useGT();
@@ -67,6 +66,11 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         isElectron && "drag-region",
       )}
     >
+      {assistantOpen && (
+        <Suspense fallback={null}>
+          <AssistantDialog onClose={() => setAssistantOpen(false)} />
+        </Suspense>
+      )}
       {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
       <div className="relative top-[calc(var(--workspace-controls-top)-env(safe-area-inset-top))] z-10 ml-[calc(var(--workspace-controls-left)+1px-env(safe-area-inset-left))] flex shrink-0 items-center md:hidden">
         <SidebarTrigger
@@ -79,9 +83,30 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         <div className="flex shrink-0 items-center gap-1">
           <SidebarBrand onBackdrop={backdropVariant !== null} />
           {isElectron ? (
-            <div className="hidden items-center md:flex">
-              <HistoryNavigationButton direction="back" onBackdrop={backdropVariant !== null} />
-              <HistoryNavigationButton direction="forward" onBackdrop={backdropVariant !== null} />
+            <div className="flex items-center">
+              <div className="hidden items-center md:flex">
+                <HistoryNavigationButton direction="back" onBackdrop={backdropVariant !== null} />
+                <HistoryNavigationButton
+                  direction="forward"
+                  onBackdrop={backdropVariant !== null}
+                />
+              </div>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      aria-label={gt("Personal assistant")}
+                      className="[-webkit-app-region:no-drag]"
+                      size="icon-sm"
+                      variant={backdropVariant ? "media-navigation" : "ghost"}
+                      onClick={() => setAssistantOpen(true)}
+                    />
+                  }
+                >
+                  <MessageCircleIcon className="size-3.5" />
+                </TooltipTrigger>
+                <TooltipPopup side="bottom">{gt("Personal assistant")}</TooltipPopup>
+              </Tooltip>
             </div>
           ) : null}
         </div>
@@ -118,7 +143,7 @@ export function SidebarBrandWidthProbe({
     >
       <div className="ml-[var(--workspace-titlebar-content-left)] flex gap-1">
         <SidebarBrandMark onBackdrop={false} />
-        {isElectron ? <div className="w-[calc(2*var(--workspace-titlebar-control-size))]" /> : null}
+        {isElectron ? <div className="w-[calc(3*var(--workspace-titlebar-control-size))]" /> : null}
       </div>
     </div>
   );
@@ -171,7 +196,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
   const gt = useGT();
   return (
     <Link
-      aria-label={gt("T3 Code home")}
+      aria-label={gt("PutmanCode home")}
       className={cn(
         "relative z-10 ml-[var(--workspace-titlebar-content-left)] hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2 focus-visible:ring-inset md:flex",
         onBackdrop ? "text-white" : "text-foreground",
@@ -185,17 +210,14 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
 
 function SidebarBrandMark({ onBackdrop }: { onBackdrop: boolean }) {
   return (
-    <span className="inline-flex min-w-0 items-baseline gap-1 text-sm font-medium tracking-tight">
-      <T3Wordmark aria-label="T3" className="h-[1cap] w-auto shrink-0" />
-      <span
-        className={cn(
-          "truncate [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:py-1",
-          onBackdrop ? "text-white/70" : "text-muted-foreground",
-        )}
-      >
-        {/* oxlint-disable-next-line t3code/no-untranslated-copy -- product wordmark */}
-        {"Code"}
-      </span>
+    <span
+      className={cn(
+        "inline-flex min-w-0 items-center gap-2 text-sm font-semibold tracking-tight",
+        onBackdrop && "text-white",
+      )}
+    >
+      <PutmanCodeMark aria-hidden className="size-5 shrink-0" />
+      <span>PutmanCode</span>
     </span>
   );
 }
@@ -233,34 +255,14 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const isOnUtilityPage = useLocation({
     select: (location) => isSidebarUtilityPage(location.pathname),
   });
-  const pullRequestsSupported = usePullRequestsSupported();
-  const issuesSupported = useIssuesSupported();
   const closeMobileSidebar = () => {
     if (isMobile) {
       setOpenMobile(false);
     }
   };
-  const handlePullRequestsClick = () => {
-    closeMobileSidebar();
-    void navigate({
-      to: "/pull-requests",
-      search: readPullRequestListPreferences(),
-    });
-  };
-  const handleIssuesClick = () => {
-    closeMobileSidebar();
-    void navigate({ to: "/issues", search: readIssueListPreferences() });
-  };
   const handleSettingsClick = () => {
     closeMobileSidebar();
     void navigate({ to: "/settings" });
-  };
-
-  const handleUsageClick = () => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-    void navigate({ to: "/usage" });
   };
 
   const handleBackClick = () => {
@@ -280,32 +282,11 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           </SidebarMenuButton>
         </SidebarMenuItem>
       ) : (
-        <>
-          <SidebarUtilityItem
-            icon={<SettingsIcon />}
-            label={gt("Settings")}
-            onClick={handleSettingsClick}
-          />
-          {pullRequestsSupported ? (
-            <SidebarUtilityItem
-              icon={<PullRequestGlyph.pullRequest />}
-              label={gt("Pull requests")}
-              onClick={handlePullRequestsClick}
-            />
-          ) : null}
-          {issuesSupported ? (
-            <SidebarUtilityItem
-              icon={<IssueGlyph.issue />}
-              label={gt("Issues", { $context: "sidebar link to the list of issues" })}
-              onClick={handleIssuesClick}
-            />
-          ) : null}
-          <SidebarUtilityItem
-            icon={<ChartNoAxesColumnIcon />}
-            label={gt("Usage")}
-            onClick={handleUsageClick}
-          />
-        </>
+        <SidebarUtilityItem
+          icon={<SettingsIcon />}
+          label={gt("Settings")}
+          onClick={handleSettingsClick}
+        />
       )}
       <SidebarThreadUndoNotice />
       <SidebarUpdatePill />
@@ -319,6 +300,7 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
       <SidebarUtilityMenu />
+      <SidebarUsageBar />
     </SidebarFooter>
   );
 });

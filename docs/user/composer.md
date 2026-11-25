@@ -256,10 +256,10 @@ Steer. Click it or press your send shortcut to use that action. Hold `Cmd` on ma
 Windows and Linux to switch the button to the opposite action, then click, or use the opposite-action
 shortcut described above.
 
-On web and desktop, queued messages appear at the end of the thread as dashed messages that have
-not been sent yet. On mobile they appear above the composer. Each shows its text and any attached
-images. **Send now** sends a message right away, into the running turn if there is one. You can
-also edit or remove it.
+Queued messages stay just above the composer while you scroll through the conversation. Each
+row shows the message and any attached images. You can edit or remove a waiting message, or
+choose **Steer now** to send it into the active turn when the provider supports steering.
+Longer queues have a **Show all** control. As each message starts, it leaves the queue.
 
 If you stop the agent or the server restarts, queued messages keep their order and are held.
 Press **Resume** in an empty composer to continue. For stopped runs and usage limits,

@@ -19,6 +19,7 @@ const STEP_TIMEOUT_MS = 60_000;
 const { values } = NodeUtil.parseArgs({
   options: {
     executable: { type: "string" },
+    "check-sidebar": { type: "boolean", default: false },
     // An unpackaged app directory for a plain Electron executable, as PR CI runs it.
     app: { type: "string" },
     "artifacts-dir": { type: "string" },
@@ -49,7 +50,7 @@ try {
       ...process.env,
       XDG_CONFIG_HOME: NodePath.join(home, ".config"),
       XDG_DATA_HOME: NodePath.join(home, ".local/share"),
-      T3CODE_HOME: t3Home,
+      PUTMANCODE_HOME: t3Home,
       T3CODE_TELEMETRY_ENABLED: "false",
       T3CODE_DISABLE_AUTO_UPDATE: "true",
     },
@@ -60,12 +61,51 @@ try {
   step = "waiting for the first window";
   const page = await app.firstWindow({ timeout: STEP_TIMEOUT_MS });
   try {
-    step = `finding "${THREAD_TITLE}" in the sidebar`;
+    step = "entering the workspace on first launch";
     const thread = page.locator("li[data-thread-item]", { hasText: THREAD_TITLE });
+    const skipSetup = page.getByRole("button", { name: "Skip setup", exact: true });
+    await thread.or(skipSetup).first().waitFor({ timeout: STEP_TIMEOUT_MS });
+    if (await skipSetup.isVisible()) await skipSetup.click();
+    step = `finding "${THREAD_TITLE}" in the sidebar`;
     await thread.waitFor({ timeout: STEP_TIMEOUT_MS });
     step = "opening the thread";
     await thread.click();
     await page.getByText(THREAD_MESSAGE).waitFor({ timeout: STEP_TIMEOUT_MS });
+    if (values["check-sidebar"]) {
+      step = "checking the packaged Linux worker";
+      const resources = await app.evaluate(() => process.resourcesPath);
+      const worker = NodePath.join(resources, "assistant", "worker.py");
+      if (!NodeFS.statSync(worker).isFile()) throw new Error("Assistant worker missing");
+      step = "opening the personal assistant from the desktop title bar";
+      await page.getByRole("button", { name: "Personal assistant", exact: true }).click();
+      await page.getByRole("button", { name: "Connect and install worker" }).waitFor();
+      await page.keyboard.press("Escape");
+      step = "checking the usage meters and sidebar controls";
+      const footer = page.locator('[data-sidebar="footer"]:visible');
+      for (const provider of ["Codex", "Claude"]) {
+        await footer.getByText(provider, { exact: true }).waitFor();
+      }
+      if (await footer.getByRole("button", { name: /^(Issues|Pull requests|Usage)$/ }).count()) {
+        throw new Error("The old sidebar shortcuts are still present");
+      }
+      const projects = page.getByRole("navigation", { name: "Projects" });
+      await projects.waitFor();
+      if (await projects.getByRole("link", { name: /GitHub/ }).count()) {
+        throw new Error("The project row still shows a GitHub badge");
+      }
+      step = "opening and hiding settled chats through the filter";
+      const filter = page.getByLabel("Filter threads by project", { exact: true });
+      await filter.click();
+      await page.getByRole("option", { name: /Show settled chats/ }).click();
+      const settled = page.getByTestId("sidebar-settled-header").getByRole("heading");
+      await settled.waitFor();
+      await filter.click();
+      await page.getByRole("option", { name: /Hide settled chats/ }).click();
+      await settled.waitFor({ state: "hidden" });
+      step = "opening Microsoft 365 settings in the installed app";
+      await footer.getByRole("button", { name: "Settings", exact: true }).click();
+      await page.getByRole("button", { name: "Sign in with Microsoft 365", exact: true }).waitFor();
+    }
   } catch (error) {
     NodeFS.mkdirSync(artifactsDir, { recursive: true });
     await page

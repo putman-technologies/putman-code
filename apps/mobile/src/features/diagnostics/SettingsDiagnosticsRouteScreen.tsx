@@ -162,8 +162,8 @@ function CrashReportsSetting() {
   const gt = useGT();
   const ready = AsyncResult.isSuccess(preferences) && !preferences.waiting;
   const enabled = AsyncResult.isSuccess(preferences)
-    ? preferences.value.crashReportsEnabled !== false
-    : true;
+    ? preferences.value.crashReportsEnabled === true
+    : false;
 
   const change = (value: boolean) => {
     setSaving(true);
@@ -197,7 +197,7 @@ function CrashReportsSetting() {
       <Text className="px-2 text-sm leading-normal text-foreground-muted">
         <T>
           When the app crashes or hits an error, it sends the error message, the stack trace, the
-          app version, and the device model and OS version to the T3 Code team. Each launch also
+          app version, and the device model and OS version to the PutmanCode team. Each launch also
           sends startup timings. Reports carry a random ID for this install.
         </T>
       </Text>

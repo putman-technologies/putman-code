@@ -1,3 +1,4 @@
+import { environmentPresentationLabel } from "@t3tools/client-runtime/connection";
 import { useAtomValue } from "@effect/atom-react";
 import {
   AuthDiagnosticsReadScope,
@@ -33,22 +34,36 @@ export interface EnvironmentUsageStatus {
 
 const usageByWindowAtom = Atom.family((windowKey: string) =>
   Atom.make((get): readonly EnvironmentUsageStatus[] => {
-    const input = JSON.parse(windowKey) as UsageSummaryInput;
-    const presentations = get(environmentPresentations.presentationsAtom);
+    const { onlyEnvironmentId, ...input } = JSON.parse(windowKey) as UsageSummaryInput & {
+      onlyEnvironmentId?: EnvironmentId;
+    };
+    const presentations =
+      onlyEnvironmentId === undefined
+        ? get(environmentPresentations.presentationsAtom)
+        : [
+            [
+              onlyEnvironmentId,
+              get(environmentPresentations.presentationAtom(onlyEnvironmentId)),
+            ] as const,
+          ];
 
     const statuses: EnvironmentUsageStatus[] = [];
     for (const [environmentId, presentation] of presentations) {
+      if (!presentation) continue;
       const isConnected = presentation.connection.phase === "connected";
       const sessionResult = get(environmentSession.sessionStateAtom(environmentId));
-      const access = resolveUsageAccess({
-        connectionPhase: presentation.connection.phase,
-        session: AsyncResult.getOrElse(sessionResult, () => null),
-        hasSessionError: sessionResult._tag === "Failure",
-      });
-      if (!access.canReadDiagnostics) {
+      const access = resolveUsageAccess(
+        {
+          connectionPhase: presentation.connection.phase,
+          session: AsyncResult.getOrElse(sessionResult, () => null),
+          hasSessionError: sessionResult._tag === "Failure",
+        },
+        m,
+      );
+      if (!access.canReadDiagnostics || (onlyEnvironmentId !== undefined && !isConnected)) {
         statuses.push({
           environmentId,
-          label: presentation.entry.target.label,
+          label: environmentPresentationLabel(presentation),
           isConnected,
           ...access,
           summary: null,
@@ -67,7 +82,7 @@ const usageByWindowAtom = Atom.family((windowKey: string) =>
       const summary = AsyncResult.getOrElse(result, () => null);
       statuses.push({
         environmentId,
-        label: presentation.entry.target.label,
+        label: environmentPresentationLabel(presentation),
         isPending: result.waiting,
         canReadDiagnostics: true,
         isConnected,
@@ -79,6 +94,11 @@ const usageByWindowAtom = Atom.family((windowKey: string) =>
     return statuses;
   }).pipe(Atom.withLabel(`web-usage:window:${windowKey}`)),
 );
+
+export function useEnvironmentUsage(environmentId: EnvironmentId, input: UsageSummaryInput) {
+  const key = JSON.stringify({ ...input, onlyEnvironmentId: environmentId });
+  return useAtomValue(usageByWindowAtom(key))[0];
+}
 
 export interface UsageView {
   readonly merged: MergedUsage;

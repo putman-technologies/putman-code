@@ -152,6 +152,7 @@ export const ReceivedProjectIcon = ForwardCompatibleUnion(projectIconMembers, "k
 );
 
 export const Project = Schema.Struct({
+  secondBrainEnabled: Schema.optional(Schema.Boolean),
   id: ProjectId,
   title: TrimmedNonEmptyString,
   workspaceRoot: TrimmedNonEmptyString,
@@ -178,6 +179,7 @@ export const ProjectSnapshot = Schema.Struct({
 export type ProjectSnapshot = typeof ProjectSnapshot.Type;
 
 export const ProjectCreatePayload = Schema.Struct({
+  secondBrainEnabled: Schema.optional(Schema.Boolean),
   title: TrimmedNonEmptyString,
   workspaceRoot: TrimmedNonEmptyString,
   createWorkspaceRootIfMissing: Schema.optional(Schema.Boolean),
@@ -187,6 +189,7 @@ export const ProjectCreatePayload = Schema.Struct({
 export type ProjectCreatePayload = typeof ProjectCreatePayload.Type;
 
 export const ProjectUpdatePayload = Schema.Struct({
+  secondBrainEnabled: Schema.optional(Schema.Boolean),
   title: Schema.optional(TrimmedNonEmptyString),
   workspaceRoot: Schema.optional(TrimmedNonEmptyString),
   defaultModelSelection: Schema.optional(Schema.NullOr(ModelSelection)),
@@ -531,6 +534,7 @@ export const ProjectEnsureScratchResult = Schema.Struct({
 export type ProjectEnsureScratchResult = typeof ProjectEnsureScratchResult.Type;
 
 export const ProjectCreateNewInput = Schema.Struct({
+  secondBrainEnabled: Schema.optional(Schema.Boolean),
   name: TrimmedNonEmptyString.check(Schema.isMaxLength(200)),
 });
 export type ProjectCreateNewInput = typeof ProjectCreateNewInput.Type;

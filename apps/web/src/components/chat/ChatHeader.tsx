@@ -46,6 +46,7 @@ import { useClientSettings } from "../../hooks/useSettings";
 import { GuestShareIndicator } from "./GuestShareControls";
 
 interface ChatHeaderProps {
+  coordinatorModelLabel?: string | undefined;
   activeThreadEnvironmentId: EnvironmentId;
   activeThreadId: ThreadId;
   activeThreadTitle: string;
@@ -71,6 +72,7 @@ function resolveRenameCommit(input: {
 }
 
 export const ChatHeader = memo(function ChatHeader({
+  coordinatorModelLabel,
   activeThreadEnvironmentId,
   activeThreadId,
   activeThreadTitle,
@@ -411,6 +413,9 @@ export const ChatHeader = memo(function ChatHeader({
           ) : null}
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>
+      {coordinatorModelLabel && (
+        <span className="truncate text-xs text-muted-foreground">{coordinatorModelLabel}</span>
+      )}
       {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
     </div>
   );

@@ -137,3 +137,154 @@ query PullRequestWatchFingerprint(
     }
   }
 }
+
+# Commit-scoped evidence for the coordinator sidebar. A successful build alone cannot
+# establish that the release was deployed.
+query CoordinatorRelease($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      state
+      reviewDecision
+      commits(last: 1) {
+        nodes {
+          commit {
+            statusCheckRollup {
+              state
+            }
+          }
+        }
+      }
+      mergeCommit {
+        oid
+        statusCheckRollup {
+          state
+        }
+        deployments(
+          first: 1
+          environments: ["Production", "production", "Prod", "prod", "PRODUCTION", "PROD"]
+          orderBy: { field: CREATED_AT, direction: DESC }
+        ) {
+          nodes {
+            latestStatus {
+              state
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment CoordinatorCi on StatusCheckRollupContextConnection {
+  pageInfo {
+    hasNextPage
+  }
+  nodes {
+    __typename
+    ... on CheckRun {
+      name
+      status
+      conclusion
+      detailsUrl
+      checkSuite {
+        app {
+          slug
+        }
+      }
+    }
+    ... on StatusContext {
+      context
+      state
+      targetUrl
+    }
+  }
+}
+
+query CoordinatorChange($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    defaultBranchRef {
+      name
+      target {
+        oid
+      }
+    }
+    pullRequest(number: $number) {
+      title
+      body
+      state
+      isDraft
+      headRefOid
+      baseRef {
+        target {
+          ... on Commit {
+            oid
+            statusCheckRollup {
+              contexts(first: 100) {
+                ...CoordinatorCi
+              }
+            }
+          }
+        }
+      }
+      reviewDecision
+      mergeable
+      commits(last: 1) {
+        nodes {
+          commit {
+            statusCheckRollup {
+              state
+              contexts(first: 100) {
+                ...CoordinatorCi
+              }
+            }
+            deployments(first: 20, orderBy: { field: CREATED_AT, direction: DESC }) {
+              nodes {
+                environment
+                latestStatus {
+                  state
+                  environmentUrl
+                }
+              }
+            }
+          }
+        }
+      }
+      mergeCommit {
+        oid
+        deployments(
+          first: 1
+          environments: ["Production", "production", "Prod", "prod", "PRODUCTION", "PROD"]
+          orderBy: { field: CREATED_AT, direction: DESC }
+        ) {
+          nodes {
+            latestStatus {
+              state
+              createdAt
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+query CoordinatorProduction($owner: String!, $name: String!) {
+  repository(owner: $owner, name: $name) {
+    deployments(
+      first: 30
+      environments: ["Production", "production", "Prod", "prod", "PRODUCTION", "PROD"]
+      orderBy: { field: CREATED_AT, direction: DESC }
+    ) {
+      nodes {
+        commitOid
+        environment
+        createdAt
+        latestStatus {
+          state
+          createdAt
+          environmentUrl
+        }
+      }
+    }
+  }
+}

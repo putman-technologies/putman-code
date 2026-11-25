@@ -1,14 +1,12 @@
+import { MicrosoftProfileSection } from "./MicrosoftProfileSection";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m as resolveMessage } from "~/i18n/messages";
-import { useAtomValue } from "@effect/atom-react";
 import { NotificationSettings } from "./NotificationSettings";
-import { PRIVACY_POLICY_URL } from "../../legalLinks";
 import { CheckIcon } from "lucide-react";
 import { msg, T, useGT, useMessages } from "gt-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import {
-  type DesktopUpdateChannel,
   IDLE_COMPACTION_MODES,
   type IdleCompactionMode,
   globalIdleCompaction,
@@ -27,19 +25,14 @@ import {
   ScreenReaderAnnouncements,
   ToolCallVisibility,
 } from "@t3tools/contracts/settings";
-import {
-  managedUpdatesDenial,
-  managedUpdatesMessage,
-} from "@t3tools/client-runtime/contract-labels";
-import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
+import { managedUpdatesDenial } from "@t3tools/client-runtime/contract-labels";
 import { createModelSelection, pickModelSelection } from "@t3tools/shared/model";
 import { resolvePastedPath } from "@t3tools/shared/path";
 import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
-import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
+import { HOSTED_APP_CHANNEL } from "../../branding";
 import { AboutVersionTitle } from "./AboutVersionTitle";
 import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
-import { MobileAppSettingsRow } from "./MobileAppSettingsRow";
 import {
   canCheckForUpdate,
   getDesktopUpdateButtonTooltip,
@@ -51,7 +44,6 @@ import {
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { TraitsPicker } from "../chat/TraitsPicker";
 import { isElectron } from "../../env";
-import { buildHostedChannelSelectionUrl, type HostedAppChannel } from "../../hostedPairing";
 import {
   readAppearanceModePreference,
   readThemeHalves,
@@ -70,7 +62,7 @@ import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { ThreadTitleInstructionsSettings } from "./ThreadTitleInstructionsSettings";
 import { SnoozePresetsRow } from "./SnoozePresetsSettings";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
-import { managedTelemetryOffMessage, usePrimaryManagedPolicy } from "../../state/managedPolicy";
+import { usePrimaryManagedPolicy } from "../../state/managedPolicy";
 import {
   getTextGenerationModelOptionsByInstance,
   resolveAppModelSelectionState,
@@ -79,11 +71,7 @@ import {
 import { useTextGenerationTargets } from "../../textGenerators";
 import { ensureLocalApi, readLocalApi } from "../../localApi";
 import { isMacPlatform } from "../../lib/utils";
-import {
-  useEnvironmentProviders,
-  useEnvironments,
-  usePrimaryEnvironmentId,
-} from "../../state/environments";
+import { useEnvironmentProviders } from "../../state/environments";
 import { EMPTY_SERVER_PROVIDERS } from "../../state/server";
 import { Button } from "../ui/button";
 import { DraftInput } from "../ui/draft-input";
@@ -122,15 +110,8 @@ import { BackgroundActivitySettingsRow } from "./BackgroundActivitySettings";
 import { AdvancedSettings } from "./AdvancedSettings";
 import { PullRequestLinksOpenInAppSetting } from "./IntegrationsSettings";
 import { StorageCleanupSections } from "./StorageSettings";
-import { UpdateTrackSwitchDialog } from "./UpdateTrackSwitchDialog";
-import { environmentIdsKey } from "~/state/environmentAtomList";
-import { environmentSessionStatesAtom } from "~/state/session";
 import { useCheckProviderUpdates } from "../ProviderUpdatesAction";
-import { canUpdateServer } from "../ServerUpdateAction";
 import { downloadLocalUpdate } from "../sidebar/SidebarUpdatePill";
-import { useUpdateEverythingRun } from "../sidebar/updateEverythingRun";
-import { awaitsTrackSwitch, channelSwitchLabel } from "../sidebar/updateEverything.logic";
-import { isHostedByThisApp } from "../sidebar/useUpdateEverything";
 
 const RESPONSE_STREAMING_MODE_LABELS: Record<ResponseStreamingMode, string> = {
   turn: msg("Wait for the full response"),
@@ -172,49 +153,15 @@ function AboutVersionSection() {
   const gt = useGT();
   const messages = useMessages();
   const updateState = useDesktopUpdateState();
-  const [switchChannel, setSwitchChannel] = useState<DesktopUpdateChannel | null>(null);
   const [isUpdateActionPending, setIsUpdateActionPending] = useState(false);
-  const { environments } = useEnvironments();
-  const sessionStates = useAtomValue(
-    environmentSessionStatesAtom(
-      environmentIdsKey(environments.map(({ environmentId }) => environmentId)),
-    ),
-  );
-  // A second run would replace the first run's progress and local download.
-  const updateRun = useUpdateEverythingRun();
   const checkProviderUpdates = useCheckProviderUpdates();
 
   const hasDesktopBridge = typeof window !== "undefined" && Boolean(window.desktopBridge);
-  const selectedUpdateChannel = updateState?.channel ?? "latest";
   // The desktop updates this machine, whose policy the primary environment reports.
   const primaryPolicy = usePrimaryManagedPolicy();
   const updatesDenial = hasDesktopBridge
     ? managedUpdatesDenial(primaryPolicy, messages)
     : undefined;
-  const nightlyDeniedBy =
-    hasDesktopBridge && primaryPolicy?.limits?.updates?.allowNightly === false
-      ? primaryPolicy.organization
-      : undefined;
-  const selectedHostedAppChannel = hasDesktopBridge ? null : HOSTED_APP_CHANNEL;
-  // A switch that failed part way leaves this app or a server on the other track.
-  // With its updater off, a switch cannot move this app, so it is not counted.
-  const appOffTrack =
-    updateState?.enabled !== false && desktopUpdateChannelOf(APP_VERSION) !== selectedUpdateChannel;
-  const unswitchedMachines =
-    (appOffTrack ? 1 : 0) +
-    environments.filter(
-      (environment, index) =>
-        environment.connection.phase === "connected" &&
-        canUpdateServer(sessionStates[index]!) &&
-        awaitsTrackSwitch(
-          {
-            serverConfig: environment.serverConfig,
-            hostedByThisApp: isHostedByThisApp(environment),
-          },
-          selectedUpdateChannel,
-        ),
-    ).length;
-
   const handleButtonClick = async () => {
     const bridge = window.desktopBridge;
     if (!bridge) return;
@@ -316,8 +263,7 @@ function AboutVersionSection() {
   const statusLabel: Record<string, string> = {
     checking: gt("Checking…"),
     downloading: gt("Downloading…"),
-    // Off its track, "up to date" only means no switch is pending; Review moves it.
-    ...(appOffTrack ? {} : { "up-to-date": gt("Up to Date") }),
+    "up-to-date": gt("Up to Date"),
   };
   const buttonLabel =
     actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? gt("Check for Updates");
@@ -353,114 +299,10 @@ function AboutVersionSection() {
         }
       />
       {hasDesktopBridge ? (
-        <SettingsRow
-          {...setting("update-track")}
-          description={
-            nightlyDeniedBy !== undefined ? (
-              selectedUpdateChannel === "nightly" ? (
-                gt(
-                  "{policy} Nightly builds are not available; switch to Stable to keep getting updates.",
-                  { policy: managedUpdatesMessage(nightlyDeniedBy, messages) },
-                )
-              ) : (
-                gt("{policy} Nightly builds are not available.", {
-                  policy: managedUpdatesMessage(nightlyDeniedBy, messages),
-                })
-              )
-            ) : unswitchedMachines > 0 ? (
-              <>
-                {gt(
-                  "{count, plural, one {{count} machine still runs {track}.} other {{count} machines still run {track}.}}",
-                  {
-                    count: unswitchedMachines,
-                    track: channelSwitchLabel(
-                      selectedUpdateChannel === "nightly" ? "latest" : "nightly",
-                      messages,
-                    ),
-                  },
-                )}{" "}
-                {/* The dialog moves what it can and says why it skips the rest. */}
-                <Button
-                  size="xs"
-                  variant="link"
-                  disabled={updateRun !== null}
-                  onClick={() => setSwitchChannel(selectedUpdateChannel)}
-                >
-                  <T>Review</T>
-                </Button>
-              </>
-            ) : (
-              gt(
-                "Switches this app and every connected machine whose database the target release supports.",
-              )
-            )
-          }
-          managed={updatesDenial}
-          control={
-            <Select
-              value={selectedUpdateChannel}
-              onValueChange={(value) => {
-                if (value !== selectedUpdateChannel) {
-                  setSwitchChannel(value as DesktopUpdateChannel);
-                }
-              }}
-            >
-              <SelectTrigger
-                size="sm"
-                className="w-full sm:w-40"
-                aria-label={gt("Update track")}
-                disabled={switchChannel !== null || updateRun !== null}
-              >
-                <SelectValue>{channelSwitchLabel(selectedUpdateChannel, messages)}</SelectValue>
-              </SelectTrigger>
-              <SelectPopup align="end" alignItemWithTrigger={false}>
-                <SelectItem hideIndicator value="latest">
-                  <T>Stable</T>
-                </SelectItem>
-                <SelectItem
-                  hideIndicator
-                  value="nightly"
-                  disabled={nightlyDeniedBy !== undefined && selectedUpdateChannel !== "nightly"}
-                >
-                  <T>Nightly</T>
-                </SelectItem>
-              </SelectPopup>
-            </Select>
-          }
-        />
-      ) : selectedHostedAppChannel ? (
-        <SettingsRow
-          {...setting("update-track")}
-          description={gt("Switches the hosted app release channel.")}
-          control={
-            <Select
-              value={selectedHostedAppChannel}
-              onValueChange={(value) => {
-                if (value === selectedHostedAppChannel) return;
-                window.location.assign(
-                  buildHostedChannelSelectionUrl({ channel: value as HostedAppChannel }),
-                );
-              }}
-            >
-              <SelectTrigger size="sm" className="w-full sm:w-40" aria-label={gt("Update track")}>
-                <SelectValue>{HOSTED_APP_CHANNEL_LABEL}</SelectValue>
-              </SelectTrigger>
-              <SelectPopup align="end" alignItemWithTrigger={false}>
-                <SelectItem hideIndicator value="latest">
-                  <T>Latest</T>
-                </SelectItem>
-                <SelectItem hideIndicator value="nightly">
-                  <T>Nightly</T>
-                </SelectItem>
-              </SelectPopup>
-            </Select>
-          }
-        />
+        <AdvancedSettings targetIds={["cli-command"]}>
+          <CliCommandSettingsRow />
+        </AdvancedSettings>
       ) : null}
-      {hasDesktopBridge ? <CliCommandSettingsRow /> : null}
-      {switchChannel === null ? null : (
-        <UpdateTrackSwitchDialog channel={switchChannel} onClose={() => setSwitchChannel(null)} />
-      )}
     </>
   );
 }
@@ -576,7 +418,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.sendShortcut !== DEFAULT_UNIFIED_SETTINGS.sendShortcut
       ? [gt("Send shortcut")]
       : []),
-    ...(settings.followUpBehavior !== DEFAULT_UNIFIED_SETTINGS.followUpBehavior
+    ...(settings.runningTurnSendAction !== DEFAULT_UNIFIED_SETTINGS.runningTurnSendAction
       ? [gt("Follow-up behavior")]
       : []),
     ...(settings.toolCallVisibility !== DEFAULT_UNIFIED_SETTINGS.toolCallVisibility
@@ -709,7 +551,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       showSkillsInSlashMenu: DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu,
       composerRichTextEnabled: DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled,
       sendShortcut: DEFAULT_UNIFIED_SETTINGS.sendShortcut,
-      followUpBehavior: DEFAULT_UNIFIED_SETTINGS.followUpBehavior,
+      runningTurnSendAction: DEFAULT_UNIFIED_SETTINGS.runningTurnSendAction,
       toolCallVisibility: DEFAULT_UNIFIED_SETTINGS.toolCallVisibility,
       screenReaderAnnouncements: DEFAULT_UNIFIED_SETTINGS.screenReaderAnnouncements,
       screenReaderWindowTitle: DEFAULT_UNIFIED_SETTINGS.screenReaderWindowTitle,
@@ -838,6 +680,17 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <SettingsSection id="getting-started" title={gt("Getting started")}>
+        <SettingsRow
+          {...setting("setup-guide")}
+          control={
+            <Button variant="outline" size="sm" render={<Link to="/welcome" />}>
+              {gt("Open setup guide")}
+            </Button>
+          }
+        />
+      </SettingsSection>
+      <MicrosoftProfileSection />
       <SettingsSection id="notifications" title={gt("Notifications")}>
         <NotificationSettings />
         <SettingsRow
@@ -969,58 +822,6 @@ export function GeneralSettingsPanel() {
 
       <SettingsSection id="confirmations" title={gt("Confirmations")}>
         <SettingsRow
-          {...setting("unpin-confirmation")}
-          description={<T>Ask before unpinning a thread from the pinned section.</T>}
-          resetAction={
-            settings.confirmThreadUnpin !== DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin ? (
-              <SettingResetButton
-                ariaLabel={gt("Reset unpin confirmation to default")}
-                onClick={() =>
-                  updateSettings({
-                    confirmThreadUnpin: DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.confirmThreadUnpin}
-              onCheckedChange={(checked) =>
-                updateSettings({ confirmThreadUnpin: Boolean(checked) })
-              }
-              aria-label={gt("Confirm thread unpinning")}
-            />
-          }
-        />
-        <SettingsRow
-          {...setting("archive-confirmation")}
-          description={
-            <T>Require a second click on the inline archive action before a thread is archived.</T>
-          }
-          resetAction={
-            settings.confirmThreadArchive !== DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive ? (
-              <SettingResetButton
-                ariaLabel={gt("Reset archive confirmation to default")}
-                onClick={() =>
-                  updateSettings({
-                    confirmThreadArchive: DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.confirmThreadArchive}
-              onCheckedChange={(checked) =>
-                updateSettings({ confirmThreadArchive: Boolean(checked) })
-              }
-              aria-label={gt("Confirm thread archiving")}
-            />
-          }
-        />
-        <SettingsRow
           {...setting("delete-confirmation")}
           description={<T>Ask before deleting a thread and its chat history.</T>}
           resetAction={
@@ -1045,74 +846,137 @@ export function GeneralSettingsPanel() {
             />
           }
         />
-        <SettingsRow
-          {...setting("terminal-close-confirmation")}
-          description={<T>Ask before closing terminals and stopping their running processes.</T>}
-          resetAction={
-            settings.confirmTerminalClose !== DEFAULT_UNIFIED_SETTINGS.confirmTerminalClose ? (
-              <SettingResetButton
-                ariaLabel={gt("Reset terminal close confirmation to default")}
-                onClick={() =>
-                  updateSettings({
-                    confirmTerminalClose: DEFAULT_UNIFIED_SETTINGS.confirmTerminalClose,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.confirmTerminalClose}
-              onCheckedChange={(checked) =>
-                updateSettings({ confirmTerminalClose: Boolean(checked) })
-              }
-              aria-label={gt("Confirm terminal closing")}
-            />
-          }
-        />
-        {isElectron ? (
+        <AdvancedSettings
+          targetIds={[
+            "unpin-confirmation",
+            "archive-confirmation",
+            "terminal-close-confirmation",
+            "quit-confirmation",
+          ]}
+        >
           <SettingsRow
-            {...setting("quit-confirmation")}
-            description={<T>Hold mode also quits on two quick presses.</T>}
+            {...setting("unpin-confirmation")}
+            description={<T>Ask before unpinning a thread from the pinned section.</T>}
             resetAction={
-              settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit ? (
+              settings.confirmThreadUnpin !== DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin ? (
                 <SettingResetButton
-                  ariaLabel={gt("Reset quit shortcut behavior to default")}
+                  ariaLabel={gt("Reset unpin confirmation to default")}
                   onClick={() =>
-                    updateSettings({ confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit })
+                    updateSettings({
+                      confirmThreadUnpin: DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin,
+                    })
                   }
                 />
               ) : null
             }
             control={
-              <Select
-                value={settings.confirmQuit}
-                onValueChange={(value) => {
-                  if (value === "direct" || value === "hold" || value === "double-click") {
-                    updateSettings({ confirmQuit: value });
-                  }
-                }}
-              >
-                <SelectTrigger
-                  size="sm"
-                  className="w-full sm:w-40"
-                  aria-label={gt("Quit shortcut behavior")}
-                >
-                  <SelectValue>
-                    {m(QUIT_CONFIRMATION_MODE_LABELS[settings.confirmQuit])}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectPopup align="end" alignItemWithTrigger={false}>
-                  {Object.entries(QUIT_CONFIRMATION_MODE_LABELS).map(([value, label]) => (
-                    <SelectItem hideIndicator key={value} value={value}>
-                      {m(label)}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
+              <Switch
+                checked={settings.confirmThreadUnpin}
+                onCheckedChange={(checked) =>
+                  updateSettings({ confirmThreadUnpin: Boolean(checked) })
+                }
+                aria-label={gt("Confirm thread unpinning")}
+              />
             }
           />
-        ) : null}
+          <SettingsRow
+            {...setting("archive-confirmation")}
+            description={
+              <T>
+                Require a second click on the inline archive action before a thread is archived.
+              </T>
+            }
+            resetAction={
+              settings.confirmThreadArchive !== DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive ? (
+                <SettingResetButton
+                  ariaLabel={gt("Reset archive confirmation to default")}
+                  onClick={() =>
+                    updateSettings({
+                      confirmThreadArchive: DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive,
+                    })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <Switch
+                checked={settings.confirmThreadArchive}
+                onCheckedChange={(checked) =>
+                  updateSettings({ confirmThreadArchive: Boolean(checked) })
+                }
+                aria-label={gt("Confirm thread archiving")}
+              />
+            }
+          />
+          <SettingsRow
+            {...setting("terminal-close-confirmation")}
+            description={<T>Ask before closing terminals and stopping their running processes.</T>}
+            resetAction={
+              settings.confirmTerminalClose !== DEFAULT_UNIFIED_SETTINGS.confirmTerminalClose ? (
+                <SettingResetButton
+                  ariaLabel={gt("Reset terminal close confirmation to default")}
+                  onClick={() =>
+                    updateSettings({
+                      confirmTerminalClose: DEFAULT_UNIFIED_SETTINGS.confirmTerminalClose,
+                    })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <Switch
+                checked={settings.confirmTerminalClose}
+                onCheckedChange={(checked) =>
+                  updateSettings({ confirmTerminalClose: Boolean(checked) })
+                }
+                aria-label={gt("Confirm terminal closing")}
+              />
+            }
+          />
+          {isElectron ? (
+            <SettingsRow
+              {...setting("quit-confirmation")}
+              description={<T>Hold mode also quits on two quick presses.</T>}
+              resetAction={
+                settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit ? (
+                  <SettingResetButton
+                    ariaLabel={gt("Reset quit shortcut behavior to default")}
+                    onClick={() =>
+                      updateSettings({ confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit })
+                    }
+                  />
+                ) : null
+              }
+              control={
+                <Select
+                  value={settings.confirmQuit}
+                  onValueChange={(value) => {
+                    if (value === "direct" || value === "hold" || value === "double-click") {
+                      updateSettings({ confirmQuit: value });
+                    }
+                  }}
+                >
+                  <SelectTrigger
+                    size="sm"
+                    className="w-full sm:w-40"
+                    aria-label={gt("Quit shortcut behavior")}
+                  >
+                    <SelectValue>
+                      {m(QUIT_CONFIRMATION_MODE_LABELS[settings.confirmQuit])}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectPopup align="end" alignItemWithTrigger={false}>
+                    {Object.entries(QUIT_CONFIRMATION_MODE_LABELS).map(([value, label]) => (
+                      <SelectItem hideIndicator key={value} value={value}>
+                        {m(label)}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+              }
+            />
+          ) : null}
+        </AdvancedSettings>
       </SettingsSection>
 
       <SettingsSection id="display" title={gt("Display")}>
@@ -1351,12 +1215,12 @@ export function ChatSettingsPanel() {
                   )
           }
           resetAction={
-            settings.followUpBehavior !== DEFAULT_UNIFIED_SETTINGS.followUpBehavior ? (
+            settings.runningTurnSendAction !== DEFAULT_UNIFIED_SETTINGS.runningTurnSendAction ? (
               <SettingResetButton
                 ariaLabel={gt("Reset follow-up behavior to default")}
                 onClick={() =>
                   updateSettings({
-                    followUpBehavior: DEFAULT_UNIFIED_SETTINGS.followUpBehavior,
+                    runningTurnSendAction: DEFAULT_UNIFIED_SETTINGS.runningTurnSendAction,
                   })
                 }
               />
@@ -1364,10 +1228,10 @@ export function ChatSettingsPanel() {
           }
           control={
             <Select
-              value={settings.followUpBehavior}
+              value={settings.runningTurnSendAction}
               onValueChange={(value) => {
                 if (value === "queue" || value === "steer") {
-                  updateSettings({ followUpBehavior: value });
+                  updateSettings({ runningTurnSendAction: value });
                 }
               }}
             >
@@ -1377,7 +1241,7 @@ export function ChatSettingsPanel() {
                 aria-label={gt("Follow-up behavior")}
               >
                 <SelectValue>
-                  {settings.followUpBehavior === "queue" ? gt("Queue") : gt("Steer")}
+                  {settings.runningTurnSendAction === "queue" ? gt("Queue") : gt("Steer")}
                 </SelectValue>
               </SelectTrigger>
               <SelectPopup align="end" alignItemWithTrigger={false}>
@@ -2449,11 +2313,7 @@ export function MaintenanceSettingsPanel() {
 export function AboutSettingsPanel() {
   const setting = useSearchableSetting();
   const gt = useGT();
-  const messages = useMessages();
   const primaryPolicy = usePrimaryManagedPolicy();
-  // The Welcome page sets up this computer, so it needs one.
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const telemetryOff = managedTelemetryOffMessage(primaryPolicy, messages);
   return (
     <SettingsPageContainer>
       <SettingsSection id="about" title={gt("App")}>
@@ -2490,51 +2350,6 @@ export function AboutSettingsPanel() {
             />
           </>
         )}
-        <MobileAppSettingsRow />
-        {primaryEnvironmentId === null ? null : (
-          <SettingsRow
-            {...setting("welcome-page")}
-            description={gt("See your agents, import projects, and set up your phone.")}
-            control={
-              <Button size="sm" variant="outline" render={<Link to="/welcome" />}>
-                <T context="verb, opens a page">Open</T>
-              </Button>
-            }
-          />
-        )}
-      </SettingsSection>
-
-      <SettingsSection id="legal" title={gt("Legal")}>
-        <SettingsRow
-          {...setting("privacy-policy")}
-          description={
-            telemetryOff === undefined
-              ? gt("How we handle your data, including the anonymous usage data T3 Code collects.")
-              : gt("How we handle your data. {telemetryOff}", { telemetryOff })
-          }
-          control={
-            <Button
-              render={<a href={PRIVACY_POLICY_URL} target="_blank" rel="noreferrer noopener" />}
-              size="sm"
-              variant="outline"
-            >
-              <T>View policy</T>
-            </Button>
-          }
-        />
-        <SettingsRow
-          {...setting("open-source-licenses")}
-          description={gt("Notices for dependencies, assets, and optional tools used by T3 Code.")}
-          control={
-            <Button
-              render={<Link to="/settings/open-source-licenses" />}
-              size="sm"
-              variant="outline"
-            >
-              <T>View licenses</T>
-            </Button>
-          }
-        />
       </SettingsSection>
     </SettingsPageContainer>
   );

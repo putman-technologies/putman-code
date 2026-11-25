@@ -38,11 +38,16 @@ export interface EnvironmentConnectionPresentation {
 export type EnvironmentServerConfig = Omit<ServerConfig, "providers">;
 
 export interface EnvironmentPresentation {
+  readonly displayName?: string;
   readonly entry: ConnectionCatalogEntry;
   readonly connection: EnvironmentConnectionPresentation;
   readonly serverConfig: EnvironmentServerConfig | null;
   /** See `SupervisorConnectionState.refusedRouteIds`. */
   readonly refusedRouteIds: ReadonlyArray<string>;
+}
+
+export function environmentPresentationLabel(environment: EnvironmentPresentation): string {
+  return environment.displayName ?? environment.entry.target.label;
 }
 
 function failureError(

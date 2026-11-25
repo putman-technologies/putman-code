@@ -218,6 +218,70 @@ function renderTimeline(entries: ReadonlyArray<Entry>, props: Partial<TimelinePr
   );
 }
 
+it("hides conversational approval replies when a response is stale or a native request is pending", async () => {
+  const props = baseProps();
+  const runId = RunId.make("ask");
+  const question = message("Should I proceed?", { role: "assistant", runId });
+  const run = {
+    runId,
+    status: "completed" as const,
+    startedAt: CREATED_AT,
+    completedAt: CREATED_AT,
+  };
+  const ui = (extra: Partial<TimelineProps>, entries = [question]) => (
+    <MessagesTimeline
+      {...props}
+      canOperateThread
+      onAnswerApprovalQuestion={vi.fn()}
+      latestRun={run}
+      timelineEntries={entries}
+      {...extra}
+    />
+  );
+  await using screen = await renderElement(ui({}));
+  const yes = page.getByRole("button", { name: "Yes", exact: true });
+  await expect.element(yes).toBeVisible();
+  for (const extra of [
+    { canOperateThread: false },
+    { syncing: true },
+    { isWorking: true },
+    { awaitingUser: "approval" as const },
+    { latestRun: { ...run, runId: RunId.make("later") } },
+  ]) {
+    await screen.rerender(ui(extra));
+    await expect.element(yes).not.toBeInTheDocument();
+  }
+  await screen.rerender(ui({}, [question, message("Already answered", { runId }, "user-reply")]));
+  await expect.element(yes).not.toBeInTheDocument();
+});
+
+it("retries a failed approval reply and blocks a second click during submission", async () => {
+  const runId = RunId.make("ask");
+  const first = Promise.withResolvers<void>();
+  const send = vi
+    .fn()
+    .mockImplementationOnce(() => first.promise)
+    .mockResolvedValue(undefined);
+  await using _screen = await renderTimeline(
+    [message("May I proceed?", { role: "assistant", runId })],
+    {
+      canOperateThread: true,
+      onAnswerApprovalQuestion: send,
+      latestRun: { runId, status: "completed", startedAt: CREATED_AT, completedAt: CREATED_AT },
+    },
+  );
+  const no = page.getByRole("button", { name: "No", exact: true });
+  await userEvent.click(no);
+  await expect.element(no).toBeDisabled();
+  await expect.element(page.getByRole("button", { name: "Yes", exact: true })).toBeDisabled();
+  expect(send).toHaveBeenCalledTimes(1);
+  first.reject(new Error("Connection lost"));
+  await expect.element(page.getByRole("alert")).toHaveTextContent("Connection lost");
+  await userEvent.click(no);
+  expect(send).toHaveBeenCalledTimes(2);
+  expect(send.mock.calls[1]?.[0]).toEqual(send.mock.calls[0]?.[0]);
+});
+
 async function click(element: HTMLElement) {
   await act(async () => element.click());
 }
@@ -1492,7 +1556,7 @@ describe("MessagesTimeline agent messages", () => {
     expect(screen.buttons("Open thread")).toHaveLength(0);
   });
 
-  it("leaves messages sent by T3 Code as full bubbles", async () => {
+  it("leaves messages sent by PutmanCode as full bubbles", async () => {
     setup();
     await using screen = await renderTimeline([
       message(AGENT_MESSAGE, { createdBy: "agent", creationSource: "server" }),

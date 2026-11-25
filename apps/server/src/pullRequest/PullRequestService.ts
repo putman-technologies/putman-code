@@ -19,6 +19,10 @@ import {
   PullRequestOperationError,
   PullRequestUnavailableError,
   resolvePullRequestAuthorFilter,
+  type CoordinatorStatus,
+  type CoordinatorChange,
+  type ShipRange,
+  type ProductionDeployment,
   type OrchestrationProjectShell,
   type ProjectId,
   type PullRequestAction,
@@ -198,6 +202,32 @@ export class PullRequestService extends Context.Service<
       input: PullRequestRef,
       operation: Effect.Effect<A, E, R>,
     ) => Effect.Effect<A, E | PullRequestError, R>;
+    readonly dispatchCoordinatorRelease: (
+      input: PullRequestRef & {
+        branch: string;
+        revision: string;
+        requestId: string;
+        pullNumbers: string;
+      },
+    ) => Effect.Effect<void, PullRequestError>;
+    readonly coordinatorSinceProduction?: (
+      projectId: ProjectId,
+      base: string,
+    ) => Effect.Effect<import("@t3tools/contracts").ShipRange | null>;
+    readonly coordinatorRange?: (
+      input: PullRequestRef & { base: string; head: string; branch: string },
+    ) => Effect.Effect<ShipRange | null>;
+    readonly coordinatorIncludes: (
+      input: PullRequestRef & { base: string; head: string },
+    ) => Effect.Effect<boolean | null>;
+    readonly coordinatorChange: (
+      input: PullRequestRef,
+      options?: { readonly bypassCache?: boolean },
+    ) => Effect.Effect<CoordinatorChange | null>;
+    readonly coordinatorProduction: (
+      projectId: ProjectId,
+    ) => Effect.Effect<readonly ProductionDeployment[] | null>;
+    readonly coordinatorStatus: (input: PullRequestRef) => Effect.Effect<CoordinatorStatus>;
     readonly summary: (
       input: PullRequestRef,
       options?: {
@@ -284,6 +314,9 @@ export class PullRequestService extends Context.Service<
       input: PullRequestRef & { readonly check?: string; readonly tailLines: number },
     ) => Effect.Effect<ReadonlyArray<ProviderCheckLog>, PullRequestError>;
     /** Re-runs the failing checks, or only the named check. */
+    readonly workflowButton: (
+      input: import("@t3tools/contracts").RepoWorkflowButtonInput,
+    ) => Effect.Effect<import("@t3tools/contracts").RepoWorkflowButtonResult, PullRequestError>;
     readonly rerunChecks: (
       input: PullRequestRef & { readonly check?: string },
     ) => Effect.Effect<ReadonlyArray<ProviderCheckRerun>, PullRequestError>;
@@ -588,6 +621,29 @@ function withRateLimitBackoff(
     ...(api.getChangeRequestPreview === undefined
       ? {}
       : { getChangeRequestPreview: wrap("getChangeRequestPreview", api.getChangeRequestPreview) }),
+    ...(api.coordinatorRange
+      ? { coordinatorRange: wrap("coordinatorRange", api.coordinatorRange) }
+      : {}),
+    ...(api.coordinatorIncludes
+      ? { coordinatorIncludes: wrap("coordinatorIncludes", api.coordinatorIncludes) }
+      : {}),
+    ...(api.dispatchCoordinatorRelease
+      ? {
+          dispatchCoordinatorRelease: wrap(
+            "dispatchCoordinatorRelease",
+            api.dispatchCoordinatorRelease,
+          ),
+        }
+      : {}),
+    ...(api.coordinatorChange
+      ? { coordinatorChange: wrap("coordinatorChange", api.coordinatorChange) }
+      : {}),
+    ...(api.coordinatorProduction
+      ? { coordinatorProduction: wrap("coordinatorProduction", api.coordinatorProduction) }
+      : {}),
+    ...(api.coordinatorStatus === undefined
+      ? {}
+      : { coordinatorStatus: wrap("coordinatorStatus", api.coordinatorStatus) }),
     ...(api.getChangeRequestChecks === undefined
       ? {}
       : { getChangeRequestChecks: wrap("getChangeRequestChecks", api.getChangeRequestChecks) }),
@@ -641,6 +697,9 @@ function withRateLimitBackoff(
     ...(api.getCheckLogs === undefined
       ? {}
       : { getCheckLogs: interactive("getCheckLogs", api.getCheckLogs) }),
+    ...(api.workflowButton === undefined
+      ? {}
+      : { workflowButton: interactive("workflowButton", api.workflowButton) }),
     ...(api.rerunChecks === undefined
       ? {}
       : { rerunChecks: interactive("rerunChecks", api.rerunChecks) }),
@@ -759,6 +818,11 @@ const observeRead = Effect.fnUntraced(function* <A, E, R>(read: Effect.Effect<A,
   return { value: yield* read, observedAt };
 });
 
+const compareKey = Schema.fromJsonString(
+  Schema.Tuple([Schema.String, Schema.String, Schema.String]),
+);
+const encodeCompareKey = Schema.encodeSync(compareKey);
+const decodeCompareKey = Schema.decodeSync(compareKey);
 export const make = Effect.gen(function* () {
   const mergedPullRequests = yield* PubSub.sliding<PullRequestMergeEvent>(64);
   const stateChanges = yield* PubSub.sliding<ThreadPullRequestKey>(64);
@@ -3300,6 +3364,66 @@ export const make = Effect.gen(function* () {
     );
   };
 
+  const containsCache = yield* Cache.makeWith(
+    (key: string) => {
+      const [refKey, base, head] = decodeCompareKey(key);
+      return requireProject(refOfCacheKey(refKey)).pipe(
+        Effect.flatMap(
+          ({ api, project, repository, host }) =>
+            api.coordinatorIncludes?.({
+              cwd: project.workspaceRoot,
+              repository,
+              host,
+              base,
+              head,
+            }) ?? Effect.succeed(null),
+        ),
+      );
+    },
+    {
+      capacity: DETAIL_CACHE_CAPACITY,
+      timeToLive: (exit) => (Exit.isSuccess(exit) ? Duration.minutes(20) : Duration.zero),
+    },
+  );
+  const boardChangeCache = yield* Cache.makeWith(
+    (key: string) => {
+      const ref = refOfCacheKey(key);
+      return requireProject(ref).pipe(
+        Effect.flatMap(
+          ({ api, project, host, repository }) =>
+            api.coordinatorChange?.({
+              cwd: project.workspaceRoot,
+              host,
+              repository,
+              number: ref.number,
+            }) ?? Effect.succeed(null),
+        ),
+      );
+    },
+    {
+      capacity: DETAIL_CACHE_CAPACITY,
+      timeToLive: (exit) => (Exit.isSuccess(exit) ? Duration.seconds(15) : Duration.zero),
+    },
+  );
+  const coordinatorCache = yield* Cache.makeWith(
+    (key: string) => {
+      const input = refOfCacheKey(key);
+      return requireProject(input).pipe(
+        Effect.flatMap(
+          ({ api, project, host, repository }) =>
+            api.coordinatorStatus?.({
+              cwd: project.workspaceRoot,
+              host,
+              repository,
+              number: input.number,
+            }) ?? Effect.succeed("unavailable" as const),
+        ),
+        Effect.orElseSucceed(() => "unavailable" as const),
+      );
+    },
+    { capacity: DETAIL_CACHE_CAPACITY, timeToLive: () => Duration.seconds(45) },
+  );
+
   const checksCache = yield* Cache.makeWith(
     (key: string) => {
       const input = refOfCacheKey(key);
@@ -3913,6 +4037,25 @@ export const make = Effect.gen(function* () {
     ];
   });
 
+  const workflowButton: PullRequestService["Service"]["workflowButton"] = Effect.fn(
+    "PullRequestService.workflowButton",
+  )(function* (input) {
+    const project = yield* requireProject(input);
+    if (!project.api.workflowButton)
+      return yield* new PullRequestOperationError({
+        operation: "workflowButton",
+        detail: "This host does not support GitHub Actions.",
+      });
+    return yield* project.api
+      .workflowButton({
+        cwd: project.project.workspaceRoot,
+        host: project.host,
+        repository: project.repository,
+        number: input.number,
+        request: input.request,
+      })
+      .pipe(Effect.mapError(toPullRequestError("workflowButton")));
+  });
   const rerunChecks: PullRequestService["Service"]["rerunChecks"] = Effect.fn(
     "PullRequestService.rerunChecks",
   )(function* (input) {
@@ -4102,6 +4245,10 @@ export const make = Effect.gen(function* () {
       ),
     );
 
+  const readCoordinatorPull = credentialCached((ref) =>
+    Cache.get(coordinatorCache, refCacheKey(ref)),
+  );
+
   return PullRequestService.of({
     withSharedProjectReads,
     routing,
@@ -4116,6 +4263,88 @@ export const make = Effect.gen(function* () {
       );
       return yield* listStats({ ...input, refs: refs.flatMap(Option.toArray) });
     }),
+    coordinatorSinceProduction: Effect.fn("PullRequestService.coordinatorSinceProduction")(
+      (projectId, base) =>
+        listWorkspaceProjects({ projectId }).pipe(
+          Effect.flatMap(({ supported }) => {
+            const own = supported[0];
+            return (
+              own?.api.coordinatorRange?.({
+                host: own.host,
+                repository: own.repository,
+                cwd: own.project.workspaceRoot,
+                base,
+                head: "HEAD",
+                branch: "",
+              }) ?? Effect.succeed(null)
+            );
+          }),
+          Effect.orElseSucceed(() => null),
+        ),
+    ),
+    coordinatorRange: Effect.fn("PullRequestService.coordinatorRange")((input) =>
+      credentialCached((ref) =>
+        requireProject(ref).pipe(
+          Effect.flatMap(
+            (p) =>
+              p.api.coordinatorRange?.({
+                ...input,
+                host: p.host,
+                repository: p.repository,
+                cwd: p.project.workspaceRoot,
+              }) ?? Effect.succeed(null),
+          ),
+        ),
+      )(input).pipe(Effect.orElseSucceed(() => null)),
+    ),
+    coordinatorIncludes: Effect.fn("PullRequestService.coordinatorIncludes")((input) =>
+      credentialCached((ref) =>
+        Cache.get(containsCache, encodeCompareKey([refCacheKey(ref), input.base, input.head])),
+      )(input).pipe(Effect.orElseSucceed(() => null)),
+    ),
+    dispatchCoordinatorRelease: Effect.fn("PullRequestService.dispatchCoordinatorRelease")(
+      function* (input) {
+        const project = yield* requireProject(input);
+        if (!project.api.dispatchCoordinatorRelease)
+          return yield* new PullRequestOperationError({
+            operation: "dispatchCoordinatorRelease",
+            detail: "This repository does not support release workflows.",
+          });
+        yield* project.api
+          .dispatchCoordinatorRelease({
+            ...input,
+            host: project.host,
+            repository: project.repository,
+            cwd: project.project.workspaceRoot,
+          })
+          .pipe(Effect.mapError(toPullRequestError("dispatchCoordinatorRelease")));
+      },
+    ),
+    coordinatorChange: Effect.fn("PullRequestService.coordinatorChange")((input, options) =>
+      credentialCached((ref) =>
+        options?.bypassCache
+          ? Cache.refresh(boardChangeCache, refCacheKey(ref))
+          : Cache.get(boardChangeCache, refCacheKey(ref)),
+      )(input).pipe(Effect.orElseSucceed(() => null)),
+    ),
+    coordinatorProduction: Effect.fn("PullRequestService.coordinatorProduction")((projectId) =>
+      listWorkspaceProjects({ projectId }).pipe(
+        Effect.flatMap(({ supported }) => {
+          const own = supported[0];
+          return (
+            own?.api.coordinatorProduction?.({
+              cwd: own.project.workspaceRoot,
+              repository: own.repository,
+              host: own.host,
+            }) ?? Effect.succeed(null)
+          );
+        }),
+        Effect.orElseSucceed(() => null),
+      ),
+    ),
+    coordinatorStatus: Effect.fn("PullRequestService.coordinatorStatus")((input) =>
+      readCoordinatorPull(input).pipe(Effect.orElseSucceed(() => "unavailable" as const)),
+    ),
     summary: credentialCached(summary),
     batchesReads,
     stack: credentialCached(stack),
@@ -4153,6 +4382,7 @@ export const make = Effect.gen(function* () {
     ),
     runAction: runActionAndInvalidate,
     checkLogs,
+    workflowButton,
     rerunChecks,
     update: invalidatedByMutation(update),
     comment: invalidatedByMutation(comment),

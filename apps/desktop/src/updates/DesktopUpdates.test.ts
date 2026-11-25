@@ -42,8 +42,8 @@ const semver = requireFromUpdater("semver") as { parse: (version: string) => Run
 
 const releaseTitle = (version: string) =>
   version.includes("-nightly.")
-    ? `T3 Code Nightly ${version} (0123456789ab)`
-    : `T3 Code v${version}`;
+    ? `PutmanCode Nightly ${version} (0123456789ab)`
+    : `PutmanCode v${version}`;
 
 const releaseFeed = (...versions: ReadonlyArray<string>) =>
   parseXml(
@@ -102,6 +102,27 @@ describe("DesktopUpdates", () => {
       const unmarked = yield* linuxState(undefined);
       assert.equal(unmarked.state.status, "disabled");
       assert.isFalse(unmarked.canInstallUpdates);
+    }),
+  );
+
+  it.effect("checks the beta feed on beta installs and the stable feed on stable installs", () =>
+    Effect.gen(function* () {
+      for (const [version, feed, prerelease] of [
+        ["1.0.0-beta.7", "beta", true],
+        ["1.0.0", "latest", false],
+      ] as const) {
+        const harness = makeHarness({ appVersion: version });
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            const updates = yield* DesktopUpdates.DesktopUpdates;
+            yield* updates.configure;
+            assert.deepEqual(harness.feedSettings(), {
+              channel: feed,
+              allowPrerelease: prerelease,
+            });
+          }),
+        ).pipe(Effect.provide(harness.layer));
+      }
     }),
   );
 
@@ -1327,7 +1348,7 @@ describe("describeUpdateErrorCause", () => {
 });
 
 describe("DesktopUpdates under a managed policy", () => {
-  const message = "Example Corp manages T3 Code updates.";
+  const message = "Example Corp manages PutmanCode updates.";
   const managed = (
     policy: Partial<DesktopUpdatePolicy.UpdatePolicy>,
   ): DesktopUpdatePolicy.UpdatePolicy => ({

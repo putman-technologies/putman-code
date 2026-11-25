@@ -26,10 +26,11 @@ interface PendingRpcAckRequest {
 }
 
 const pendingRpcAckRequests = new Map<string, PendingRpcAckRequest>();
-// Background reports nobody waits on. A busy host delays them first, and warning
-// about a request the user never made does not say what is wrong. A sign-in wait
-// lasts as long as the user takes on the forge.
+// Branch and file pickers show their own loading state. Opening several panels can
+// start multiple read-only lookups against the same busy host.
 const untrackedRpcAckMethods = new Set<string>([
+  WS_METHODS.vcsListRefs,
+  WS_METHODS.projectsSearchEntries,
   WS_METHODS.serverGetUsageSummary,
   WS_METHODS.serverReportClientActivity,
   WS_METHODS.sourceControlSignInWait,

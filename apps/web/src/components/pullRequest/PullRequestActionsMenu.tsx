@@ -107,6 +107,7 @@ export function PullRequestActionsMenu({
   perform,
   openOnHostText,
   copyReference,
+  configureWorkflow,
 }: {
   environmentId: EnvironmentId;
   reference: PullRequestRef;
@@ -158,6 +159,7 @@ export function PullRequestActionsMenu({
   pendingAction: PullRequestAction | null;
   perform: PerformPullRequestAction;
   openOnHostText: string;
+  configureWorkflow?: (() => void) | undefined;
   copyReference: (value: string, failureTitle: string) => void;
 }) {
   const gt = useGT();
@@ -434,6 +436,9 @@ export function PullRequestActionsMenu({
             ) : null}
           </>
         ) : null}
+        {configureWorkflow && (
+          <MenuItem onClick={configureWorkflow}>{gt("Configure workflow button")}</MenuItem>
+        )}
         <MenuItem onClick={() => void readLocalApi()?.shell.openExternal(detail.url)}>
           <ArrowUpRightIcon className="size-3.5" />
           {openOnHostText}
