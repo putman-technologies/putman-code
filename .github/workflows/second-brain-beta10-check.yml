@@ -18,15 +18,15 @@ jobs:
           sparse-checkout-cone-mode: false
       - uses: ./.github/actions/setup-ci-deps
         with:
-          install-args: --filter=t3... --filter=@t3tools/web...
+          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/scripts...
       - name: Verify project creation, history, file capture and project isolation
         working-directory: apps/server
         run: vp test run src/project/SecondBrain.test.ts src/project/secondBrainFiles.test.ts src/project/ManagedProjectFolders.test.ts
       - name: Check server types and analytics test fixtures
         working-directory: apps/server
         run: |
-          vp run typecheck
           vp test run src/guest/GuestShareService.test.ts src/mcp/toolkits/core.test.ts src/provider/CodexChatGptAuth.test.ts src/ws.test.ts
+          vp run typecheck
       - name: Install Chromium
         run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
       - name: Verify opt-in from the new project screen
