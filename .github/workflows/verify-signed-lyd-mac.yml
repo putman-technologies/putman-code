@@ -91,9 +91,9 @@ jobs:
               processes = subprocess.check_output(["ps","-ax","-o","pid=,command="],text=True)
               pids = [int(row[0]) for line in processes.splitlines() if len(row := line.strip().split(None,1)) == 2 and (row[1] == exe or row[1].startswith(exe+" "))]
               if not pids: break
-              if attempt == 0:
+              if attempt in (0, 15):
                   for pid in pids:
-                      try: os.kill(pid, signal.SIGTERM)
+                      try: os.kill(pid, signal.SIGTERM if attempt == 0 else signal.SIGKILL)
                       except ProcessLookupError: pass
               time.sleep(.5)
           else: raise SystemExit("The updated test app did not quit before reopening its profile")
