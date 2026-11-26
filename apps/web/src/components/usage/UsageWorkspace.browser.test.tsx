@@ -1,3 +1,4 @@
+import "../../index.css";
 import { expect, it } from "vite-plus/test";
 import { page } from "vite-plus/test/browser";
 import { render } from "../../../test/render";
