@@ -82,6 +82,15 @@ jobs:
           [[ "$requirement" == *'certificate leaf'* ]]
           codesign --verify --deep --strict -R="$requirement" "$image/PutmanCode.app"
           if codesign --verify -R="$requirement" /usr/bin/true 2>/dev/null; then exit 1; fi
+          # Only the two packaged test applications create and use this disposable Keychain.
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          fixture_keychain="$RUNNER_TEMP/upgrade-native-test.keychain-db"
+          fixture_password=$(openssl rand -hex 32)
+          security create-keychain -p "$fixture_password" "$fixture_keychain"
+          security set-keychain-settings -lut 3600 "$fixture_keychain"
+          security unlock-keychain -p "$fixture_password" "$fixture_keychain"
+          security list-keychains -d user -s "$fixture_keychain"
+          security default-keychain -d user -s "$fixture_keychain"
           node verification/verify-putmancode-profile-upgrade.mjs seed "$exe" "$profile" "$old"
           PUTMANCODE_UPGRADE_FIXTURE="$profile" node verification/verify-putmancode-beta-upgrade.mjs "$exe" "$PWD/feed" "$new" "$old"
           python3 - "$exe" <<'PYTHON'
