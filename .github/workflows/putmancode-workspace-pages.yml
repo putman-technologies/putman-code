@@ -4,6 +4,7 @@ on:
     paths:
       - 'apps/web/src/components/assistant/**'
       - 'apps/web/src/components/usage/UsagePage.tsx'
+      - 'apps/web/src/components/usage/UsageWorkspace.browser.test.tsx'
       - 'apps/web/src/components/sidebar/SidebarThreadHeader.tsx'
       - 'apps/web/src/components/sidebar/mainAppLocation*'
       - 'apps/web/src/routes/_chat.lyd.tsx'
@@ -26,4 +27,4 @@ jobs:
       - run: vp install --frozen-lockfile --filter=@t3tools/web... --filter=@t3tools/scripts...
       - run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
       - working-directory: apps/web
-        run: vp test run --project browser src/components/assistant/LydPage.browser.test.tsx src/components/sidebar/mainAppLocation.browser.test.tsx src/components/UsageToggleShortcut.browser.test.tsx
+        run: vp test run --project browser src/components/assistant/LydPage.browser.test.tsx src/components/sidebar/mainAppLocation.browser.test.tsx src/components/UsageToggleShortcut.browser.test.tsx src/components/usage/UsageWorkspace.browser.test.tsx
