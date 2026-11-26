@@ -631,7 +631,7 @@ describe("t3 pair", () => {
 
   // regression: #37459 - on Linux without an operator, tailscaled refuses Serve config
   // from a normal user, and the CLI must say how to fix it.
-  it.effect("explains the operator fix when Tailscale denies the Serve config", () =>
+  it.effect("directs users to their administrator when Tailscale denies the Serve config", () =>
     Effect.gen(function* () {
       const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-remote-"));
       yield* persistServerRuntimeState({
@@ -690,7 +690,8 @@ describe("t3 pair", () => {
         ),
       );
 
-      assert.include(String(error), "sudo tailscale set --operator=$USER");
+      assert.include(String(error), "Ask the server administrator");
+      assert.notInclude(String(error), "sudo");
       assert.notInclude(String(error), "by hand to see why");
     }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );

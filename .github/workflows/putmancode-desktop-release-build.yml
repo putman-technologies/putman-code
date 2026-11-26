@@ -1,8 +1,8 @@
-name: Build PutmanCode desktop release
+name: Build PutmanCode desktop candidates
 
 on:
   push:
-    branches: [release/1.0.0]
+    branches: [preview/lyd-usage-beta11]
   workflow_dispatch:
 
 permissions:
@@ -217,114 +217,3 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
-
-  release-lint:
-    name: Check unused code and dependencies
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-ci-deps
-      - run: vp run knip:check
-
-  linux-ssh:
-    name: Build and exercise the Linux SSH companion (${{ matrix.arch }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { runner: ubuntu-24.04, arch: x64 }
-          - { runner: ubuntu-24.04-arm, arch: arm64 }
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-        with:
-          persist-credentials: false
-          sparse-checkout: |
-            /*
-            !/.repos/
-            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
-          sparse-checkout-cone-mode: false
-      - uses: ./.github/actions/setup-ci-deps
-        with:
-          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/scripts...
-      - uses: ./.github/actions/setup-apt-mirrors
-      - name: Install the Linux archive tooling
-        run: command -v patchelf || { sudo apt-get update && sudo apt-get install -y patchelf; }
-      - name: Build the native server and verify its archive
-        env:
-          ARCH: ${{ matrix.arch }}
-          APP_VERSION: ${{ env.RELEASE_VERSION }}
-          NODE_OPTIONS: --max-old-space-size=6144
-        run: |
-          set -euo pipefail
-          cargo build --locked --release --manifest-path native/resource-monitor/Cargo.toml
-          mkdir -p "$RUNNER_TEMP/monitor/linux-$ARCH"
-          cp native/resource-monitor/target/release/t3-resource-monitor "$RUNNER_TEMP/monitor/linux-$ARCH/"
-          vp run --filter @t3tools/web build
-          node apps/server/scripts/cli.ts build --verbose
-          python3 scripts/verify-putmancode-privacy.py apps/server/dist
-          node scripts/apply-web-brand-assets.ts production apps/server/dist/client
-          node apps/server/scripts/cli.ts build-exe --verbose
-          node scripts/build-cli-archive.ts --platform linux --arch "$ARCH" --version "$RELEASE_VERSION" --resource-monitor-dir "$RUNNER_TEMP/monitor" --output-dir release-cli
-          node scripts/smoke-cli-archive.ts --archive release-cli/*.tar.gz --expect-version "$RELEASE_VERSION"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: ssh-linux-${{ matrix.arch }}
-          path: release-cli/*.tar.gz
-          compression-level: 0
-          if-no-files-found: error
-          retention-days: 7
-
-  follow-ups:
-    name: Check the sidebar and follow-ups
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-        with:
-          persist-credentials: false
-          sparse-checkout: |
-            /*
-            !/.repos/
-            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
-          sparse-checkout-cone-mode: false
-      - uses: ./.github/actions/setup-ci-deps
-        with:
-          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
-      - run: vp test run src/vcs/GitVcsDriverCore.test.ts src/orchestration-v2/ThreadLaunchService.test.ts src/telemetry/AnalyticsService.test.ts src/cloud/relayTracing.test.ts src/cloud/publicConfig.test.ts
-        working-directory: apps/server
-      - run: vp run --filter @t3tools/client-runtime typecheck
-      - run: vp test run src/state/turnItemPresentation.test.ts
-        working-directory: packages/client-runtime
-      - run: vp test run --testTimeout 30000 src/tunnel.test.ts
-        working-directory: packages/ssh
-      - run: vp test run --project unit src/ssh/DesktopSshEnvironment.test.ts -t 'resolveDesktopSshCliRunner'
-        working-directory: apps/desktop
-      - run: vp test run src/microsoftProfile.test.ts
-        working-directory: packages/shared
-      - run: vp test run --project unit src/app/DesktopUserData.test.ts src/app/DesktopAppIdentity.test.ts src/app/DesktopConnectionCatalogStore.test.ts
-        working-directory: apps/desktop
-      - run: vp test run src/updates/DesktopUpdates.test.ts src/updates/githubUpdateFeed.test.ts src/account/MicrosoftLoopback.test.ts
-        working-directory: apps/desktop
-      - run: python3 -B scripts/tests/test_personal_assistant.py
-      - run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
-      - run: vp test run src/components/settings/pairingUrls.test.ts src/components/settings/AuthorizedClientsSettings.browser.test.tsx
-        working-directory: apps/web
-      - run: vp test run src/server/repoWorkflowButton.test.ts
-        working-directory: packages/source-control-github
-      - run: vp test run src/settings.test.ts
-        working-directory: packages/contracts
-      - run: vp test run src/state/composerDispatch.test.ts src/state/presentation.test.ts
-        working-directory: packages/client-runtime
-      - run: vp test run --project unit src/lib/runtime.test.ts src/components/chat/approvalQuestion.test.ts src/components/chat/MessagesTimeline.logic.test.ts src/components/sidebar/sidebarUsage.test.ts src/components/Sidebar.logic.test.ts src/components/Sidebar.drag.test.ts
-        working-directory: apps/web
-      - run: vp test run --project browser src/components/Sidebar.browser.test.tsx -t "hides the open chat after it settles"
-        working-directory: apps/web
-      - run: vp test run --project browser src/components/ChatView.browser.test.tsx src/components/chat/MessagesTimeline.browser.test.tsx -t "keeps the queue directly above the composer|answers an approval question|hides conversational approval replies|retries a failed approval reply"
-        working-directory: apps/web
-      - run: vp test run --project browser src/components/chat/ComposerPrimaryActions.browser.test.tsx src/components/chat/QueuedRunsControl.browser.test.tsx src/components/chat/ChatHeader.browser.test.tsx src/components/pullRequest/RepoWorkflowAction.browser.test.tsx src/components/settings/RenameEnvironmentDialog.browser.test.tsx src/components/assistant/LydPage.browser.test.tsx src/components/usage/UsageWorkspace.browser.test.tsx
-        working-directory: apps/web
