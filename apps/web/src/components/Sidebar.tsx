@@ -3310,6 +3310,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                   </ComboboxPopup>
                 </Combobox>
               }
+              onOpenUsage={() => {
+                if (isMobile) setOpenMobile(false);
+                if (router.state.location.pathname !== "/usage")
+                  void router.navigate({ to: "/usage" });
+              }}
               onNewProject={openAddProjectCommandPalette}
               onNewThread={handleNewThreadClick}
               newThreadDisabled={projects.length === 0}

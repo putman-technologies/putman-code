@@ -7,7 +7,10 @@ import { randomUUID } from "../../lib/utils";
 import ReactMarkdown, { type Components } from "react-markdown";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { Button } from "../ui/button";
-import { Dialog, DialogHeader, DialogPanel, DialogPopup, DialogTitle } from "../ui/dialog";
+import { ArrowUpIcon, BellIcon, ServerIcon } from "lucide-react";
+import { SidebarInset } from "../ui/sidebar";
+import { WorkspacePageHeader } from "../WorkspacePageHeader";
+import "./lyd.css";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 
@@ -38,13 +41,11 @@ function errorText(error: unknown) {
   );
 }
 
-export default function AssistantDialog({
-  onClose,
-  call = request,
-}: {
-  onClose: () => void;
-  call?: Request;
-}) {
+function LydOrb({ small = false }: { small?: boolean }) {
+  return <span aria-hidden="true" className={small ? "lyd-orb lyd-orb-small" : "lyd-orb"} />;
+}
+
+export default function LydPage({ call = request }: { call?: Request }) {
   const gt = useGT();
   const [host, setHost] = useLocalStorage(hostKey, "", Schema.String);
   const [address, setAddress] = useState(() => host || suggestedAssistantHost());
@@ -76,18 +77,12 @@ export default function AssistantDialog({
   }
 
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
-      <DialogPopup className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>
-            <T>Personal assistant</T>
-          </DialogTitle>
-        </DialogHeader>
+    <SidebarInset className="h-dvh min-w-0 overflow-hidden" aria-label="Lyd">
+      <WorkspacePageHeader electron className="border-b border-border/60">
+        <LydOrb small />
+        <h1 className="text-sm font-semibold tracking-tight">Lyd</h1>
+      </WorkspacePageHeader>
+      <div className="lyd-workspace flex min-h-0 flex-1 flex-col">
         {host ? (
           <Conversation
             key={host}
@@ -101,9 +96,13 @@ export default function AssistantDialog({
             }}
           />
         ) : (
-          <DialogPanel>
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-safe-center overflow-y-auto px-5 py-10">
+            <div className="mb-7 flex flex-col items-center gap-4">
+              <LydOrb />
+              <h2 className="text-3xl font-medium tracking-tight">{gt("Connect Lyd")}</h2>
+            </div>
             <form
-              className="grid gap-3"
+              className="grid w-full max-w-sm gap-4 rounded-3xl border border-border bg-card p-6 shadow-sm"
               onSubmit={(event) => {
                 event.preventDefault();
                 void connect();
@@ -139,10 +138,10 @@ export default function AssistantDialog({
                 </p>
               )}
             </form>
-          </DialogPanel>
+          </div>
         )}
-      </DialogPopup>
-    </Dialog>
+      </div>
+    </SidebarInset>
   );
 }
 
@@ -160,6 +159,7 @@ function Conversation({
   const gt = useGT();
   const [state, setState] = useState(initial);
   const [draft, setDraft] = useState("");
+  const composer = useRef<HTMLTextAreaElement>(null);
   const [notify, setNotify] = useState(false);
   const [phoneSetup, setPhoneSetup] = useState(false);
   const [keys, setKeys] = useState({ userKey: "", token: "" });
@@ -247,8 +247,9 @@ function Conversation({
   }
 
   return (
-    <DialogPanel>
-      <div className="flex flex-wrap items-center gap-2 text-sm">
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 text-xs sm:px-6">
+        <ServerIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
         <span className="mr-auto truncate font-mono text-muted-foreground">{host}</span>
         <Button size="sm" variant="ghost" disabled={busy} onClick={onChangeHost}>
           {gt("Change server")}
@@ -266,7 +267,7 @@ function Conversation({
       </div>
       {phoneSetup && (
         <form
-          className="grid gap-2 rounded-lg border p-3 text-sm"
+          className="mx-auto grid max-h-[42%] w-[min(30rem,95%)] shrink-0 gap-2 overflow-y-auto rounded-2xl border bg-card p-4 text-sm shadow-sm"
           onSubmit={(e) => {
             e.preventDefault();
             void act({ kind: "phone", ...keys });
@@ -327,12 +328,15 @@ function Conversation({
         </form>
       )}
       {(pollError || error) && (
-        <p role="alert" className="break-words text-sm text-destructive">
+        <p
+          role="alert"
+          className="mx-auto w-full max-w-3xl px-6 py-1 break-words text-sm text-destructive"
+        >
           {error || pollError}
         </p>
       )}
       {state && !state.alwaysOn && (
-        <p role="status" className="text-sm text-muted-foreground">
+        <p role="status" className="px-5 text-center text-xs text-muted-foreground">
           {gt("To keep tasks running after SSH logout, enable lingering for this Linux account.")}{" "}
           <code>loginctl enable-linger</code>
         </p>
@@ -345,7 +349,7 @@ function Conversation({
       {!state && !pollError && <p role="status">{gt("Connecting…")}</p>}
       {state && (
         <>
-          <div className="flex gap-3">
+          <div className="mx-auto flex w-full max-w-3xl justify-center gap-3">
             {state.older && (
               <Button
                 size="sm"
@@ -368,36 +372,79 @@ function Conversation({
               const el = event.currentTarget;
               followEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
             }}
-            className="max-h-[42vh] space-y-3 overflow-y-auto"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
             aria-label={gt("Conversation")}
           >
-            {state.tasks.map((item) => (
-              <article key={item.id} className="grid gap-2 text-sm">
-                <p className="ml-8 justify-self-end whitespace-pre-wrap wrap-anywhere rounded-lg bg-secondary px-3 py-2">
-                  {item.prompt}
-                </p>
-                <span className="font-semibold text-muted-foreground">
-                  {statusLabels[item.status]}
-                </span>
-                {item.answer && (
-                  <div className="space-y-2 wrap-anywhere leading-relaxed [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5">
-                    <ReactMarkdown skipHtml components={assistantMarkdown}>
-                      {item.answer}
-                    </ReactMarkdown>
+            {state.tasks.length === 0 && before === undefined && (
+              <div className="mx-auto flex min-h-full max-w-2xl flex-col items-center justify-center gap-5 px-5 py-8 text-center">
+                <LydOrb />
+                <h2 className="text-3xl font-medium tracking-tight sm:text-5xl">
+                  {gt("What’s on your mind?")}
+                </h2>
+                <div className="mt-1 flex flex-wrap justify-center gap-2">
+                  {(
+                    [
+                      [gt("Plan my day"), gt("Help me plan my day. Ask me what is on my list.")],
+                      [
+                        gt("Research a role"),
+                        gt("Help me research a job opportunity. Ask me for the role and company."),
+                      ],
+                      [
+                        gt("Review a tracker"),
+                        gt("Help me review my tracker. I’ll paste the rows below."),
+                      ],
+                    ] as const
+                  ).map(([label, prompt]) => (
+                    <button
+                      key={label}
+                      type="button"
+                      disabled={busy}
+                      className="lyd-suggestion"
+                      onClick={() => {
+                        setDraft(prompt);
+                        requestId.current = "";
+                        composer.current?.focus();
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="mx-auto grid w-full max-w-3xl gap-8 px-5 sm:px-8">
+              {state.tasks.map((item) => (
+                <article key={item.id} className="grid gap-2 py-2 text-sm">
+                  <p className="ml-8 justify-self-end whitespace-pre-wrap wrap-anywhere max-w-[88%] rounded-2xl rounded-br-sm bg-secondary px-4 py-3">
+                    {item.prompt}
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <LydOrb small />
+                    <strong className="font-medium">Lyd</strong>
+                    <span className="text-xs text-muted-foreground">
+                      {statusLabels[item.status]}
+                    </span>
                   </div>
-                )}
-                {item.delivery === "sent" && <small>{gt("Phone alert sent")}</small>}
-                {(item.delivery === "failed" || item.delivery === "unknown") && (
-                  <small role="status">
-                    {gt("Phone alert unconfirmed. Check Android notifications.")}
-                  </small>
-                )}
-              </article>
-            ))}
+                  {item.answer && (
+                    <div className="space-y-2 wrap-anywhere leading-relaxed [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5">
+                      <ReactMarkdown skipHtml components={assistantMarkdown}>
+                        {item.answer}
+                      </ReactMarkdown>
+                    </div>
+                  )}
+                  {item.delivery === "sent" && <small>{gt("Phone alert sent")}</small>}
+                  {(item.delivery === "failed" || item.delivery === "unknown") && (
+                    <small role="status">
+                      {gt("Phone alert unconfirmed. Check Android notifications.")}
+                    </small>
+                  )}
+                </article>
+              ))}
+            </div>
           </div>
           {before === undefined && (
             <form
-              className="grid gap-2"
+              className="lyd-composer mx-auto mb-4 grid w-[min(44rem,calc(100%-2rem))] shrink-0 gap-2 rounded-3xl border border-border bg-card p-3 sm:mb-7"
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!draft.trim()) return;
@@ -412,34 +459,50 @@ function Conversation({
             >
               <Textarea
                 value={draft}
-                rows={3}
+                unstyled
+                ref={composer}
+                className="min-h-12 max-h-36 resize-none px-2 py-2 text-base"
+                rows={2}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                    event.preventDefault();
+                    if (!busy && state.running && draft.trim())
+                      event.currentTarget.form?.requestSubmit();
+                  }
+                }}
                 disabled={busy}
                 maxLength={16000}
                 aria-label={gt("Message")}
-                placeholder={gt("Ask your assistant, or paste rows from your tracker…")}
+                placeholder={gt("Message Lyd…")}
                 onChange={(e) => {
                   setDraft(e.target.value);
                   requestId.current = "";
                 }}
               />
               <div className="flex items-center justify-between gap-2">
-                <label className="flex items-center gap-2 text-sm">
+                <label className="flex items-center gap-2 px-2 text-xs text-muted-foreground">
                   <input
                     type="checkbox"
                     checked={notify && state.phone}
                     disabled={!state.phone || busy}
                     onChange={(e) => setNotify(e.target.checked)}
                   />
+                  <BellIcon className="size-3.5" aria-hidden="true" />
                   {gt("Notify me when done")}
                 </label>
-                <Button type="submit" disabled={busy || !state.running || !draft.trim()}>
-                  {gt("Send")}
+                <Button
+                  type="submit"
+                  aria-label={gt("Send")}
+                  className="size-9 rounded-full p-0"
+                  disabled={busy || !state.running || !draft.trim()}
+                >
+                  <ArrowUpIcon aria-hidden="true" className="size-4" />
                 </Button>
               </div>
             </form>
           )}
         </>
       )}
-    </DialogPanel>
+    </div>
   );
 }
