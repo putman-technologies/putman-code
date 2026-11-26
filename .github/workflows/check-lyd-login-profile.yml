@@ -46,6 +46,7 @@ jobs:
             /scripts/fixtures/desktop-launch/statev2.sqlite
             /scripts/verify-putmancode-beta-upgrade.mjs
             /scripts/verify-putmancode-profile-upgrade.mjs
+            /scripts/check-beta-login-state.swift
           sparse-checkout-cone-mode: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
@@ -82,7 +83,10 @@ jobs:
           [[ "$requirement" == *'certificate leaf'* ]]
           codesign --verify --deep --strict -R="$requirement" "$image/PutmanCode.app"
           if codesign --verify -R="$requirement" /usr/bin/true 2>/dev/null; then exit 1; fi
+          swiftc -suppress-warnings scripts/check-beta-login-state.swift -o "$RUNNER_TEMP/check-login-state"
+          "$RUNNER_TEMP/check-login-state"
           node verification/verify-putmancode-profile-upgrade.mjs seed "$exe" "$profile" "$old"
+          "$RUNNER_TEMP/check-login-state"
           PUTMANCODE_UPGRADE_FIXTURE="$profile" node verification/verify-putmancode-beta-upgrade.mjs "$exe" "$PWD/feed" "$new" "$old"
           python3 - "$exe" <<'PYTHON'
           import os, signal, subprocess, sys, time
@@ -99,6 +103,8 @@ jobs:
           else: raise SystemExit("The updated test app did not quit before reopening its profile")
           PYTHON
           codesign --verify --deep --strict -R="$requirement" "$app"
+          "$RUNNER_TEMP/check-login-state"
+          (sleep 25; "$RUNNER_TEMP/check-login-state") &
           node verification/verify-putmancode-profile-upgrade.mjs verify "$exe" "$profile" "$new"
           ln -s /Applications "$image/Applications"
           dmg="$RUNNER_TEMP/out/PutmanCode-$new-macOS-arm64.dmg"
