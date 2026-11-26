@@ -1,0 +1,113 @@
+name: Verify signed Mac beta upgrade and saved profile
+on:
+  push:
+    branches: [qa/verify-lyd-mac-signed]
+permissions:
+  contents: read
+jobs:
+  inputs:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Collect the signed staging assets and the published Beta 10 DMG
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo=putman-technologies/putman-code
+          staging=staging-mac-beta11-lyd-9b081c1596
+          old=v1.0.0-beta.10
+          gh release view "$staging" -R "$repo" --json isDraft,targetCommitish,assets > staging.json
+          jq -e '.isDraft and .targetCommitish=="9b081c15962694c092ece6ba74c58fbd87050579" and (.assets|length)==3' staging.json
+          mkdir -p feed/previous
+          gh release download "$staging" -R "$repo" --dir feed --pattern 'Putman-Code-1.0.0-beta.11-arm64.zip*' --pattern beta-mac.yml
+          jq -r '.assets[] | (.digest | sub("^sha256:";"")) + "  " + .name' staging.json | (cd feed && sha256sum -c -)
+          gh release view "$old" -R "$repo" --json isDraft,assets > previous.json
+          jq -e '.isDraft==false' previous.json
+          gh release download "$old" -R "$repo" --dir feed/previous --pattern 'PutmanCode-1.0.0-beta.10-macOS-arm64.dmg'
+          jq -r '.assets[] | select(.name=="PutmanCode-1.0.0-beta.10-macOS-arm64.dmg") | (.digest | sub("^sha256:";""))+"  "+.name' previous.json | (cd feed/previous && sha256sum -c -)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: signed-mac-upgrade-inputs
+          path: feed/
+          retention-days: 2
+          compression-level: 0
+  native-upgrade:
+    needs: inputs
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            /apps/desktop/package.json
+            /scripts/fixtures/desktop-launch/statev2.sqlite
+            /scripts/verify-putmancode-beta-upgrade.mjs
+            /scripts/verify-putmancode-profile-upgrade.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '26.13.1'
+          package-manager-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: signed-mac-upgrade-inputs
+          path: feed
+      - name: Install tools for the isolated native check
+        run: |
+          mkdir verification
+          cp scripts/verify-putmancode-{profile,beta}-upgrade.mjs verification/
+          pw=$(node -p 'require("./apps/desktop/package.json").dependencies["playwright-core"]')
+          cd verification
+          npm install --ignore-scripts --no-audit --no-fund "playwright-core@$pw" @electron/asar@4.3.0
+      - name: Verify the exact signed update and reopen the original Beta 10 profile
+        run: |
+          set -euo pipefail
+          old=1.0.0-beta.10
+          new=1.0.0-beta.11
+          mount="$RUNNER_TEMP/mount-beta10"
+          old_dir="$RUNNER_TEMP/installed"
+          image="$RUNNER_TEMP/verified-image"
+          profile="$RUNNER_TEMP/existing-beta-profile"
+          mkdir -p "$old_dir" "$image" "$RUNNER_TEMP/out"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" "feed/previous/PutmanCode-$old-macOS-arm64.dmg"
+          ditto "$mount/PutmanCode.app" "$old_dir/PutmanCode.app"
+          hdiutil detach "$mount" -force
+          ditto -x -k "feed/Putman-Code-$new-arm64.zip" "$image"
+          app="$old_dir/PutmanCode.app"
+          exe="$app/Contents/MacOS/PutmanCode"
+          requirement=$(codesign -dr- "$app" 2>&1 | sed -n 's/^designated => //p')
+          [[ "$requirement" == *'certificate leaf'* ]]
+          codesign --verify --deep --strict -R="$requirement" "$image/PutmanCode.app"
+          if codesign --verify -R="$requirement" /usr/bin/true 2>/dev/null; then exit 1; fi
+          node verification/verify-putmancode-profile-upgrade.mjs seed "$exe" "$profile" "$old"
+          PUTMANCODE_UPGRADE_FIXTURE="$profile" node verification/verify-putmancode-beta-upgrade.mjs "$exe" "$PWD/feed" "$new" "$old"
+          python3 - "$exe" <<'PYTHON'
+          import os, signal, subprocess, sys, time
+          exe = sys.argv[1]
+          for attempt in range(40):
+              processes = subprocess.check_output(["ps","-ax","-o","pid=,command="],text=True)
+              pids = [int(row[0]) for line in processes.splitlines() if len(row := line.strip().split(None,1)) == 2 and (row[1] == exe or row[1].startswith(exe+" "))]
+              if not pids: break
+              if attempt == 0:
+                  for pid in pids:
+                      try: os.kill(pid, signal.SIGTERM)
+                      except ProcessLookupError: pass
+              time.sleep(.5)
+          else: raise SystemExit("The updated test app did not quit before reopening its profile")
+          PYTHON
+          codesign --verify --deep --strict -R="$requirement" "$app"
+          node verification/verify-putmancode-profile-upgrade.mjs verify "$exe" "$profile" "$new"
+          ln -s /Applications "$image/Applications"
+          dmg="$RUNNER_TEMP/out/PutmanCode-$new-macOS-arm64.dmg"
+          hdiutil create -quiet -format UDZO -volname "PutmanCode $new" -srcfolder "$image" "$dmg"
+          hdiutil verify "$dmg"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: verified-beta11-mac-dmg
+          path: ${{ runner.temp }}/out/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

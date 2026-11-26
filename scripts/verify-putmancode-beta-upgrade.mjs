@@ -16,15 +16,24 @@ NodeAssert.ok(
     installedVersion &&
     expectedVersion !== installedVersion,
 );
-const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "putmancode-upgrade-"));
+const existingProfile = process.env.PUTMANCODE_UPGRADE_FIXTURE;
+if (existingProfile) {
+  NodeAssert.equal(process.env.RUNNER_ENVIRONMENT, "github-hosted");
+  NodeAssert.ok(NodePath.resolve(existingProfile).startsWith(NodePath.resolve(process.env.RUNNER_TEMP) + NodePath.sep));
+}
+const home = existingProfile ?? NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "putmancode-upgrade-"));
 // oxlint-disable-next-line t3code/no-global-process-runtime -- This standalone installer test runs directly on the native CI host.
 const mac = NodeOS.platform() === "darwin";
 const feedName = mac ? "beta-mac.yml" : "beta.yml";
-NodeFS.mkdirSync(NodePath.join(home, "userdata"));
-NodeFS.copyFileSync(
-  NodePath.resolve("scripts/fixtures/desktop-launch/statev2.sqlite"),
-  NodePath.join(home, "userdata", "statev2.sqlite"),
-);
+if (!existingProfile) {
+  NodeFS.mkdirSync(NodePath.join(home, "userdata"));
+  NodeFS.copyFileSync(
+    NodePath.resolve("scripts/fixtures/desktop-launch/statev2.sqlite"),
+    NodePath.join(home, "userdata", "statev2.sqlite"),
+  );
+} else {
+  NodeAssert.ok(NodeFS.statSync(NodePath.join(home, "userdata", "statev2.sqlite")).isFile());
+}
 const requests = new Set();
 let offerUpdate = false;
 const server = NodeHttp.createServer((req, res) => {
