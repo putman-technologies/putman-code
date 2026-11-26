@@ -148,7 +148,7 @@ export class TailscaleOperatorRequiredError extends Schema.TaggedError<Tailscale
   { cause: Schema.Defect() },
 ) {
   override get message(): string {
-    return "Tailscale refused the Serve config because this user is not its operator. Run `sudo tailscale set --operator=$USER` once, then run this command again.";
+    return "This VPS needs a mobile address. Ask the server administrator to configure Tailscale HTTPS for this PutmanCode server. Then select the VPS in Settings → Sharing & access and create a pairing link.";
   }
 }
 

@@ -12,7 +12,7 @@ import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/http/HttpClient";
 import type * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
-import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { describe, expect, it } from "vite-plus/test";
 
 import * as ServerConfig from "../config.ts";
@@ -273,26 +273,38 @@ const TAILSCALE_STATUS_JSON = JSON.stringify({
   Self: { DNSName: "bb-1.tail1234.ts.net.", TailscaleIPs: ["100.64.1.2"] },
 });
 
-const layerTailscaleUp = Layer.succeed(
-  ChildProcessSpawner.ChildProcessSpawner,
-  ChildProcessSpawner.make(() =>
-    Effect.succeed(
-      ChildProcessSpawner.makeHandle({
-        pid: ChildProcessSpawner.ProcessId(1),
-        exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(0)),
-        isRunning: Effect.succeed(false),
-        kill: () => Effect.void,
-        unref: Effect.succeed(Effect.void),
-        stdin: Sink.drain,
-        stdout: Stream.make(new TextEncoder().encode(TAILSCALE_STATUS_JSON)),
-        stderr: Stream.empty,
-        all: Stream.empty,
-        getInputFd: () => Sink.drain,
-        getOutputFd: () => Stream.empty,
-      }),
-    ),
-  ),
-);
+const tailscaleLayer = (serveStatus = "{}") =>
+  Layer.succeed(
+    ChildProcessSpawner.ChildProcessSpawner,
+    ChildProcessSpawner.make((command) => {
+      if (!ChildProcess.isStandardCommand(command)) return Effect.die("Unexpected pipeline");
+      const args = command.args.join(" ");
+      const output =
+        args === "status --json"
+          ? TAILSCALE_STATUS_JSON
+          : args === "serve status --json"
+            ? serveStatus
+            : undefined;
+      if (output === undefined) return Effect.die("Unexpected Tailscale command: " + args);
+      return Effect.succeed(
+        ChildProcessSpawner.makeHandle({
+          pid: ChildProcessSpawner.ProcessId(1),
+          exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(0)),
+          isRunning: Effect.succeed(false),
+          kill: () => Effect.void,
+          unref: Effect.succeed(Effect.void),
+          stdin: Sink.drain,
+          stdout: Stream.make(new TextEncoder().encode(output)),
+          stderr: Stream.empty,
+          all: Stream.empty,
+          getInputFd: () => Sink.drain,
+          getOutputFd: () => Stream.empty,
+        }),
+      );
+    }),
+  );
+
+const layerTailscaleUp = tailscaleLayer();
 
 const T3_DESCRIPTOR_BODY = JSON.stringify({
   environmentId: "serve-test",
@@ -314,14 +326,14 @@ const layerServeProbe = (status: number) =>
     HttpClient.make((request) => Effect.succeed(serveProbeResponse(request, status))),
   );
 
-const layerServeConfig = (host = "127.0.0.1") =>
+const layerServeConfig = (host = "127.0.0.1", tailscaleServeEnabled = true) =>
   Layer.effect(
     ServerConfig.ServerConfig,
     Effect.map(ServerConfig.ServerConfig, (config) => ({
       ...config,
       host,
       port: 3773,
-      tailscaleServeEnabled: true,
+      tailscaleServeEnabled,
       tailscaleServePort: 443,
     })),
   ).pipe(
@@ -347,6 +359,46 @@ const resolveWithServe = (probeStatus: number) =>
   );
 
 describe("DirectEndpoints Tailscale Serve", () => {
+  effectIt.effect("discovers a host-managed HTTPS route without changing Serve configuration", () =>
+    Effect.gen(function* () {
+      const hostname = "bb-1.tail1234.ts.net";
+      const proxy = { Proxy: "http://127.0.0.1:3773" };
+      const serveStatus = JSON.stringify({
+        Web: {
+          [hostname + ":8443"]: { Handlers: { "/": proxy } },
+          [hostname + ":9443"]: { Handlers: { "/other": proxy } },
+        },
+      });
+      const requested: string[] = [];
+      const service = yield* DirectEndpoints.make.pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            layerServeConfig("127.0.0.1", false),
+            tailscaleLayer(serveStatus),
+            Layer.succeed(
+              HttpClient.HttpClient,
+              HttpClient.make((request) => {
+                requested.push(request.url);
+                const own = new URL(request.url).port === "8443";
+                const body = own
+                  ? T3_DESCRIPTOR_BODY
+                  : T3_DESCRIPTOR_BODY.replace("serve-test", "other-host");
+                return Effect.succeed(HttpClientResponse.fromWeb(request, new Response(body)));
+              }),
+            ),
+          ),
+        ),
+      );
+      expect(yield* service.resolve()).toEqual([
+        { kind: "tailnet", httpBaseUrl: "https://" + hostname + ":8443/" },
+      ]);
+      expect(requested.toSorted()).toEqual([
+        "https://" + hostname + "/.well-known/t3/environment",
+        "https://" + hostname + ":8443/.well-known/t3/environment",
+      ]);
+    }),
+  );
+
   effectIt.effect("lists the tailnet name once Serve answers for this server", () =>
     Effect.gen(function* () {
       expect(yield* resolveWithServe(200)).toEqual([

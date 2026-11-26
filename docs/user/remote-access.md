@@ -196,6 +196,12 @@ on that machine. Existing threads stay where they started. If resource checks ar
 unavailable or all eligible machines are full, choose a machine manually to continue.
 Mobile keeps its manual environment selection.
 
+### Pair a phone with a managed VPS
+
+On the desktop, open **Settings → Sharing & access**, choose the VPS under **Showing access for**, and select **Authorized clients → Create link**. On the phone, connect to the same tailnet, open **Add environment**, scan the new QR code, and tap the checkmark. Each phone gets its own pairing link and the permissions selected by its issuer.
+
+The VPS administrator provisions the HTTPS address once for the running PutmanCode environment. The desktop and VPS runtime need the remote QR and address discovery updates respectively. The server checks that the HTTPS address answers with its own environment ID before offering it. If the VPS has no mobile address, contact the host administrator. For a long-lived deployment, run the service on a fixed loopback port so the private HTTPS route continues to reach it after restarts.
+
 ### Tailscale HTTPS
 
 Join both devices to the same tailnet. In the desktop app, enable **Tailscale
