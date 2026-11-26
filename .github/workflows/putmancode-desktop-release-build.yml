@@ -326,5 +326,5 @@ jobs:
         working-directory: apps/web
       - run: vp test run --project browser src/components/ChatView.browser.test.tsx src/components/chat/MessagesTimeline.browser.test.tsx -t "keeps the queue directly above the composer|answers an approval question|hides conversational approval replies|retries a failed approval reply"
         working-directory: apps/web
-      - run: vp test run --project browser src/components/chat/ComposerPrimaryActions.browser.test.tsx src/components/chat/QueuedRunsControl.browser.test.tsx src/components/chat/ChatHeader.browser.test.tsx src/components/pullRequest/RepoWorkflowAction.browser.test.tsx src/components/settings/RenameEnvironmentDialog.browser.test.tsx src/components/assistant/AssistantDialog.browser.test.tsx
+      - run: vp test run --project browser src/components/chat/ComposerPrimaryActions.browser.test.tsx src/components/chat/QueuedRunsControl.browser.test.tsx src/components/chat/ChatHeader.browser.test.tsx src/components/pullRequest/RepoWorkflowAction.browser.test.tsx src/components/settings/RenameEnvironmentDialog.browser.test.tsx src/components/assistant/LydPage.browser.test.tsx src/components/usage/UsageWorkspace.browser.test.tsx
         working-directory: apps/web

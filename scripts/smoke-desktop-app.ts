@@ -76,10 +76,18 @@ try {
       const resources = await app.evaluate(() => process.resourcesPath);
       const worker = NodePath.join(resources, "assistant", "worker.py");
       if (!NodeFS.statSync(worker).isFile()) throw new Error("Assistant worker missing");
-      step = "opening the personal assistant from the desktop title bar";
-      await page.getByRole("button", { name: "Personal assistant", exact: true }).click();
+      step = "opening Lyd from the desktop title bar";
+      await page.getByRole("button", { name: "Open Lyd", exact: true }).click();
       await page.getByRole("button", { name: "Connect and install worker" }).waitFor();
-      await page.keyboard.press("Escape");
+      await page.getByRole("main", { name: "Lyd", exact: true }).waitFor();
+      step = "opening the full Usage page beside search";
+      await page.getByRole("button", { name: "Usage", exact: true }).click();
+      await page
+        .getByRole("main", { name: "Usage", exact: true })
+        .getByRole("heading", { name: "Usage", exact: true })
+        .waitFor();
+      await thread.click();
+      await page.getByText(THREAD_MESSAGE).waitFor({ timeout: STEP_TIMEOUT_MS });
       step = "checking the usage meters and sidebar controls";
       const footer = page.locator('[data-sidebar="footer"]:visible');
       for (const provider of ["Codex", "Claude"]) {
