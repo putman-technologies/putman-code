@@ -1,0 +1,54 @@
+name: Verify Windows Beta 10 to Beta 11 update
+on:
+  push:
+    branches: [qa/verify-lyd-windows-upgrade]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  upgrade:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    env:
+      PREVIOUS_VERSION: 1.0.0-beta.10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            /apps/desktop/package.json
+            /scripts/verify-putmancode-beta-upgrade.mjs
+            /scripts/fixtures/desktop-launch/statev2.sqlite
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "26.13.1"
+          package-manager-cache: false
+      - name: Collect the installed Beta 10 and the verified Windows candidate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo=putman-technologies/putman-code
+          gh run view 45738027816 -R "$repo" --json headSha,conclusion | jq -e '.headSha=="9b081c15962694c092ece6ba74c58fbd87050579" and .conclusion=="success"'
+          gh run download 45738027816 -R "$repo" -n PutmanCode-1.0.0-beta.11-Windows-x64 -D feed
+          gh release download v1.0.0-beta.10 -R "$repo" -p Putman-Code-1.0.0-beta.10-x64.exe -D feed/previous
+      - name: Install native test tools in isolation
+        shell: bash
+        run: |
+          mkdir verification
+          cp scripts/verify-putmancode-beta-upgrade.mjs verification/
+          pw=$(node -p 'require("./apps/desktop/package.json").dependencies["playwright-core"]')
+          cd verification
+          npm install --no-audit --no-fund --ignore-scripts "playwright-core@$pw" "@electron/asar@4.3.0"
+      - name: Upgrade the installed Windows app and confirm relaunch
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = (Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json).version
+          $previous = (Get-Item feed/previous/*.exe).FullName
+          $target = Join-Path $env:LOCALAPPDATA 'Programs\PutmanCodeBetaVerification'
+          $result = Start-Process -FilePath $previous -ArgumentList @('/S', "/D=$target") -Wait -PassThru
+          if ($result.ExitCode -ne 0) { throw "Baseline installation failed" }
+          node verification/verify-putmancode-beta-upgrade.mjs "$target\PutmanCode.exe" (Resolve-Path feed).Path $version $env:PREVIOUS_VERSION
