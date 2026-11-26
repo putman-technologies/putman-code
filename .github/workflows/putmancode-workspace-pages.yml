@@ -1,0 +1,29 @@
+name: Test PutmanCode workspace pages
+on:
+  pull_request:
+    paths:
+      - 'apps/web/src/components/assistant/**'
+      - 'apps/web/src/components/usage/UsagePage.tsx'
+      - 'apps/web/src/components/sidebar/SidebarThreadHeader.tsx'
+      - 'apps/web/src/components/sidebar/mainAppLocation*'
+      - 'apps/web/src/routes/_chat.lyd.tsx'
+      - '.github/workflows/putmancode-workspace-pages.yml'
+permissions:
+  contents: read
+jobs:
+  workspace-pages:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb
+        with:
+          node-version-file: package.json
+          cache: false
+          run-install: false
+      - run: vp install --frozen-lockfile --filter=@t3tools/web... --filter=@t3tools/scripts...
+      - run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
+      - working-directory: apps/web
+        run: vp test run --project browser src/components/assistant/LydPage.browser.test.tsx src/components/sidebar/mainAppLocation.browser.test.tsx src/components/UsageToggleShortcut.browser.test.tsx

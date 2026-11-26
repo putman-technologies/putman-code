@@ -1,0 +1,50 @@
+.lyd-workspace {
+  background:
+    radial-gradient(
+      ellipse at 50% 42%,
+      color-mix(in srgb, #8077e4 6%, transparent),
+      transparent 58%
+    ),
+    var(--background);
+}
+.lyd-orb {
+  display: inline-block;
+  width: 4.25rem;
+  aspect-ratio: 1;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse at 31% 23%, #fff 0%, #eaf9fc 4%, transparent 24%),
+    radial-gradient(ellipse at 20% 65%, #87dfec, transparent 45%),
+    radial-gradient(ellipse at 78% 26%, #ded3ff 4%, transparent 45%),
+    radial-gradient(ellipse at 64% 74%, #36316e 3%, transparent 53%),
+    linear-gradient(140deg, #8da8d3 12%, #a28bd0 60%, #6774a2);
+  box-shadow:
+    inset 0 0 0 1px #ffffff57,
+    inset 0 -3px 8px #25214938,
+    0 6px 24px #7062a92e;
+}
+.lyd-orb-small {
+  width: 1.15rem;
+  box-shadow: inset 0 0 0 1px #ffffff38;
+}
+.lyd-suggestion {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.42rem 0.85rem;
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.lyd-suggestion:hover,
+.lyd-suggestion:focus-visible {
+  color: var(--foreground);
+  border-color: var(--ring);
+}
+.lyd-composer {
+  box-shadow: 0 8px 30px color-mix(in srgb, var(--foreground) 7%, transparent);
+}
+.lyd-composer:focus-within {
+  border-color: color-mix(in srgb, var(--ring) 55%, var(--border));
+}

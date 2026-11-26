@@ -1,7 +1,7 @@
 import { ArrowLeftIcon, ArrowRightIcon, MessageCircleIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { T, useGT } from "gt-react";
-import { lazy, memo, Suspense, useState } from "react";
+import { memo } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { useAtomValue } from "@effect/atom-react";
@@ -39,14 +39,13 @@ import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { observeResize } from "~/lib/observeResize";
 
-const AssistantDialog = lazy(() => import("../assistant/AssistantDialog"));
-
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
 }: {
   isElectron: boolean;
 }) {
-  const [assistantOpen, setAssistantOpen] = useState(false);
+  const navigate = useNavigate();
+  const lydOpen = useLocation({ select: (location) => location.pathname === "/lyd" });
   const stageLabel = useEnvironmentStageLabel();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const gt = useGT();
@@ -66,11 +65,6 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         isElectron && "drag-region",
       )}
     >
-      {assistantOpen && (
-        <Suspense fallback={null}>
-          <AssistantDialog onClose={() => setAssistantOpen(false)} />
-        </Suspense>
-      )}
       {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
       <div className="relative top-[calc(var(--workspace-controls-top)-env(safe-area-inset-top))] z-10 ml-[calc(var(--workspace-controls-left)+1px-env(safe-area-inset-left))] flex shrink-0 items-center md:hidden">
         <SidebarTrigger
@@ -95,17 +89,20 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
                 <TooltipTrigger
                   render={
                     <Button
-                      aria-label={gt("Personal assistant")}
+                      aria-label={gt("Open Lyd")}
+                      aria-current={lydOpen ? "page" : undefined}
                       className="[-webkit-app-region:no-drag]"
                       size="icon-sm"
                       variant={backdropVariant ? "media-navigation" : "ghost"}
-                      onClick={() => setAssistantOpen(true)}
+                      onClick={() => {
+                        if (!lydOpen) void navigate({ to: "/lyd" });
+                      }}
                     />
                   }
                 >
                   <MessageCircleIcon className="size-3.5" />
                 </TooltipTrigger>
-                <TooltipPopup side="bottom">{gt("Personal assistant")}</TooltipPopup>
+                <TooltipPopup side="bottom">{gt("Open Lyd")}</TooltipPopup>
               </Tooltip>
             </div>
           ) : null}
