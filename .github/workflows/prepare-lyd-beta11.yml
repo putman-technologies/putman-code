@@ -1,0 +1,32 @@
+name: Assemble draft Beta 11 from verified packages
+on:
+  push:
+    branches: [ops/beta11-prepare-lyd]
+concurrency:
+  group: putmancode-desktop-beta11-release
+  cancel-in-progress: false
+permissions:
+  contents: write
+  actions: read
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Assemble draft Beta 11 from verified packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: '826e07a0c6727b8dc32ece499d416fb621105942'
+          RELEASE_BUILD: '45744329744'
+          PROFILE_RUN: '45743946519'
+          PROFILE_SHA: 'de69c855dfcf2919d43b1b9b3be3b334f87666c4'
+        run: python3 scripts/release-beta11/prepare.py
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: verified-beta11-assets
+          path: ${{ runner.temp }}/verified-beta11-assets.json
+          if-no-files-found: error
+          retention-days: 14
